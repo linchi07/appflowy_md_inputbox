@@ -27,7 +27,6 @@ dependencies:
   markdown: "^7.2.1"
   nanoid: "^1.0.0"
   numerus: "^2.1.2"
-  pdf: "^3.10.7"
   provider: "^6.0.5"
   scroll_to_index: "^3.0.1"
   string_validator: "^1.0.0"
