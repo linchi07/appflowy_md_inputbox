@@ -93,14 +93,10 @@ class SelectionMenu extends SelectionMenuService {
     calculateSelectionMenuOffset(selectionRects.first);
     final (left, top, right, bottom) = getPosition();
 
-    final editorHeight = editorState.renderBox!.size.height;
-    final editorWidth = editorState.renderBox!.size.width;
-
     _selectionMenuEntry = OverlayEntry(
       builder: (context) {
-        return SizedBox(
-          width: editorWidth,
-          height: editorHeight,
+        return Material(
+          type: MaterialType.transparency,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () {
@@ -310,19 +306,6 @@ final List<SelectionMenuItem> standardSelectionMenuItems = [
     keywords: ['heading 3, h3'],
     handler: (editorState, _, __) {
       insertHeadingAfterSelection(editorState, 3);
-    },
-  ),
-  SelectionMenuItem(
-    getName: () => AppFlowyEditorL10n.current.image,
-    icon: (editorState, isSelected, style) => SelectionMenuIconWidget(
-      name: 'image',
-      isSelected: isSelected,
-      style: style,
-    ),
-    keywords: ['image'],
-    handler: (editorState, menuService, context) {
-      final container = Overlay.of(context, rootOverlay: true);
-      showImageMenu(container, editorState, menuService);
     },
   ),
   SelectionMenuItem(
