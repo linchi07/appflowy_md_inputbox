@@ -56,15 +56,6 @@ CommandShortcutEventHandler _pasteCommandHandler = (editorState) {
   () async {
     final data = await AppFlowyClipboard.getData();
     final text = data.text;
-    final html = data.html;
-    if (html != null && html.isNotEmpty) {
-      // if the html is pasted successfully, then return
-      // otherwise, paste the plain text
-      if (await editorState.pasteHtml(html)) {
-        return;
-      }
-    }
-
     if (text != null && text.isNotEmpty) {
       editorState.pastePlainText(text);
     }
@@ -83,30 +74,6 @@ RegExp _phoneRegex = RegExp(r'^\+?' // Optional '+' at start
     );
 
 extension on EditorState {
-  Future<bool> pasteHtml(String html) async {
-    final nodes = htmlToDocument(html).root.children.toList();
-    // remove the front and back empty line
-    while (nodes.isNotEmpty &&
-        nodes.first.delta?.isEmpty == true &&
-        nodes.first.children.isEmpty) {
-      nodes.removeAt(0);
-    }
-    while (nodes.isNotEmpty &&
-        nodes.last.delta?.isEmpty == true &&
-        nodes.last.children.isEmpty) {
-      nodes.removeLast();
-    }
-    if (nodes.isEmpty) {
-      return false;
-    }
-    if (nodes.length == 1) {
-      await pasteSingleLineNode(nodes.first);
-    } else {
-      await pasteMultiLineNodes(nodes.toList());
-    }
-
-    return true;
-  }
 
   Future<void> pastePlainText(String plainText) async {
     final selectionAttributes = getDeltaAttributesInSelectionStart();

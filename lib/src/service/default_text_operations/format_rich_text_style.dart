@@ -14,27 +14,6 @@ void insertQuoteAfterSelection(EditorState editorState) {
   );
 }
 
-void insertCheckboxAfterSelection(EditorState editorState) {
-  insertNodeAfterSelection(
-    editorState,
-    todoListNode(checked: false),
-  );
-}
-
-void insertBulletedListAfterSelection(EditorState editorState) {
-  insertNodeAfterSelection(
-    editorState,
-    bulletedListNode(),
-  );
-}
-
-void insertNumberedListAfterSelection(EditorState editorState) {
-  insertNodeAfterSelection(
-    editorState,
-    numberedListNode(),
-  );
-}
-
 bool insertNodeAfterSelection(
   EditorState editorState,
   Node node,

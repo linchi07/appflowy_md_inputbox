@@ -42,7 +42,9 @@ class SelectionMenu extends SelectionMenuService {
   final bool deleteSlashByDefault;
   final bool deleteKeywordsByDefault;
   final bool singleColumn;
+  @override
   final double menuHeight;
+  @override
   final double menuWidth;
 
   @override
@@ -95,9 +97,8 @@ class SelectionMenu extends SelectionMenuService {
       return;
     }
 
-    calculateSelectionMenuOffset(selectionRects.first);
+    var showAbove = calculateSelectionMenuOffset(selectionRects.first);
     final (left, top, right, bottom) = getPosition();
-
     _selectionMenuEntry = OverlayEntry(
       builder: (context) {
         return Material(
@@ -117,6 +118,7 @@ class SelectionMenu extends SelectionMenuService {
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: SelectionMenuWidget(
+                      reverse: showAbove,
                       selectionMenuStyle: style,
                       singleColumn: singleColumn,
                       items: selectionMenuItems
@@ -213,13 +215,14 @@ class SelectionMenu extends SelectionMenuService {
     return (left, top, right, bottom);
   }
 
-  void calculateSelectionMenuOffset(Rect rect) {
+  // now returns if show above or below
+  bool calculateSelectionMenuOffset(Rect rect) {
     const menuOffset = Offset(0, 10);
 
     // Use the actual overlay size as the safe boundary
-    final overlayRenderBox =
-        Overlay.of(context, rootOverlay: true).context.findRenderObject()
-            as RenderBox;
+    final overlayRenderBox = Overlay.of(context, rootOverlay: true)
+        .context
+        .findRenderObject() as RenderBox;
     final overlaySize = overlayRenderBox.size;
 
     _alignment = Alignment.topLeft;
@@ -227,30 +230,43 @@ class SelectionMenu extends SelectionMenuService {
     // Default: show below
     var top = rect.bottom + menuOffset.dy;
     var left = rect.left;
+    var showAbove = false;
 
     // If bottom space is not enough, show above the selection
     if (top + menuHeight > overlaySize.height) {
       final potentialTop = rect.top - menuHeight - menuOffset.dy;
       if (potentialTop >= 0) {
-        top = potentialTop;
+        showAbove = true;
       }
+    }
+
+    if (showAbove) {
+      // Anchoring to bottom for Above mode to ensure correct shrinking direction
+      _alignment = Alignment.bottomLeft;
+      _offset = Offset(left, overlaySize.height - rect.top + menuOffset.dy);
+    } else {
+      // Anchoring to top for Below mode
+      _alignment = Alignment.topLeft;
+      _offset = Offset(left, top);
     }
 
     // Horizontal check: if the menu would overflow the right edge of the overlay
     if (left + menuWidth > overlaySize.width) {
       // Align the right edge of the menu with the right edge of the selection rect
-      _alignment = Alignment.topRight;
-      _offset = Offset(
-        overlaySize.width - rect.right,
-        top,
-      );
+      final rightOffset = overlaySize.width - rect.right;
+      if (showAbove) {
+        _alignment = Alignment.bottomRight;
+        _offset = Offset(rightOffset, _offset.dy);
+      } else {
+        _alignment = Alignment.topRight;
+        _offset = Offset(rightOffset, _offset.dy);
+      }
     } else {
-      // Align to the left
-      _offset = Offset(
-        max(0.0, left),
-        top,
-      );
+      // Align to the left (ensure it doesn't overflow the left edge)
+      _offset = Offset(max(0.0, _offset.dx), _offset.dy);
     }
+
+    return showAbove;
   }
 }
 
@@ -301,42 +317,6 @@ final List<SelectionMenuItem> standardSelectionMenuItems = [
     keywords: ['heading 3, h3'],
     handler: (editorState, _, __) {
       insertHeadingAfterSelection(editorState, 3);
-    },
-  ),
-  SelectionMenuItem(
-    getName: () => AppFlowyEditorL10n.current.bulletedList,
-    icon: (editorState, isSelected, style) => SelectionMenuIconWidget(
-      name: 'bulleted_list',
-      isSelected: isSelected,
-      style: style,
-    ),
-    keywords: ['bulleted list', 'list', 'unordered list'],
-    handler: (editorState, _, __) {
-      insertBulletedListAfterSelection(editorState);
-    },
-  ),
-  SelectionMenuItem(
-    getName: () => AppFlowyEditorL10n.current.numberedList,
-    icon: (editorState, isSelected, style) => SelectionMenuIconWidget(
-      name: 'number',
-      isSelected: isSelected,
-      style: style,
-    ),
-    keywords: ['numbered list', 'list', 'ordered list'],
-    handler: (editorState, _, __) {
-      insertNumberedListAfterSelection(editorState);
-    },
-  ),
-  SelectionMenuItem(
-    getName: () => AppFlowyEditorL10n.current.checkbox,
-    icon: (editorState, isSelected, style) => SelectionMenuIconWidget(
-      name: 'checkbox',
-      isSelected: isSelected,
-      style: style,
-    ),
-    keywords: ['todo list', 'list', 'checkbox list'],
-    handler: (editorState, _, __) {
-      insertCheckboxAfterSelection(editorState);
     },
   ),
   SelectionMenuItem(

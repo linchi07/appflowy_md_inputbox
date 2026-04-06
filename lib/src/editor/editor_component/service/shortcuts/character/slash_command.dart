@@ -8,9 +8,6 @@ import 'package:flutter/material.dart';
 const Set<String> _defaultSupportSlashMenuNodeTypes = {
   ParagraphBlockKeys.type,
   HeadingBlockKeys.type,
-  TodoListBlockKeys.type,
-  BulletedListBlockKeys.type,
-  NumberedListBlockKeys.type,
   QuoteBlockKeys.type,
 };
 

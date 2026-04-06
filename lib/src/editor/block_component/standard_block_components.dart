@@ -1,38 +1,22 @@
+
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor/src/editor/block_component/heading_block_component/heading_command_shortcut.dart';
 import 'package:appflowy_editor/src/editor/util/platform_extension.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+
+import 'divider_block_component/divider_block_component.dart';
+import 'divider_block_component/divider_character_shortcut.dart';
+import 'rich_text/markdown_block_builder.dart';
+import 'rich_text/markdown_commands.dart';
 
 const standardBlockComponentConfiguration = BlockComponentConfiguration();
 
 final Map<String, BlockComponentBuilder> standardBlockComponentBuilderMap = {
   PageBlockKeys.type: PageBlockComponentBuilder(),
-  ParagraphBlockKeys.type: ParagraphBlockComponentBuilder(
+  ParagraphBlockKeys.type: MarkdownBlockComponentBuilder(
     configuration: standardBlockComponentConfiguration.copyWith(
       placeholderText: (_) => PlatformExtension.isDesktopOrWeb
           ? AppFlowyEditorL10n.current.slashPlaceHolder
           : ' ',
-    ),
-  ),
-  TodoListBlockKeys.type: TodoListBlockComponentBuilder(
-    configuration: standardBlockComponentConfiguration.copyWith(
-      placeholderText: (_) => AppFlowyEditorL10n.current.toDoPlaceholder,
-    ),
-    toggleChildrenTriggers: [
-      LogicalKeyboardKey.shift,
-      LogicalKeyboardKey.shiftLeft,
-      LogicalKeyboardKey.shiftRight,
-    ],
-  ),
-  BulletedListBlockKeys.type: BulletedListBlockComponentBuilder(
-    configuration: standardBlockComponentConfiguration.copyWith(
-      placeholderText: (_) => AppFlowyEditorL10n.current.listItemPlaceholder,
-    ),
-  ),
-  NumberedListBlockKeys.type: NumberedListBlockComponentBuilder(
-    configuration: standardBlockComponentConfiguration.copyWith(
-      placeholderText: (_) => AppFlowyEditorL10n.current.listItemPlaceholder,
     ),
   ),
   QuoteBlockKeys.type: QuoteBlockComponentBuilder(
@@ -46,65 +30,37 @@ final Map<String, BlockComponentBuilder> standardBlockComponentBuilderMap = {
           'Heading ${node.attributes[HeadingBlockKeys.level]}',
     ),
   ),
-  ImageBlockKeys.type: ImageBlockComponentBuilder(),
-  DividerBlockKeys.type: DividerBlockComponentBuilder(
-    configuration: standardBlockComponentConfiguration.copyWith(
-      padding: (node) => const EdgeInsets.symmetric(vertical: 8.0),
-    ),
-  ),
   TableBlockKeys.type: TableBlockComponentBuilder(),
   TableCellBlockKeys.type: TableCellBlockComponentBuilder(),
+  DividerBlockKeys.type: DividerBlockComponentBuilder(),
 };
 
 final List<CharacterShortcutEvent> standardCharacterShortcutEvents = [
   // '\n'
-  insertNewLineAfterBulletedList,
-  insertNewLineAfterTodoList,
-  insertNewLineAfterNumberedList,
-  insertNewLineAfterHeading,
   insertNewLine,
 
-  // bulleted list
-  formatAsteriskToBulletedList,
-  formatMinusToBulletedList,
-
-  // numbered list
-  formatNumberToNumberedList,
-
-  // quote
-  formatDoubleQuoteToQuote,
-
-  // heading
-  formatSignToHeading,
-
-  // checkbox
-  // format unchecked box, [] or -[]
-  formatEmptyBracketsToUncheckedBox,
-  formatHyphenEmptyBracketsToUncheckedBox,
-
-  // format checked box, [x] or -[x]
-  formatFilledBracketsToCheckedBox,
-  formatHyphenFilledBracketsToCheckedBox,
-
   // slash
-  slashCommand,
-
-  // divider
-  convertMinusesToDivider,
-  convertStarsToDivider,
-  convertUnderscoreToDivider,
+  markdownSlashCommand,
 
   // markdown syntax
   ...markdownSyntaxShortcutEvents,
 
   // convert => to arrow
   formatGreaterEqual,
+
+  // divider
+  convertMinusesToDivider,
+  convertStarsToDivider,
+  convertUnderscoreToDivider,
 ];
 
 final List<CommandShortcutEvent> standardCommandShortcutEvents = [
   // undo, redo
   undoCommand,
   redoCommand,
+
+  // enter
+  enterMarkdownShortcutEvent,
 
   // backspace
   convertToParagraphCommand,
@@ -128,8 +84,7 @@ final List<CommandShortcutEvent> standardCommandShortcutEvents = [
   endCommand,
 
   //
-  toggleTodoListCommand,
-  ...toggleMarkdownCommands,
+  // ...toggleMarkdownCommands,
   ...toggleHeadingCommands,
   toggleHighlightCommand,
   showLinkMenuCommand,

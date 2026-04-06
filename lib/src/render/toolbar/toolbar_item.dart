@@ -78,10 +78,7 @@ class ToolbarItem {
 
 final Set<String> toolbarItemWhiteList = {
   ParagraphBlockKeys.type,
-  NumberedListBlockKeys.type,
-  BulletedListBlockKeys.type,
   QuoteBlockKeys.type,
-  TodoListBlockKeys.type,
   HeadingBlockKeys.type,
 };
 

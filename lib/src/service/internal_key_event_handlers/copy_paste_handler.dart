@@ -10,9 +10,9 @@ void handlePastePlainText(EditorState editorState, String plainText) {
     return;
   }
 
-  // Use markdownToDocument to parse the plain text.
-  // This turns something like "**bold**" into rich text nodes.
-  final nodes = markdownToDocument(plainText).root.children;
+  // Simplified: treat entire text as lines and insert them.
+  final lines = plainText.split('\n');
+  final nodes = lines.map((line) => paragraphNode(text: line)).toList();
   if (nodes.isEmpty) {
     return;
   }
@@ -32,40 +32,6 @@ void handlePastePlainText(EditorState editorState, String plainText) {
   }
 }
 
-void pasteHTML(EditorState editorState, String html) {
-  final selection = editorState.selection?.normalized;
-  if (selection == null || !selection.isCollapsed) {
-    return;
-  }
-
-  AppFlowyEditorLog.keyboard.debug('paste html: $html');
-
-  final htmlToNodes = htmlToDocument(html).root.children.where((element) {
-    final delta = element.delta;
-    if (delta == null) {
-      return true;
-    }
-
-    return delta.isNotEmpty;
-  });
-  if (htmlToNodes.isEmpty) {
-    return;
-  }
-
-  if (htmlToNodes.length == 1) {
-    _pasteSingleLineInText(
-      editorState,
-      selection.startIndex,
-      htmlToNodes.first,
-    );
-  } else {
-    _pasteMultipleLinesInText(
-      editorState,
-      selection.start.offset,
-      htmlToNodes.toList(),
-    );
-  }
-}
 
 Selection _computeSelectionAfterPasteMultipleNodes(
   EditorState editorState,
@@ -88,7 +54,6 @@ void handleCopy(EditorState editorState) async {
     return;
   }
   String text;
-  String html;
 
   if (selection.isCollapsed) {
     final node = editorState.getNodeAtPath(selection.end.path);
@@ -96,29 +61,13 @@ void handleCopy(EditorState editorState) async {
       return;
     }
     text = node.delta?.toPlainText() ?? '';
-    html = documentToHTML(
-      Document(
-        root: pageNode(children: [node.copyWith()]),
-      ),
-    );
   } else {
     text = editorState.getTextInSelection(selection).join('\n');
-    final nodes = editorState.getSelectedNodes(selection: selection);
-    if (nodes.isEmpty) {
-      return;
-    }
-    html = documentToHTML(
-      Document(
-        root: pageNode(
-          children: nodes.map((node) => node.copyWith()),
-        ),
-      ),
-    );
   }
 
   return AppFlowyClipboard.setData(
     text: text,
-    html: html.isEmpty ? null : html,
+    html: null,
   );
 }
 
@@ -282,11 +231,6 @@ void handlePaste(EditorState editorState) async {
 }
 
 void _pasteRichClipboard(EditorState editorState, AppFlowyClipboardData data) {
-  if (data.html != null) {
-    pasteHTML(editorState, data.html!);
-
-    return;
-  }
   if (data.text != null) {
     handlePastePlainText(editorState, data.text!);
 

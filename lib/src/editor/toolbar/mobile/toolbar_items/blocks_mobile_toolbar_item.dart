@@ -52,21 +52,6 @@ class _BlocksMenuState extends State<_BlocksMenu> {
     ),
     // list
     _ListUnit(
-      icon: AFMobileIcons.bulletedList,
-      label: AppFlowyEditorL10n.current.bulletedList,
-      name: BulletedListBlockKeys.type,
-    ),
-    _ListUnit(
-      icon: AFMobileIcons.numberedList,
-      label: AppFlowyEditorL10n.current.numberedList,
-      name: NumberedListBlockKeys.type,
-    ),
-    _ListUnit(
-      icon: AFMobileIcons.checkbox,
-      label: AppFlowyEditorL10n.current.checkbox,
-      name: TodoListBlockKeys.type,
-    ),
-    _ListUnit(
       icon: AFMobileIcons.quote,
       label: AppFlowyEditorL10n.current.quote,
       name: QuoteBlockKeys.type,
@@ -104,8 +89,6 @@ class _BlocksMenuState extends State<_BlocksMenu> {
                   ParagraphBlockKeys.delta: (node.delta ?? Delta()).toJson(),
                   blockComponentBackgroundColor:
                       node.attributes[blockComponentBackgroundColor],
-                  if (!isSelected && list.name == TodoListBlockKeys.type)
-                    TodoListBlockKeys.checked: false,
                   if (!isSelected && list.name == HeadingBlockKeys.type)
                     HeadingBlockKeys.level: list.level,
                 },

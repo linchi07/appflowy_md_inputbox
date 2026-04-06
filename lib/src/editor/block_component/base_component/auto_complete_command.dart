@@ -4,9 +4,6 @@ import 'package:flutter/material.dart';
 // Add your custom block keys if it supports auto complete
 final autoCompletableBlockTypes = {
   ParagraphBlockKeys.type,
-  NumberedListBlockKeys.type,
-  TodoListBlockKeys.type,
-  BulletedListBlockKeys.type,
   QuoteBlockKeys.type,
   HeadingBlockKeys.type,
 };

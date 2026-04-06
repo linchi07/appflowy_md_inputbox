@@ -273,10 +273,11 @@ class SelectionMenuWidget extends StatefulWidget {
     required this.selectionMenuStyle,
     required this.itemCountFilter,
     required this.deleteSlashByDefault,
+    required this.reverse,
     this.singleColumn = false,
     this.nameBuilder,
   });
-
+  final bool reverse;
   final List<SelectionMenuItem> items;
   final int itemCountFilter;
   final int maxItemInRow;
@@ -337,7 +338,13 @@ class _SelectionMenuWidgetState extends State<SelectionMenuWidget> {
       return widget.onExit();
     }
     setState(() {
-      _showingItems = items;
+      if (widget.reverse) {
+        _showingItems = items.reversed.toList();
+        _selectedIndex = _showingItems.isNotEmpty ? _showingItems.length - 1 : 0;
+      } else {
+        _showingItems = items;
+        _selectedIndex = 0;
+      }
     });
 
     if (_showingItems.isEmpty) {
@@ -351,7 +358,12 @@ class _SelectionMenuWidgetState extends State<SelectionMenuWidget> {
   void initState() {
     super.initState();
 
-    _showingItems = widget.items;
+    if (widget.reverse) {
+      _showingItems = widget.items.reversed.toList();
+      _selectedIndex = _showingItems.length - 1;
+    } else {
+      _showingItems = widget.items;
+    }
     if (widget.singleColumn) {
       _scrollController = AutoScrollController();
     }
@@ -359,6 +371,12 @@ class _SelectionMenuWidgetState extends State<SelectionMenuWidget> {
     keepEditorFocusNotifier.increase();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
+      if (widget.reverse) {
+        _scrollController?.scrollToIndex(
+          widget.items.length - 1,
+          preferPosition: AutoScrollPosition.middle,
+        );
+      }
     });
   }
 

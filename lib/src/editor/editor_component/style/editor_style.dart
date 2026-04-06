@@ -1,5 +1,7 @@
-import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
+
+import 'package:appflowy_editor/appflowy_editor.dart';
+import '../../block_component/rich_text/markdown_decorator.dart';
 
 /// The style of the editor.
 ///
@@ -125,7 +127,7 @@ class EditorStyle {
               text: TextStyle(fontSize: 16, color: Colors.black),
             ),
         textSpanDecorator =
-            textSpanDecorator ?? defaultTextSpanDecoratorForAttribute,
+            textSpanDecorator ?? markdownTextSpanDecorator,
         magnifierSize = Size.zero,
         mobileDragHandleBallSize = Size.zero,
         mobileDragHandleWidth = 0.0,
@@ -168,7 +170,7 @@ class EditorStyle {
               text: TextStyle(fontSize: 16, color: Colors.black),
             ),
         textSpanDecorator =
-            textSpanDecorator ?? mobileTextSpanDecoratorForAttribute;
+            textSpanDecorator ?? markdownTextSpanDecorator;
 
   EditorStyle copyWith({
     EdgeInsets? padding,
