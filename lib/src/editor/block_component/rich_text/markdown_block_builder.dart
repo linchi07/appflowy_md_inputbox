@@ -7,6 +7,7 @@ class MarkdownBlockComponentBuilder extends BlockComponentBuilder {
   @override
   BlockComponentWidget build(BlockComponentContext blockComponentContext) {
     final node = blockComponentContext.node;
+
     return MarkdownBlockComponentWidget(
       node: node,
       key: node.key,
@@ -20,8 +21,7 @@ class MarkdownBlockComponentBuilder extends BlockComponentBuilder {
   }
 
   @override
-  BlockComponentValidate get validate =>
-      (node) => node.delta != null;
+  BlockComponentValidate get validate => (node) => node.delta != null;
 }
 
 class MarkdownBlockComponentWidget extends BlockComponentStatefulWidget {
@@ -83,8 +83,7 @@ class _MarkdownBlockComponentWidgetState
 
   void _onSelectionChange() {
     final selection = editorState.selection;
-    final showPlaceholder =
-        selection != null &&
+    final showPlaceholder = selection != null &&
         (selection.isSingle && selection.start.path.equals(node.path));
     if (showPlaceholder != _showPlaceholder) {
       if (mounted) setState(() => _showPlaceholder = showPlaceholder);
@@ -99,11 +98,30 @@ class _MarkdownBlockComponentWidgetState
     final text = node.delta?.toPlainText() ?? '';
     bool isQuote = text.startsWith('> ');
     bool isTodo = text.startsWith('- [ ]') || text.startsWith('- [x]');
-    bool isList =
-        !isTodo &&
+    bool isList = !isTodo &&
         (text.startsWith('- ') ||
             text.startsWith('* ') ||
             RegExp(r'^\d+\. ').hasMatch(text));
+
+    // Divider check: exactly ---, *** or ___ at the beginning of a paragraph, including em-dash variants
+    final isDivider = RegExp(r'^([-*_])\1{2,}$|^—-$|^——-$').hasMatch(text);
+
+    if (isDivider) {
+      final selection = editorState.selection;
+      if (selection != null &&
+          selection.isCollapsed &&
+          selection.start.path.equals(node.path)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final transaction = editorState.transaction
+            ..insertNode(node.path, dividerNode())
+            ..deleteNode(node)
+            ..insertNode(node.path.next, paragraphNode())
+            ..afterSelection =
+                Selection.collapsed(Position(path: node.path.next));
+          editorState.apply(transaction);
+        });
+      }
+    }
 
     final textDirection = calculateTextDirection(
       layoutDirection: Directionality.maybeOf(context),

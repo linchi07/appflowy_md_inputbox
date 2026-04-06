@@ -105,27 +105,38 @@ CommandShortcutEventHandler _backspaceInCollapsedSelection = (editorState) {
             .findParent((element) => element.type == TableBlockKeys.type);
         // break if only one is in a table or they're in different tables
         return tableParent != prevTableParent ||
-            // merge with the previous node contains delta.
-            element.delta != null;
+            // merge with the previous node contains delta or it's a divider.
+            element.delta != null ||
+            element.type == DividerBlockKeys.type;
       });
       // table nodes should be deleted using the table menu
       // in-table paragraphs should only be deleted inside the table
       if (prev != null && tableParent == prevTableParent) {
-        assert(prev.delta != null);
-        transaction
-          ..mergeText(prev, node)
-          ..insertNodes(
-            // insert children to previous node
-            prev.path.next,
-            node.children.toList(),
-          )
-          ..deleteNode(node)
-          ..afterSelection = Selection.collapsed(
-            Position(
-              path: prev.path,
-              offset: prev.delta!.length,
-            ),
-          );
+        if (prev.delta != null) {
+          transaction
+            ..mergeText(prev, node)
+            ..insertNodes(
+              // insert children to previous node
+              prev.path.next,
+              node.children.toList(),
+            )
+            ..deleteNode(node)
+            ..afterSelection = Selection.collapsed(
+              Position(
+                path: prev.path,
+                offset: prev.delta!.length,
+              ),
+            );
+        } else if (prev.type == DividerBlockKeys.type) {
+          transaction
+            ..deleteNode(prev)
+            ..afterSelection = Selection.collapsed(
+              Position(
+                path: prev.path,
+                offset: 0,
+              ),
+            );
+        }
       } else {
         // do nothing if there is no previous node contains delta.
         return KeyEventResult.ignored;

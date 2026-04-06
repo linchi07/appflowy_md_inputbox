@@ -20,6 +20,7 @@ TextSpan markdownTextSpanDecorator(
     for (int i = 0; i < p1.length; i++) {
       if (p1[i] != node.path[i]) return false;
     }
+
     return true;
   }
 
@@ -57,19 +58,16 @@ TextSpan markdownTextSpanDecorator(
   final String content = text.text;
   TextStyle? baseStyle = before.style;
 
-  final hiddenStyle =
-      baseStyle?.copyWith(
+  final hiddenStyle = baseStyle?.copyWith(
         fontSize: 0.1,
         height: 0.1,
         color: Colors.transparent,
       ) ??
       const TextStyle(fontSize: 0.1, height: 0.1, color: Colors.transparent);
 
-  // Regex to match Markdown elements
-  // 1: Bold, 2: Italic, 3: Strike, 4: Code, 5: Full Header Line, 6: Checkbox, 7: Tag, 8: ListPrefix (Bullet), 9: ListPrefix (Ordered)
-  // 修改 1-4 组以支持非闭合匹配（直到行尾或符号结束）
+  // 1: Bold, 2: Italic, 3: Strike, 4: Code, 5: Full Header Line, 6: Checkbox (with optional list prefix), 7: Tag, 8: ListPrefix (Bullet), 9: ListPrefix (Ordered), 10: DividerLine
   final RegExp exp = RegExp(
-    r'(\*\*.*?(?:\*\*|$))|(\*.*?(?:\*|$))|(~~.*?(?:~~|$))|(`.*?(?:`|$))|^(#{1,6}\s+.*)$|(\[[ x]])|(#[\w\u4e00-\u9fa5]+)|^([-*]\s+)|^(\d+\.\s+)',
+    r'(\*\*.*?(?:\*\*|$))|(\*.*?(?:\*|$))|(~~.*?(?:~~|$))|(`.*?(?:`|$))|^(#{1,6}\s+.*)$|((?:^[-*]\s+)?\[[ x]])|(#[\w\u4e00-\u9fa5]+)|^([-*]\s+)|^(\d+\.\s+)|^([-*_]{3,})$',
     multiLine: true,
   );
 
@@ -98,7 +96,7 @@ TextSpan markdownTextSpanDecorator(
     bool isCaretIn = overlaps(
       globalMatchStart,
       globalMatchEnd,
-      isLineLevel: match.group(5) != null,
+      isLineLevel: match.group(5) != null || match.group(10) != null,
     );
 
     // 1-4: Inline formats
@@ -128,8 +126,7 @@ TextSpan markdownTextSpanDecorator(
       }
 
       // 判定是否闭合：首尾都有 marker 且长度足够
-      bool isClosed =
-          fullMatchStr.startsWith(marker) &&
+      bool isClosed = fullMatchStr.startsWith(marker) &&
           fullMatchStr.endsWith(marker) &&
           fullMatchStr.length >= marker.length * 2;
 
@@ -204,7 +201,13 @@ TextSpan markdownTextSpanDecorator(
             alignment: PlaceholderAlignment.middle,
             child: GestureDetector(
               onTap: () {
-                final newText = isChecked ? '[ ]' : '[x]';
+                // Determine current checkbox content and preserve prefix if any
+                final checkboxMatch =
+                    RegExp(r'\[[ x]]').firstMatch(fullMatchStr)!;
+                final prefix = fullMatchStr.substring(0, checkboxMatch.start);
+                final newCheckbox = isChecked ? '[ ]' : '[x]';
+                final newText = '$prefix$newCheckbox';
+
                 final transaction = editorState.transaction
                   ..replaceText(
                     node,
@@ -222,10 +225,12 @@ TextSpan markdownTextSpanDecorator(
             ),
           ),
         );
-        final int paddingLength = fullMatchStr.length - 1;
-        if (paddingLength > 0) {
-          final String paddingText = fullMatchStr.substring(1);
-          spans.add(TextSpan(text: paddingText, style: hiddenStyle));
+        // IMPORTANT: Pad with hidden characters to match original string length
+        // WidgetSpan occupies 1 char, so we hide fullMatchStr.length - 1 chars
+        if (fullMatchStr.length > 1) {
+          spans.add(
+            TextSpan(text: fullMatchStr.substring(1), style: hiddenStyle),
+          );
         }
       }
     }
@@ -292,6 +297,27 @@ TextSpan markdownTextSpanDecorator(
               text: fullMatchStr,
               style: baseStyle?.copyWith(fontWeight: FontWeight.bold),
             ),
+          );
+        }
+      }
+    }
+    // 10: Divider
+    else if (match.group(10) != null) {
+      if (isCaretIn) {
+        spans.add(TextSpan(text: fullMatchStr, style: baseStyle));
+      } else {
+        spans.add(
+          WidgetSpan(
+            child: Container(
+              height: 10,
+              alignment: Alignment.center,
+              child: const Divider(height: 1, thickness: 1, color: Colors.grey),
+            ),
+          ),
+        );
+        if (fullMatchStr.length > 1) {
+          spans.add(
+            TextSpan(text: fullMatchStr.substring(1), style: hiddenStyle),
           );
         }
       }

@@ -22,11 +22,14 @@ final CommandShortcutEvent enterMarkdownShortcutEvent = CommandShortcutEvent(
     // We will determine if the new line needs any prefix
     String nextPrefix = '';
 
-    // Check for Lists/Quotes Regex:
-    final match = RegExp(r'^([-*]\s+)|^(\d+)\.\s+|^((>\s*)+)').firstMatch(text);
-
+    // Check for Lists/Quotes/Checkboxes Regex:
+    // 1: Checkbox, 2: Bullet, 3: Numbered, 4: Quote
+    final match =
+        RegExp(r'^([-*]\s+\[[ x]]\s+)|^([-*]\s+)|^(\d+)\.\s+|^((>\s*)+)')
+            .firstMatch(text);
     if (match != null) {
       final fullMatchStr = match.group(0)!;
+
       // Termination Check: if line is ONLY the prefix and we are at the end of it
       if (text.trim() == fullMatchStr.trim() && offset <= fullMatchStr.length) {
         final transaction = editorState.transaction;
@@ -36,12 +39,16 @@ final CommandShortcutEvent enterMarkdownShortcutEvent = CommandShortcutEvent(
       }
 
       // Continuation Logic:
-      if (match.group(1) != null || match.group(3) != null) {
+      if (match.group(1) != null) {
+        // Checkbox: convert current (x or space) to empty [ ]
+        final prefix = match.group(1)!;
+        nextPrefix = '${prefix.substring(0, 2)}[ ] ';
+      } else if (match.group(2) != null || match.group(4) != null) {
         // Unordered list or Quote
         nextPrefix = fullMatchStr;
-      } else if (match.group(2) != null) {
+      } else if (match.group(3) != null) {
         // Ordered list
-        int currentNum = int.parse(match.group(2)!);
+        int currentNum = int.parse(match.group(3)!);
         nextPrefix = '${currentNum + 1}. ';
       }
     }
@@ -236,5 +243,15 @@ final List<SelectionMenuItem> markdownSelectionMenuItems = [
     keywords: ['italic'],
     handler: (editorState, _, __) =>
         _insertMarkdown(editorState, '**', cursorOffset: -1),
+  ),
+  SelectionMenuItem(
+    getName: () => 'Divider',
+    icon: (editorState, isSelected, style) => Icon(
+      Icons.horizontal_rule,
+      size: 20,
+      color: isSelected ? Colors.white : Colors.black,
+    ),
+    keywords: ['divider', 'horizontal', 'rule', '---'],
+    handler: (editorState, _, __) => _insertMarkdown(editorState, '---'),
   ),
 ];
