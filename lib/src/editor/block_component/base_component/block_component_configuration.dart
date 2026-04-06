@@ -91,8 +91,8 @@ mixin BlockComponentConfigurable<T extends StatefulWidget> on State<T> {
 }
 
 EdgeInsets _padding(Node node) {
-  return const EdgeInsets.symmetric(vertical: 4.0);
-}
+  return EdgeInsets.zero;
+} //调整为1间距
 
 EdgeInsets _indentPadding(Node node, TextDirection textDirection) {
   switch (textDirection) {
