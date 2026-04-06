@@ -42,7 +42,7 @@ dependencies:
 
 dependency_overrides:
   appflowy_editor:
-    path: ../appflowy-editor
+    path: ..
 
 dev_dependencies:
   flutter_test:
