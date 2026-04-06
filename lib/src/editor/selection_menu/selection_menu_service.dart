@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,10 @@ abstract class SelectionMenuService {
   Alignment get alignment;
 
   SelectionMenuStyle get style;
+
+  double get menuHeight;
+
+  double get menuWidth;
 
   Future<void> show();
 
@@ -209,51 +214,41 @@ class SelectionMenu extends SelectionMenuService {
   }
 
   void calculateSelectionMenuOffset(Rect rect) {
-    // Workaround: We can customize the padding through the [EditorStyle],
-    // but the coordinates of overlay are not properly converted currently.
-    // Just subtract the padding here as a result.
     const menuOffset = Offset(0, 10);
-    final editorOffset =
-        editorState.renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
-    final editorHeight = editorState.renderBox!.size.height;
-    final editorWidth = editorState.renderBox!.size.width;
 
-    // show below default
+    // Use the actual overlay size as the safe boundary
+    final overlayRenderBox =
+        Overlay.of(context, rootOverlay: true).context.findRenderObject()
+            as RenderBox;
+    final overlaySize = overlayRenderBox.size;
+
     _alignment = Alignment.topLeft;
-    final bottomRight = rect.bottomRight;
-    final topRight = rect.topRight;
-    var offset = bottomRight + menuOffset;
-    _offset = Offset(
-      offset.dx,
-      offset.dy,
-    );
 
-    // show above
-    if (offset.dy + menuHeight >= editorOffset.dy + editorHeight) {
-      offset = topRight - menuOffset;
-      _alignment = Alignment.bottomLeft;
+    // Default: show below
+    var top = rect.bottom + menuOffset.dy;
+    var left = rect.left;
 
-      _offset = Offset(
-        offset.dx,
-        editorHeight + editorOffset.dy - offset.dy,
-      );
+    // If bottom space is not enough, show above the selection
+    if (top + menuHeight > overlaySize.height) {
+      final potentialTop = rect.top - menuHeight - menuOffset.dy;
+      if (potentialTop >= 0) {
+        top = potentialTop;
+      }
     }
 
-    // show on right
-    if (_offset.dx + menuWidth < editorOffset.dx + editorWidth) {
+    // Horizontal check: if the menu would overflow the right edge of the overlay
+    if (left + menuWidth > overlaySize.width) {
+      // Align the right edge of the menu with the right edge of the selection rect
+      _alignment = Alignment.topRight;
       _offset = Offset(
-        _offset.dx,
-        _offset.dy,
+        overlaySize.width - rect.right,
+        top,
       );
-    } else if (offset.dx - editorOffset.dx > menuWidth) {
-      // show on left
-      _alignment = _alignment == Alignment.topLeft
-          ? Alignment.topRight
-          : Alignment.bottomRight;
-
+    } else {
+      // Align to the left
       _offset = Offset(
-        editorWidth - _offset.dx + editorOffset.dx,
-        _offset.dy,
+        max(0.0, left),
+        top,
       );
     }
   }

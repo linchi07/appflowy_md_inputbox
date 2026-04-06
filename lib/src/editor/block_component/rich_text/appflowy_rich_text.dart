@@ -136,6 +136,31 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
   void initState() {
     super.initState();
     confirmContextEnabled();
+    widget.editorState.selectionNotifier.addListener(_selectionListener);
+  }
+
+  @override
+  void dispose() {
+    widget.editorState.selectionNotifier.removeListener(_selectionListener);
+    super.dispose();
+  }
+
+  Selection? _lastSelection;
+
+  void _selectionListener() {
+    final selection = widget.editorState.selection;
+    final path = widget.node.path;
+
+    final isStaged = selection != null &&
+        (path.equals(selection.start.path) || path.equals(selection.end.path));
+    final wasStaged = _lastSelection != null &&
+        (path.equals(_lastSelection!.start.path) ||
+            path.equals(_lastSelection!.end.path));
+
+    if (isStaged || wasStaged) {
+      if (mounted) setState(() {});
+    }
+    _lastSelection = selection;
   }
 
   @override

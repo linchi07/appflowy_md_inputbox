@@ -437,10 +437,10 @@ class _SelectionMenuWidgetState extends State<SelectionMenuWidget> {
       }
 
       return ConstrainedBox(
-        constraints: const BoxConstraints(
-          maxHeight: 300,
-          minWidth: 300,
-          maxWidth: 300,
+        constraints: BoxConstraints(
+          maxHeight: widget.menuService.menuHeight,
+          minWidth: widget.menuService.menuWidth,
+          maxWidth: widget.menuService.menuWidth,
         ),
         child: ListView(
           shrinkWrap: true,
