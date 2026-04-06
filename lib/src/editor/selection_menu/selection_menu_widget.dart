@@ -340,7 +340,8 @@ class _SelectionMenuWidgetState extends State<SelectionMenuWidget> {
     setState(() {
       if (widget.reverse) {
         _showingItems = items.reversed.toList();
-        _selectedIndex = _showingItems.isNotEmpty ? _showingItems.length - 1 : 0;
+        _selectedIndex =
+            _showingItems.isNotEmpty ? _showingItems.length - 1 : 0;
       } else {
         _showingItems = items;
         _selectedIndex = 0;
@@ -461,6 +462,7 @@ class _SelectionMenuWidgetState extends State<SelectionMenuWidget> {
           maxWidth: widget.menuService.menuWidth,
         ),
         child: ListView(
+          padding: const EdgeInsets.only(right: 4), // for scrollbar
           shrinkWrap: true,
           controller: _scrollController,
           children: itemWidgets,

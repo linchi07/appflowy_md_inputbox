@@ -44,16 +44,16 @@ class _SelectionMenuItemWidgetState extends State<SelectionMenuItemWidget> {
             widget.isSelected || _onHover,
             widget.selectionMenuStyle,
           ),
-          style: ButtonStyle(
-            alignment: Alignment.centerLeft,
-            overlayColor: WidgetStateProperty.all(
-              style.selectionMenuItemSelectedColor,
+          style: TextButton.styleFrom(
+            // 设置形状
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(4.0), // 值越小越不圆，0 为直角
             ),
+            alignment: Alignment.centerLeft,
+            overlayColor: style.selectionMenuItemSelectedColor,
             backgroundColor: widget.isSelected
-                ? WidgetStateProperty.all(
-                    style.selectionMenuItemSelectedColor,
-                  )
-                : WidgetStateProperty.all(Colors.transparent),
+                ? style.selectionMenuItemSelectedColor
+                : Colors.transparent,
           ),
           label: widget.item.nameBuilder
                   ?.call(widget.item.name, style, isSelected) ??

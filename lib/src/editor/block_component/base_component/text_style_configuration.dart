@@ -25,7 +25,7 @@ class TextStyleConfiguration {
     ),
     this.applyHeightToFirstAscent = false,
     this.applyHeightToLastDescent = false,
-    this.lineHeight = 0,
+    this.lineHeight = 1.5,
     this.leadingDistribution = TextLeadingDistribution.even,
   });
 
