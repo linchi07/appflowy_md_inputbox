@@ -35,6 +35,7 @@ export 'quote_block_component/quote_block_component.dart';
 export 'quote_block_component/quote_character_shortcut.dart';
 export 'rich_text/appflowy_rich_text.dart';
 export 'rich_text/appflowy_rich_text_keys.dart';
+export 'rich_text/markdown_block_builder.dart';
 // rich text
 export 'rich_text/default_selectable_mixin.dart';
 export 'standard_block_components.dart';

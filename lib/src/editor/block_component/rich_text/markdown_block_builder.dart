@@ -127,13 +127,17 @@ class _MarkdownBlockComponentWidgetState
       layoutDirection: Directionality.maybeOf(context),
     );
 
+    final isOnlyNode = editorState.document.root.children.length == 1;
+    final isEmpty = node.delta?.isEmpty ?? true;
+    final showPlaceholder = isOnlyNode && isEmpty;
+
     Widget richText = AppFlowyRichText(
       key: forwardKey,
       delegate: this,
       node: widget.node,
       editorState: editorState,
       textAlign: alignment?.toTextAlign ?? textAlign,
-      placeholderText: _showPlaceholder ? placeholderText : ' ',
+      placeholderText: showPlaceholder ? placeholderText : ' ',
       textDirection: textDirection,
       textSpanDecorator: (textSpan) =>
           textSpan.updateTextStyle(textStyleWithTextSpan(textSpan: textSpan)),

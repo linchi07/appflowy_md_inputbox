@@ -2,6 +2,8 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'markdown_commands.dart';
+
 void main() {
   runApp(const MinimalTestApp());
 }
@@ -41,6 +43,15 @@ class _MinimalEditorPageState extends State<MinimalEditorPage> {
     editorState = EditorState.blank();
   }
 
+  void _handleSend() {
+    // 这里可以回调业务逻辑模块
+    // final text = editorState.document.root.children.first.delta?.toPlainText();
+    debugPrint('发送消息: ${editorState.document.root.children.first.delta?.toPlainText()}');
+    setState(() {
+      editorState = EditorState.blank();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     var s = MediaQuery.of(context).size;
@@ -68,6 +79,11 @@ class _MinimalEditorPageState extends State<MinimalEditorPage> {
                     autoFocus: true,
                     blockComponentBuilders: {
                       ...standardBlockComponentBuilderMap,
+                      ParagraphBlockKeys.type: MarkdownBlockComponentBuilder(
+                        configuration: BlockComponentConfiguration(
+                          placeholderText: (node) => '请输入内容...',
+                        ),
+                      ),
                     },
                     editorStyle: EditorStyle.desktop(
                       padding: const EdgeInsets.symmetric(
@@ -77,7 +93,13 @@ class _MinimalEditorPageState extends State<MinimalEditorPage> {
                       cursorColor: Colors.blue,
                       selectionColor: Colors.blue.withValues(alpha: 0.2),
                     ),
-                    commandShortcutEvents: [...standardCommandShortcutEvents],
+                    commandShortcutEvents: [
+                      sendShortcutEvent(onSend: _handleSend),
+                      enterMarkdownShortcutEvent,
+                      ...standardCommandShortcutEvents.where(
+                        (e) => e.key != enterMarkdownShortcutEvent.key,
+                      ),
+                    ],
                   ),
                 ),
               ),

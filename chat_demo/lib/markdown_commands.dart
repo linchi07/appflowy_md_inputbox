@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 final CommandShortcutEvent enterMarkdownShortcutEvent = CommandShortcutEvent(
   key: 'enter markdown continuation',
-  command: 'enter',
+  command: 'shift+enter',
   handler: (editorState) {
     final selection = editorState.selection;
     if (selection == null || !selection.isCollapsed) {
@@ -110,6 +110,19 @@ final CharacterShortcutEvent markdownSlashCommand = CharacterShortcutEvent(
     return true;
   },
 );
+
+CommandShortcutEvent sendShortcutEvent({
+  required VoidCallback onSend,
+}) =>
+    CommandShortcutEvent(
+      key: 'send message',
+      command: 'enter',
+      handler: (editorState) {
+        onSend();
+        return KeyEventResult.handled;
+      },
+      getDescription: () => 'Send the message',
+    );
 
 void _insertMarkdown(
   EditorState editorState,
