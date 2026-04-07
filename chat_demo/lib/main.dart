@@ -2,7 +2,7 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
-import 'markdown_commands.dart';
+
 
 void main() {
   runApp(const MinimalTestApp());
@@ -95,9 +95,9 @@ class _MinimalEditorPageState extends State<MinimalEditorPage> {
                     ),
                     commandShortcutEvents: [
                       sendShortcutEvent(onSend: _handleSend),
-                      enterMarkdownShortcutEvent,
+                      newlineMarkdownShortcutEvent,
                       ...standardCommandShortcutEvents.where(
-                        (e) => e.key != enterMarkdownShortcutEvent.key,
+                        (e) => e.key != newlineMarkdownShortcutEvent.key,
                       ),
                     ],
                   ),
