@@ -44,12 +44,8 @@ class _MinimalEditorPageState extends State<MinimalEditorPage> {
   }
 
   void _handleSend() {
-    // 这里可以回调业务逻辑模块
-    // final text = editorState.document.root.children.first.delta?.toPlainText();
-    debugPrint('发送消息: ${editorState.document.root.children.first.delta?.toPlainText()}');
-    setState(() {
-      editorState = EditorState.blank();
-    });
+    debugPrint('发送消息: ${editorState.toPlainText()}');
+    editorState.clear();
   }
 
   @override

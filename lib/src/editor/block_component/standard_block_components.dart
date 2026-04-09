@@ -58,9 +58,7 @@ final List<CommandShortcutEvent> standardCommandShortcutEvents = [
   // undo, redo
   undoCommand,
   redoCommand,
-
-  // enter
-  enterMarkdownShortcutEvent,
+  
 
   // backspace
   convertToParagraphCommand,

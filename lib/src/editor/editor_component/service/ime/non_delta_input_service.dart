@@ -148,7 +148,7 @@ class NonDeltaTextInputService extends TextInputService with TextInputClient {
     _textInputConnection
       ?..setEditableSizeAndTransform(size, transform)
       ..setCaretRect(rect)
-      ..setComposingRect(rect.translate(0, rect.height));
+      ..setComposingRect(rect.translate(0, rect.height - 20));
   }
 
   @override
