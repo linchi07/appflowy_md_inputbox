@@ -31,7 +31,7 @@ CharacterShortcutEvent customSlashCommand(
   bool shouldInsertSlash = true,
   bool deleteKeywordsByDefault = false,
   bool singleColumn = true,
-  SelectionMenuStyle style = SelectionMenuStyle.light,
+  SelectionMenuStyle? style,
   Set<String> supportSlashMenuNodeTypes = _defaultSupportSlashMenuNodeTypes,
 }) {
   return CharacterShortcutEvent(
@@ -56,7 +56,7 @@ Future<bool> _showSlashMenu(
   bool shouldInsertSlash = true,
   bool singleColumn = true,
   bool deleteKeywordsByDefault = false,
-  SelectionMenuStyle style = SelectionMenuStyle.light,
+  SelectionMenuStyle? style,
   Set<String> supportSlashMenuNodeTypes = _defaultSupportSlashMenuNodeTypes,
 }) async {
   if (PlatformExtension.isMobile) {
@@ -105,7 +105,8 @@ Future<bool> _showSlashMenu(
       deleteSlashByDefault: shouldInsertSlash,
       deleteKeywordsByDefault: deleteKeywordsByDefault,
       singleColumn: singleColumn,
-      style: style,
+      style:
+          style ?? editorState.editorStyle.selectionMenuStyle ?? SelectionMenuStyle.light,
     );
     if (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST')) {
       _selectionMenuService?.show();

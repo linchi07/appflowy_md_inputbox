@@ -132,6 +132,14 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
       widget.textSpanOverlayBuilder ??
       widget.editorState.editorStyle.textSpanOverlayBuilder;
 
+  TextStyle get resolvedTextStyle {
+    final themeStyle = Theme.of(context).textTheme.bodyMedium;
+    return themeStyle?.merge(textStyleConfiguration.text).copyWith(
+              fontFamilyFallback: themeStyle.fontFamilyFallback,
+            ) ??
+        textStyleConfiguration.text;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -567,7 +575,7 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
         return textSpan;
       }
       textSpan = textSpan.copyWith(
-        style: textStyleConfiguration.text.copyWith(
+        style: resolvedTextStyle.copyWith(
           height: height,
           fontSize: fontSize,
         ),
@@ -580,7 +588,7 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
   TextSpan getPlaceholderTextSpan() {
     return TextSpan(
       text: widget.placeholderText,
-      style: textStyleConfiguration.text.copyWith(
+      style: resolvedTextStyle.copyWith(
         height: textStyleConfiguration.lineHeight,
       ),
     );
@@ -592,7 +600,7 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
     int offset = 0;
     List<InlineSpan> textSpans = [];
     for (final textInsert in textInserts) {
-      TextStyle textStyle = textStyleConfiguration.text.copyWith(
+      TextStyle textStyle = resolvedTextStyle.copyWith(
         height: textStyleConfiguration.lineHeight,
       );
       final attributes = textInsert.attributes;

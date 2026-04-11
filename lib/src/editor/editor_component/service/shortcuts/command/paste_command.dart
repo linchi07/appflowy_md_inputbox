@@ -1,5 +1,8 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import '../../../../../service/markdown_parser.dart';
 
 final List<CommandShortcutEvent> pasteCommands = [
   pasteCommand,
@@ -88,52 +91,15 @@ extension on EditorState {
       return;
     }
 
-    final nodes = plainText
-        .split('\n')
-        .map(
-          (paragraph) => paragraph
-            ..replaceAll(r'\r', '')
-            ..trimRight(),
-        )
-        .map((paragraph) {
-          Delta delta = Delta();
-          if (_hrefRegex.hasMatch(paragraph) ||
-              _phoneRegex.hasMatch(paragraph)) {
-            final match = _hrefRegex.firstMatch(paragraph) ??
-                _phoneRegex.firstMatch(paragraph);
-            if (match != null) {
-              int startPos = match.start;
-              int endPos = match.end;
-              final String? entity = match.group(0);
-              if (entity != null) {
-                /// insert the text before the link or phone
-                if (startPos > 0) {
-                  delta.insert(paragraph.substring(0, startPos));
-                }
-
-                /// insert the link or phone
-                delta.insert(
-                  paragraph.substring(startPos, endPos),
-                  attributes: {
-                    AppFlowyRichTextKeys.href:
-                        _phoneRegex.hasMatch(entity) ? 'tel:$entity' : entity,
-                  },
-                );
-
-                /// insert the text after the link or phone
-                if (endPos < paragraph.length) {
-                  delta.insert(paragraph.substring(endPos));
-                }
-              }
-            }
-          } else {
-            delta.insert(paragraph, attributes: selectionAttributes);
-          }
-
-          return delta;
-        })
-        .map((paragraph) => paragraphNode(delta: paragraph))
-        .toList();
+    final List<Node> nodes;
+    if (plainText.length >= 1000) {
+      nodes = await compute(
+        parseMarkdownToNodesCompute,
+        (plainText, selectionAttributes),
+      );
+    } else {
+      nodes = parseMarkdownToNodes(plainText, baseAttributes: selectionAttributes);
+    }
 
     if (nodes.isEmpty) {
       return;

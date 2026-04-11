@@ -243,114 +243,136 @@ void _insertMarkdown(
 
 final List<SelectionMenuItem> markdownSelectionMenuItems = [
   SelectionMenuItem(
-    getName: () => 'Heading 1',
+    getName: () => AppFlowyEditorL10n.current.heading1,
     icon: (editorState, isSelected, style) => Icon(
       Icons.filter_1,
       size: 20,
-      color:  Colors.black,
+      color: isSelected
+          ? style.selectionMenuItemSelectedIconColor
+          : style.selectionMenuItemIconColor,
     ),
     keywords: ['h1', 'heading'],
     handler: (editorState, _, __) => _insertMarkdown(editorState, '# '),
   ),
   SelectionMenuItem(
-    getName: () => 'Heading 2',
+    getName: () => AppFlowyEditorL10n.current.heading2,
     icon: (editorState, isSelected, style) => Icon(
       Icons.filter_2,
       size: 20,
-      color:  Colors.black,
+      color: isSelected
+          ? style.selectionMenuItemSelectedIconColor
+          : style.selectionMenuItemIconColor,
     ),
     keywords: ['h2', 'heading'],
     handler: (editorState, _, __) => _insertMarkdown(editorState, '## '),
   ),
   SelectionMenuItem(
-    getName: () => 'Heading 3',
+    getName: () => AppFlowyEditorL10n.current.heading3,
     icon: (editorState, isSelected, style) => Icon(
       Icons.filter_3,
       size: 20,
-      color:  Colors.black,
+      color: isSelected
+          ? style.selectionMenuItemSelectedIconColor
+          : style.selectionMenuItemIconColor,
     ),
     keywords: ['h3', 'heading'],
     handler: (editorState, _, __) => _insertMarkdown(editorState, '### '),
   ),
   SelectionMenuItem(
-    getName: () => 'Bulleted List',
+    getName: () => AppFlowyEditorL10n.current.bulletedList,
     icon: (editorState, isSelected, style) => Icon(
       Icons.format_list_bulleted,
       size: 20,
-      color:  Colors.black,
+      color: isSelected
+          ? style.selectionMenuItemSelectedIconColor
+          : style.selectionMenuItemIconColor,
     ),
     keywords: ['list', 'bullet'],
     handler: (editorState, _, __) => _insertMarkdown(editorState, '- '),
   ),
   SelectionMenuItem(
-    getName: () => 'Numbered List',
+    getName: () => AppFlowyEditorL10n.current.numberedList,
     icon: (editorState, isSelected, style) => Icon(
       Icons.format_list_numbered,
       size: 20,
-      color:  Colors.black,
+      color: isSelected
+          ? style.selectionMenuItemSelectedIconColor
+          : style.selectionMenuItemIconColor,
     ),
     keywords: ['list', 'number'],
     handler: (editorState, _, __) => _insertMarkdown(editorState, '1. '),
   ),
   SelectionMenuItem(
-    getName: () => 'Checkbox',
+    getName: () => AppFlowyEditorL10n.current.checkbox,
     icon: (editorState, isSelected, style) => Icon(
       Icons.check_box_outlined,
       size: 20,
-      color:  Colors.black,
+      color: isSelected
+          ? style.selectionMenuItemSelectedIconColor
+          : style.selectionMenuItemIconColor,
     ),
     keywords: ['todo', 'checkbox'],
     handler: (editorState, _, __) => _insertMarkdown(editorState, '- [ ] '),
   ),
   SelectionMenuItem(
-    getName: () => 'Quote',
+    getName: () => AppFlowyEditorL10n.current.quote,
     icon: (editorState, isSelected, style) => Icon(
       Icons.format_quote,
       size: 20,
-      color:  Colors.black,
+      color: isSelected
+          ? style.selectionMenuItemSelectedIconColor
+          : style.selectionMenuItemIconColor,
     ),
     keywords: ['quote'],
     handler: (editorState, _, __) => _insertMarkdown(editorState, '> '),
   ),
   SelectionMenuItem(
-    getName: () => 'Code Block',
+    getName: () => AppFlowyEditorL10n.current.embedCode,
     icon: (editorState, isSelected, style) => Icon(
       Icons.code,
       size: 20,
-      color:  Colors.black,
+      color: isSelected
+          ? style.selectionMenuItemSelectedIconColor
+          : style.selectionMenuItemIconColor,
     ),
     keywords: ['code', 'block'],
     handler: (editorState, _, __) =>
         _insertMarkdown(editorState, '```\n\n```', cursorOffset: -4),
   ),
   SelectionMenuItem(
-    getName: () => 'Bold',
+    getName: () => AppFlowyEditorL10n.current.bold,
     icon: (editorState, isSelected, style) => Icon(
       Icons.format_bold,
       size: 20,
-      color:  Colors.black,
+      color: isSelected
+          ? style.selectionMenuItemSelectedIconColor
+          : style.selectionMenuItemIconColor,
     ),
     keywords: ['bold'],
     handler: (editorState, _, __) =>
         _insertMarkdown(editorState, '****', cursorOffset: -2),
   ),
   SelectionMenuItem(
-    getName: () => 'Italic',
+    getName: () => AppFlowyEditorL10n.current.italic,
     icon: (editorState, isSelected, style) => Icon(
       Icons.format_italic,
       size: 20,
-      color:  Colors.black,
+      color: isSelected
+          ? style.selectionMenuItemSelectedIconColor
+          : style.selectionMenuItemIconColor,
     ),
     keywords: ['italic'],
     handler: (editorState, _, __) =>
         _insertMarkdown(editorState, '**', cursorOffset: -1),
   ),
   SelectionMenuItem(
-    getName: () => 'Divider',
+    getName: () => AppFlowyEditorL10n.current.divider,
     icon: (editorState, isSelected, style) => Icon(
       Icons.horizontal_rule,
       size: 20,
-      color:  Colors.black,
+      color: isSelected
+          ? style.selectionMenuItemSelectedIconColor
+          : style.selectionMenuItemIconColor,
     ),
     keywords: ['divider', 'horizontal', 'rule', '---'],
     handler: (editorState, _, __) => _insertMarkdown(editorState, '---'),

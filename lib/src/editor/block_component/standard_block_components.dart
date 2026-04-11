@@ -3,10 +3,6 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor/src/editor/block_component/heading_block_component/heading_command_shortcut.dart';
 import 'package:appflowy_editor/src/editor/util/platform_extension.dart';
 
-import 'divider_block_component/divider_block_component.dart';
-import 'divider_block_component/divider_character_shortcut.dart';
-import 'rich_text/markdown_block_builder.dart';
-import 'rich_text/markdown_commands.dart';
 
 const standardBlockComponentConfiguration = BlockComponentConfiguration();
 

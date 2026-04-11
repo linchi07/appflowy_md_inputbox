@@ -6,4 +6,3 @@ export 'object_extensions.dart';
 export 'position_extension.dart';
 export 'text_style_extension.dart';
 export 'url_launcher_extension.dart';
-export 'editor_state_extension.dart';

@@ -259,7 +259,45 @@ class SelectionMenuStyle {
   final Color selectionMenuButtonIconColor;
   final Color selectionMenuButtonBorderColor;
   final Color selectionMenuTabIndicatorColor;
+
+  static SelectionMenuStyle fromColors({
+    required Color backgroundColor,
+    required Color foregroundColor,
+  }) {
+    final unselectedTextColor =
+        backgroundColor.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+
+    final selectedBackgroundColor = foregroundColor.withValues(alpha: 0.15);
+    final selectedTextColor =
+        (Color.alphaBlend(selectedBackgroundColor, backgroundColor))
+                    .computeLuminance() >
+                0.5
+            ? Colors.black
+            : Colors.white;
+
+    final buttonTextColor =
+        foregroundColor.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+
+    return SelectionMenuStyle(
+      selectionMenuBackgroundColor: backgroundColor,
+      selectionMenuItemTextColor: unselectedTextColor,
+      selectionMenuItemIconColor: unselectedTextColor,
+      selectionMenuItemSelectedTextColor: selectedTextColor,
+      selectionMenuItemSelectedIconColor: selectedTextColor,
+      selectionMenuItemSelectedColor: selectedBackgroundColor,
+      selectionMenuUnselectedLabelColor: unselectedTextColor.withValues(alpha: 0.7),
+      selectionMenuDividerColor: foregroundColor.withValues(alpha: 0.1),
+      selectionMenuLinkBorderColor: foregroundColor,
+      selectionMenuInvalidLinkColor: const Color(0xFFE53935),
+      selectionMenuButtonColor: foregroundColor,
+      selectionMenuButtonTextColor: buttonTextColor,
+      selectionMenuButtonIconColor: buttonTextColor,
+      selectionMenuButtonBorderColor: foregroundColor,
+      selectionMenuTabIndicatorColor: foregroundColor,
+    );
+  }
 }
+
 
 class SelectionMenuWidget extends StatefulWidget {
   const SelectionMenuWidget({

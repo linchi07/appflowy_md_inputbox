@@ -33,7 +33,7 @@ class AppFlowyEditor extends StatefulWidget {
     this.shrinkWrap = false,
     this.showMagnifier = true,
     this.editorScrollController,
-    this.editorStyle = const EditorStyle.desktop(),
+    EditorStyle? editorStyle,
     this.header,
     this.footer,
     this.focusNode,
@@ -47,7 +47,8 @@ class AppFlowyEditor extends StatefulWidget {
     this.autoScrollEdgeOffset = appFlowyEditorAutoScrollEdgeOffset,
     this.documentRules = const [],
     this.blockWrapper,
-  })  : blockComponentBuilders =
+  })  : editorStyle = editorStyle ?? EditorStyle.desktop(),
+        blockComponentBuilders =
             blockComponentBuilders ?? standardBlockComponentBuilderMap,
         characterShortcutEvents =
             characterShortcutEvents ?? standardCharacterShortcutEvents,

@@ -29,12 +29,14 @@ class SelectionMenu extends SelectionMenuService {
     required this.selectionMenuItems,
     this.deleteSlashByDefault = true,
     this.deleteKeywordsByDefault = false,
-    this.style = SelectionMenuStyle.light,
+    SelectionMenuStyle? style,
     this.itemCountFilter = 0,
     this.singleColumn = false,
     this.menuHeight = 300,
     this.menuWidth = 300,
-  });
+  }) : style = style ??
+            editorState.editorStyle.selectionMenuStyle ??
+            SelectionMenuStyle.light;
 
   final BuildContext context;
   final EditorState editorState;

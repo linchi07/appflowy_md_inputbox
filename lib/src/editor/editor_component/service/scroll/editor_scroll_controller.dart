@@ -24,25 +24,17 @@ class EditorScrollController {
     // if shrinkWrap is true, we will render the document with Column layout.
     // otherwise, we will render the document with ScrollablePositionedList.
     if (shrinkWrap) {
-      void updateVisibleRange() {
-        visibleRangeNotifier.value = (
-          0,
-          editorState.document.root.children.length - 1,
-        );
-      }
-
-      updateVisibleRange();
-      editorState.document.root.addListener(updateVisibleRange);
+      _updateVisibleRange();
+      editorState.document.root.addListener(_updateVisibleRange);
 
       shouldDisposeScrollController = scrollController == null;
       this.scrollController = scrollController ?? ScrollController();
       // listen to the scroll offset
-      this.scrollController.addListener(
-            () => offsetNotifier.value = this.scrollController.offset,
-          );
+      this.scrollController.addListener(_updateScrollOffset);
     } else {
       // listen to the scroll offset
       _scrollOffsetSubscription = _scrollOffsetListener.changes.listen((value) {
+        if (_isDisposed) return;
         // the value from changes is the delta offset, so we add it to the current
         // offset to get the total offset.
         offsetNotifier.value = offsetNotifier.value + value;
@@ -51,6 +43,8 @@ class EditorScrollController {
       _itemPositionsListener.itemPositions.addListener(_listenItemPositions);
     }
   }
+
+  bool _isDisposed = false;
 
   final EditorState editorState;
   final bool shrinkWrap;
@@ -143,11 +137,15 @@ class EditorScrollController {
 
   // dispose the subscription
   void dispose() {
-    if (shouldDisposeScrollController) {
-      scrollController.dispose();
-    }
+    _isDisposed = true;
 
-    if (!shrinkWrap) {
+    if (shrinkWrap) {
+      editorState.document.root.removeListener(_updateVisibleRange);
+      scrollController.removeListener(_updateScrollOffset);
+      if (shouldDisposeScrollController) {
+        scrollController.dispose();
+      }
+    } else {
       _scrollOffsetSubscription.cancel();
       _itemPositionsListener.itemPositions.removeListener(_listenItemPositions);
       (_itemPositionsListener as ItemPositionsNotifier?)
@@ -229,6 +227,10 @@ class EditorScrollController {
 
   // listen to the visible item positions
   void _listenItemPositions() {
+    if (_isDisposed) {
+      return;
+    }
+
     // the value from itemPositions is the list of item positions, we need to filter
     //  the list to find the first and last visible items.
     final positions = _itemPositionsListener.itemPositions.value;
@@ -273,6 +275,25 @@ class EditorScrollController {
     // notify the listeners
 
     visibleRangeNotifier.value = (min, max);
+  }
+
+  void _updateVisibleRange() {
+    if (_isDisposed) {
+      return;
+    }
+
+    visibleRangeNotifier.value = (
+      0,
+      editorState.document.root.children.length - 1,
+    );
+  }
+
+  void _updateScrollOffset() {
+    if (_isDisposed) {
+      return;
+    }
+
+    offsetNotifier.value = scrollController.offset;
   }
 }
 
