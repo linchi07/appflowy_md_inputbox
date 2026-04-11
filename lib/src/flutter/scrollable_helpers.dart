@@ -373,9 +373,19 @@ class EdgeDraggingAutoScroller {
       );
       onScrollViewScrolled?.call();
       if (_scrolling) {
-        await _scroll();
+        if (_currentDuration == Duration.zero) {
+          _scrolling = false;
+          return;
+        }
+        // Yield to the event loop to allow layout to update, 
+        // preventing synchronous deadlocks.
+        await Future.delayed(Duration.zero);
+        if (_scrolling) {
+          await _scroll();
+        }
       }
     } catch (e) {
+
       debugPrint(e.toString());
     } finally {
       _scrolling = false;

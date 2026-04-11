@@ -84,9 +84,8 @@ class _MDEditorState extends State<MDEditor> {
   @override
   Widget build(BuildContext context) {
     Widget e = AppFlowyEditor(
-      autoScrollEdgeOffset: 40,
       editorState: editorState,
-      shrinkWrap: true,
+      shrinkWrap: false,
       focusNode: widget.focusNode,
       autoFocus: true,
       blockComponentBuilders: {
@@ -114,9 +113,9 @@ class _MDEditorState extends State<MDEditor> {
           ...standardCommandShortcutEvents,
       ],
     );
-    if (widget.multiLine) {
-      e = IntrinsicHeight(child: e);
-    }
+    // IntrinsicHeight is no longer needed since PageBlockComponent automatically
+    // constraints its height using EditorHeightService's totalHeightNotifier.
+    // This provides true auto-scaling with lazy-loading support without crashing LayoutBuilder.
 
     if (widget.decoration != null) {
       e = DecoratedBox(

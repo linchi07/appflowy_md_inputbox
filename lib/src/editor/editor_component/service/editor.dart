@@ -1,7 +1,8 @@
 import 'dart:math';
 
 import 'package:appflowy_editor/appflowy_editor.dart';
-import 'package:appflowy_editor/src/flutter/overlay.dart';
+import 'package:appflowy_editor/src/editor/editor_component/service/scroll/editor_height_service.dart';
+import 'package:appflowy_editor/src/editor/editor_component/service/selection/cursor_overlay.dart';
 import 'package:flutter/material.dart' hide Overlay, OverlayEntry;
 import 'package:provider/provider.dart';
 
@@ -239,22 +240,25 @@ class AppFlowyEditor extends StatefulWidget {
 class _AppFlowyEditorState extends State<AppFlowyEditor> {
   Widget? services;
 
-  EditorState get editorState => widget.editorState;
-
   late EditorScrollController editorScrollController;
+  late EditorHeightService editorHeightService;
+
+  EditorState get editorState => widget.editorState;
 
   @override
   void initState() {
     super.initState();
+
+    _updateValues();
+    editorState.renderer = _renderer;
+
+    editorHeightService = EditorHeightService(editorState: editorState);
 
     editorScrollController = widget.editorScrollController ??
         EditorScrollController(
           editorState: editorState,
           shrinkWrap: widget.shrinkWrap,
         );
-
-    _updateValues();
-    editorState.renderer = _renderer;
 
     // auto focus
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
@@ -264,6 +268,8 @@ class _AppFlowyEditorState extends State<AppFlowyEditor> {
 
   @override
   void dispose() {
+    editorHeightService.dispose();
+
     // dispose the scroll controller if it's created by the editor
     if (widget.editorScrollController == null) {
       editorScrollController.dispose();
@@ -297,15 +303,17 @@ class _AppFlowyEditorState extends State<AppFlowyEditor> {
   Widget build(BuildContext context) {
     services ??= _buildServices(context);
 
-    return Provider.value(
-      value: editorState,
+    return MultiProvider(
+      providers: [
+        Provider.value(value: editorState),
+        ChangeNotifierProvider.value(value: editorHeightService),
+      ],
       child: FocusScope(
-        child: Overlay(
+        child: Stack(
           clipBehavior: Clip.none,
-          initialEntries: [
-            OverlayEntry(
-              builder: (context) => services!,
-            ),
+          children: [
+            services!,
+            const CursorOverlay(),
           ],
         ),
       ),

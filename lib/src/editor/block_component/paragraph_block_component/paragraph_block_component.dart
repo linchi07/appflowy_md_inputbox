@@ -131,16 +131,16 @@ class _ParagraphBlockComponentWidgetState
   void _onSelectionChange() {
     final selection = editorState.selection;
 
+    final bool showPlaceholder;
     if (widget.showPlaceholder != null) {
-      setState(() {
-        _showPlaceholder = widget.showPlaceholder!(editorState, node);
-      });
+      showPlaceholder = widget.showPlaceholder!(editorState, node);
     } else {
-      final showPlaceholder = selection != null &&
+      showPlaceholder = selection != null &&
           (selection.isSingle && selection.start.path.equals(node.path));
-      if (showPlaceholder != _showPlaceholder) {
-        setState(() => _showPlaceholder = showPlaceholder);
-      }
+    }
+
+    if (showPlaceholder != _showPlaceholder) {
+      setState(() => _showPlaceholder = showPlaceholder);
     }
   }
 

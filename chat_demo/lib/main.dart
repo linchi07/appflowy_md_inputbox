@@ -94,11 +94,9 @@ class _ChatScreenState extends State<ChatScreen> {
     if (text.trim().isEmpty) return;
 
     setState(() {
-      _messages.add(ChatMessage(
-        text: text,
-        isMe: true,
-        timestamp: DateTime.now(),
-      ));
+      _messages.add(
+        ChatMessage(text: text, isMe: true, timestamp: DateTime.now()),
+      );
     });
     _controller.clear();
     _charCount.value = 0;
@@ -123,8 +121,14 @@ class _ChatScreenState extends State<ChatScreen> {
         title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('AppFlowy MD Input', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            Text('Obsidian-style Handfeel', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            Text(
+              'AppFlowy MD Input',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              'Obsidian-style Handfeel',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
           ],
         ),
         actions: [
@@ -190,12 +194,18 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 const Icon(Icons.bolt, color: Colors.amber, size: 20),
                 const SizedBox(width: 8),
-                const Text('Markdown 已启用', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                const Text(
+                  'Markdown 已启用',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
                 const Spacer(),
                 ValueListenableBuilder<int>(
                   valueListenable: _charCount,
                   builder: (context, count, _) {
-                    return Text('$count 字符', style: const TextStyle(fontSize: 12, color: Colors.grey));
+                    return Text(
+                      '$count 字符',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    );
                   },
                 ),
               ],
@@ -218,7 +228,10 @@ class _ChatScreenState extends State<ChatScreen> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.transparent),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -244,7 +257,10 @@ class _ChatScreenState extends State<ChatScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('功能测试', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        const Text(
+          '功能测试',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 16),
         _TestButton(
           label: '强制聚焦',
@@ -278,7 +294,14 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         const Spacer(),
         const Divider(),
-        const Text('实时预览 (Raw)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
+        const Text(
+          '实时预览 (Raw)',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey,
+          ),
+        ),
         const SizedBox(height: 8),
         Expanded(
           child: Container(
@@ -319,7 +342,9 @@ class _MessageBubble extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.5),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.5,
+        ),
         decoration: BoxDecoration(
           color: message.isMe ? Colors.indigo : Colors.white,
           borderRadius: BorderRadius.only(
@@ -384,7 +409,10 @@ class _TestButton extends StatelessWidget {
                 Expanded(
                   child: Text(
                     label,
-                    style: TextStyle(fontSize: 13, color: color ?? Colors.black87),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: color ?? Colors.black87,
+                    ),
                   ),
                 ),
               ],
