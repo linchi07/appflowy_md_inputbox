@@ -85,8 +85,10 @@ class Keybinding {
   final bool isShiftPressed;
   final String keyLabel;
 
-  int get keyCode => keyToCodeMapping[keyLabel.toLowerCase()]!;
-
+  int get keyCode {
+    return keyToCodeMapping[keyLabel.toLowerCase()]!;
+  }
+  
   Keybinding copyWith({
     bool? isAltPressed,
     bool? isControlPressed,

@@ -220,6 +220,16 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
       // For the deletion, we should attach the text input service immediately.
       _attachTextInputService(selection);
       _updateCaretPosition(selection);
+      
+      // Delay an extra caret update until the next frame.
+      // This is crucial for node splitting (like Enter): at the moment the 
+      // selection changes, the new node's renderBox might not be mounted yet.
+      // The IME needs the post-layout position.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _updateCaretPosition(editorState.selection);
+        }
+      });
 
       if (editorState.selectionUpdateReason == SelectionUpdateReason.uiEvent) {
         focusNode.requestFocus();

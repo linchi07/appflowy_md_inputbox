@@ -2,78 +2,7 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/widgets.dart';
 
 int _textLengthOfNode(Node node) => node.delta?.length ?? 0;
-RegExp _linkRegex = RegExp(
-  r'https?://(?:www\.)?[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s]*)?',
-);
 
-RegExp _phoneRegex = RegExp(r'^\+?' // Optional '+' at start
-    r'(?:[0-9][\s-.]?)+' // Sequence of digits with optional separators
-    r'[0-9]$' // Ensure it ends with a digit
-    );
-
-void _pasteSingleLine(
-  EditorState editorState,
-  Selection selection,
-  String line,
-) {
-  assert(selection.isCollapsed);
-
-  // handle link
-  final Attributes attributes = _linkRegex.hasMatch(line)
-      ? {
-          AppFlowyRichTextKeys.href: line,
-        }
-      : _phoneRegex.hasMatch(line)
-          ? {
-              AppFlowyRichTextKeys.href: line,
-            }
-          : {};
-
-  final node = editorState.getNodeAtPath(selection.end.path)!;
-  final transaction = editorState.transaction
-    ..insertText(node, selection.startIndex, line, attributes: attributes)
-    ..afterSelection = (Selection.collapsed(
-      Position(
-        path: selection.end.path,
-        offset: selection.startIndex + line.length,
-      ),
-    ));
-  editorState.apply(transaction);
-}
-
-void _pasteMarkdown(EditorState editorState, String markdown) {
-  final selection = editorState.selection;
-  if (selection == null) {
-    return;
-  }
-
-  final lines = markdown.split('\n');
-
-  if (lines.length == 1) {
-    _pasteSingleLine(editorState, selection, lines[0]);
-
-    return;
-  }
-
-  var path = selection.end.path.next;
-  final node = editorState.document.nodeAtPath(selection.end.path);
-  final delta = node?.delta;
-  if (delta != null && delta.toPlainText().isEmpty) {
-    path = selection.end.path;
-  }
-  final document = markdownToDocument(markdown);
-  final transaction = editorState.transaction;
-  var afterPath = path;
-  for (var i = 0; i < document.root.children.length - 1; i++) {
-    afterPath = afterPath.next;
-  }
-  final offset = document.root.children.lastOrNull?.delta?.length ?? 0;
-  transaction
-    ..insertNodes(path, document.root.children)
-    ..afterSelection =
-        Selection.collapsed(Position(path: afterPath, offset: offset));
-  editorState.apply(transaction);
-}
 
 void handlePastePlainText(EditorState editorState, String plainText) {
   final selection = editorState.selection?.normalized;
@@ -81,55 +10,28 @@ void handlePastePlainText(EditorState editorState, String plainText) {
     return;
   }
 
-  final lines = plainText
-      .split("\n")
-      .map((e) => e.replaceAll(RegExp(r'\r'), ""))
-      .toList();
-
-  if (lines.isEmpty) {
-    return;
-  } else if (lines.length == 1) {
-    // single line
-    _pasteSingleLine(editorState, selection, lines.first);
-  } else {
-    _pasteMarkdown(editorState, plainText);
-  }
-}
-
-void pasteHTML(EditorState editorState, String html) {
-  final selection = editorState.selection?.normalized;
-  if (selection == null || !selection.isCollapsed) {
+  // Simplified: treat entire text as lines and insert them.
+  final lines = plainText.split('\n');
+  final nodes = lines.map((line) => paragraphNode(text: line)).toList();
+  if (nodes.isEmpty) {
     return;
   }
 
-  AppFlowyEditorLog.keyboard.debug('paste html: $html');
-
-  final htmlToNodes = htmlToDocument(html).root.children.where((element) {
-    final delta = element.delta;
-    if (delta == null) {
-      return true;
-    }
-
-    return delta.isNotEmpty;
-  });
-  if (htmlToNodes.isEmpty) {
-    return;
-  }
-
-  if (htmlToNodes.length == 1) {
+  if (nodes.length == 1) {
     _pasteSingleLineInText(
       editorState,
       selection.startIndex,
-      htmlToNodes.first,
+      nodes.first,
     );
   } else {
     _pasteMultipleLinesInText(
       editorState,
       selection.start.offset,
-      htmlToNodes.toList(),
+      nodes,
     );
   }
 }
+
 
 Selection _computeSelectionAfterPasteMultipleNodes(
   EditorState editorState,
@@ -152,7 +54,6 @@ void handleCopy(EditorState editorState) async {
     return;
   }
   String text;
-  String html;
 
   if (selection.isCollapsed) {
     final node = editorState.getNodeAtPath(selection.end.path);
@@ -160,29 +61,13 @@ void handleCopy(EditorState editorState) async {
       return;
     }
     text = node.delta?.toPlainText() ?? '';
-    html = documentToHTML(
-      Document(
-        root: pageNode(children: [node.copyWith()]),
-      ),
-    );
   } else {
     text = editorState.getTextInSelection(selection).join('\n');
-    final nodes = editorState.getSelectedNodes(selection: selection);
-    if (nodes.isEmpty) {
-      return;
-    }
-    html = documentToHTML(
-      Document(
-        root: pageNode(
-          children: nodes.map((node) => node.copyWith()),
-        ),
-      ),
-    );
   }
 
   return AppFlowyClipboard.setData(
     text: text,
-    html: html.isEmpty ? null : html,
+    html: null,
   );
 }
 
@@ -346,11 +231,6 @@ void handlePaste(EditorState editorState) async {
 }
 
 void _pasteRichClipboard(EditorState editorState, AppFlowyClipboardData data) {
-  if (data.html != null) {
-    pasteHTML(editorState, data.html!);
-
-    return;
-  }
   if (data.text != null) {
     handlePastePlainText(editorState, data.text!);
 

@@ -132,10 +132,43 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
       widget.textSpanOverlayBuilder ??
       widget.editorState.editorStyle.textSpanOverlayBuilder;
 
+  TextStyle get resolvedTextStyle {
+    final themeStyle = Theme.of(context).textTheme.bodyMedium;
+    return themeStyle?.merge(textStyleConfiguration.text).copyWith(
+              fontFamilyFallback: themeStyle.fontFamilyFallback,
+            ) ??
+        textStyleConfiguration.text;
+  }
+
   @override
   void initState() {
     super.initState();
     confirmContextEnabled();
+    widget.editorState.selectionNotifier.addListener(_selectionListener);
+  }
+
+  @override
+  void dispose() {
+    widget.editorState.selectionNotifier.removeListener(_selectionListener);
+    super.dispose();
+  }
+
+  Selection? _lastSelection;
+
+  void _selectionListener() {
+    final selection = widget.editorState.selection;
+    final path = widget.node.path;
+
+    final isStaged = selection != null &&
+        (path.equals(selection.start.path) || path.equals(selection.end.path));
+    final wasStaged = _lastSelection != null &&
+        (path.equals(_lastSelection!.start.path) ||
+            path.equals(_lastSelection!.end.path));
+
+    if (isStaged || wasStaged) {
+      if (mounted) setState(() {});
+    }
+    _lastSelection = selection;
   }
 
   @override
@@ -542,7 +575,7 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
         return textSpan;
       }
       textSpan = textSpan.copyWith(
-        style: textStyleConfiguration.text.copyWith(
+        style: resolvedTextStyle.copyWith(
           height: height,
           fontSize: fontSize,
         ),
@@ -555,7 +588,7 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
   TextSpan getPlaceholderTextSpan() {
     return TextSpan(
       text: widget.placeholderText,
-      style: textStyleConfiguration.text.copyWith(
+      style: resolvedTextStyle.copyWith(
         height: textStyleConfiguration.lineHeight,
       ),
     );
@@ -567,7 +600,7 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
     int offset = 0;
     List<InlineSpan> textSpans = [];
     for (final textInsert in textInserts) {
-      TextStyle textStyle = textStyleConfiguration.text.copyWith(
+      TextStyle textStyle = resolvedTextStyle.copyWith(
         height: textStyleConfiguration.lineHeight,
       );
       final attributes = textInsert.attributes;

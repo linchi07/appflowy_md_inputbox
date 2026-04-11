@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,10 @@ abstract class SelectionMenuService {
   Alignment get alignment;
 
   SelectionMenuStyle get style;
+
+  double get menuHeight;
+
+  double get menuWidth;
 
   Future<void> show();
 
@@ -24,12 +29,14 @@ class SelectionMenu extends SelectionMenuService {
     required this.selectionMenuItems,
     this.deleteSlashByDefault = true,
     this.deleteKeywordsByDefault = false,
-    this.style = SelectionMenuStyle.light,
+    SelectionMenuStyle? style,
     this.itemCountFilter = 0,
     this.singleColumn = false,
     this.menuHeight = 300,
     this.menuWidth = 300,
-  });
+  }) : style = style ??
+            editorState.editorStyle.selectionMenuStyle ??
+            SelectionMenuStyle.light;
 
   final BuildContext context;
   final EditorState editorState;
@@ -37,7 +44,9 @@ class SelectionMenu extends SelectionMenuService {
   final bool deleteSlashByDefault;
   final bool deleteKeywordsByDefault;
   final bool singleColumn;
+  @override
   final double menuHeight;
+  @override
   final double menuWidth;
 
   @override
@@ -90,17 +99,12 @@ class SelectionMenu extends SelectionMenuService {
       return;
     }
 
-    calculateSelectionMenuOffset(selectionRects.first);
+    var showAbove = calculateSelectionMenuOffset(selectionRects.first);
     final (left, top, right, bottom) = getPosition();
-
-    final editorHeight = editorState.renderBox!.size.height;
-    final editorWidth = editorState.renderBox!.size.width;
-
     _selectionMenuEntry = OverlayEntry(
       builder: (context) {
-        return SizedBox(
-          width: editorWidth,
-          height: editorHeight,
+        return Material(
+          type: MaterialType.transparency,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () {
@@ -116,6 +120,7 @@ class SelectionMenu extends SelectionMenuService {
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: SelectionMenuWidget(
+                      reverse: showAbove,
                       selectionMenuStyle: style,
                       singleColumn: singleColumn,
                       items: selectionMenuItems
@@ -212,54 +217,58 @@ class SelectionMenu extends SelectionMenuService {
     return (left, top, right, bottom);
   }
 
-  void calculateSelectionMenuOffset(Rect rect) {
-    // Workaround: We can customize the padding through the [EditorStyle],
-    // but the coordinates of overlay are not properly converted currently.
-    // Just subtract the padding here as a result.
+  // now returns if show above or below
+  bool calculateSelectionMenuOffset(Rect rect) {
     const menuOffset = Offset(0, 10);
-    final editorOffset =
-        editorState.renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
-    final editorHeight = editorState.renderBox!.size.height;
-    final editorWidth = editorState.renderBox!.size.width;
 
-    // show below default
+    // Use the actual overlay size as the safe boundary
+    final overlayRenderBox = Overlay.of(context, rootOverlay: true)
+        .context
+        .findRenderObject() as RenderBox;
+    final overlaySize = overlayRenderBox.size;
+
     _alignment = Alignment.topLeft;
-    final bottomRight = rect.bottomRight;
-    final topRight = rect.topRight;
-    var offset = bottomRight + menuOffset;
-    _offset = Offset(
-      offset.dx,
-      offset.dy,
-    );
 
-    // show above
-    if (offset.dy + menuHeight >= editorOffset.dy + editorHeight) {
-      offset = topRight - menuOffset;
+    // Default: show below
+    var top = rect.bottom + menuOffset.dy;
+    var left = rect.left;
+    var showAbove = false;
+
+    // If bottom space is not enough, show above the selection
+    if (top + menuHeight > overlaySize.height) {
+      final potentialTop = rect.top - menuHeight - menuOffset.dy;
+      if (potentialTop >= 0) {
+        showAbove = true;
+      }
+    }
+
+    if (showAbove) {
+      // Anchoring to bottom for Above mode to ensure correct shrinking direction
       _alignment = Alignment.bottomLeft;
-
-      _offset = Offset(
-        offset.dx,
-        editorHeight + editorOffset.dy - offset.dy,
-      );
+      _offset = Offset(left, overlaySize.height - rect.top + menuOffset.dy);
+    } else {
+      // Anchoring to top for Below mode
+      _alignment = Alignment.topLeft;
+      _offset = Offset(left, top);
     }
 
-    // show on right
-    if (_offset.dx + menuWidth < editorOffset.dx + editorWidth) {
-      _offset = Offset(
-        _offset.dx,
-        _offset.dy,
-      );
-    } else if (offset.dx - editorOffset.dx > menuWidth) {
-      // show on left
-      _alignment = _alignment == Alignment.topLeft
-          ? Alignment.topRight
-          : Alignment.bottomRight;
-
-      _offset = Offset(
-        editorWidth - _offset.dx + editorOffset.dx,
-        _offset.dy,
-      );
+    // Horizontal check: if the menu would overflow the right edge of the overlay
+    if (left + menuWidth > overlaySize.width) {
+      // Align the right edge of the menu with the right edge of the selection rect
+      final rightOffset = overlaySize.width - rect.right;
+      if (showAbove) {
+        _alignment = Alignment.bottomRight;
+        _offset = Offset(rightOffset, _offset.dy);
+      } else {
+        _alignment = Alignment.topRight;
+        _offset = Offset(rightOffset, _offset.dy);
+      }
+    } else {
+      // Align to the left (ensure it doesn't overflow the left edge)
+      _offset = Offset(max(0.0, _offset.dx), _offset.dy);
     }
+
+    return showAbove;
   }
 }
 
@@ -310,55 +319,6 @@ final List<SelectionMenuItem> standardSelectionMenuItems = [
     keywords: ['heading 3, h3'],
     handler: (editorState, _, __) {
       insertHeadingAfterSelection(editorState, 3);
-    },
-  ),
-  SelectionMenuItem(
-    getName: () => AppFlowyEditorL10n.current.image,
-    icon: (editorState, isSelected, style) => SelectionMenuIconWidget(
-      name: 'image',
-      isSelected: isSelected,
-      style: style,
-    ),
-    keywords: ['image'],
-    handler: (editorState, menuService, context) {
-      final container = Overlay.of(context, rootOverlay: true);
-      showImageMenu(container, editorState, menuService);
-    },
-  ),
-  SelectionMenuItem(
-    getName: () => AppFlowyEditorL10n.current.bulletedList,
-    icon: (editorState, isSelected, style) => SelectionMenuIconWidget(
-      name: 'bulleted_list',
-      isSelected: isSelected,
-      style: style,
-    ),
-    keywords: ['bulleted list', 'list', 'unordered list'],
-    handler: (editorState, _, __) {
-      insertBulletedListAfterSelection(editorState);
-    },
-  ),
-  SelectionMenuItem(
-    getName: () => AppFlowyEditorL10n.current.numberedList,
-    icon: (editorState, isSelected, style) => SelectionMenuIconWidget(
-      name: 'number',
-      isSelected: isSelected,
-      style: style,
-    ),
-    keywords: ['numbered list', 'list', 'ordered list'],
-    handler: (editorState, _, __) {
-      insertNumberedListAfterSelection(editorState);
-    },
-  ),
-  SelectionMenuItem(
-    getName: () => AppFlowyEditorL10n.current.checkbox,
-    icon: (editorState, isSelected, style) => SelectionMenuIconWidget(
-      name: 'checkbox',
-      isSelected: isSelected,
-      style: style,
-    ),
-    keywords: ['todo list', 'list', 'checkbox list'],
-    handler: (editorState, _, __) {
-      insertCheckboxAfterSelection(editorState);
     },
   ),
   SelectionMenuItem(

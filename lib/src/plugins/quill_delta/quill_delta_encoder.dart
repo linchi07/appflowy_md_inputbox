@@ -1,22 +1,17 @@
 import 'dart:convert';
+import 'dart:ui';
 
 import 'package:appflowy_editor/appflowy_editor.dart';
-import 'package:flutter/material.dart';
 
 final QuillDeltaEncoder quillDeltaEncoder = QuillDeltaEncoder();
 
 const _newLineSymbol = '\n';
 const _header = 'header';
 const _list = 'list';
-const _orderedList = 'ordered';
-const _bulletedList = 'bullet';
-const _uncheckedList = 'unchecked';
-const _checkedList = 'checked';
 const _blockquote = 'blockquote';
 const _indent = 'indent';
 
 class QuillDeltaEncoder extends Converter<Delta, Document> {
-  final Map<int, List<Node>> nestedLists = {};
 
   @override
   Document convert(Delta input) {
@@ -37,16 +32,7 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
             node = _applyBlockquoteIfNeeded(node, attributes);
             _applyIndentIfNeeded(node, attributes);
           }
-          if (_isIndentBulletedList(attributes)) {
-            final level = _indentLevel(attributes);
-            final path = [
-              ...nestedLists[level - 1]!.last.path,
-              nestedLists[level]!.length - 1,
-            ];
-            document.insert(path, [node]);
-          } else {
-            document.insert([index++], [node]);
-          }
+          document.insert([index++], [node]);
           node = paragraphNode();
         } else {
           final texts = op.text.split('\n');
@@ -144,69 +130,9 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
 
   // If the attributes contains the list style, then apply the list style to the node.
   Node _applyListStyleIfNeeded(Node node, Map<String, dynamic> attributes) {
-    final list = attributes[_list] as String?;
-    switch (list) {
-      case _bulletedList:
-        final bulletedList = bulletedListNode(
-          delta: node.delta,
-        );
-        final indent = attributes[_indent] as int?;
-        if (indent != null) {
-          nestedLists[indent] ??= [];
-          nestedLists[indent]?.add(bulletedList);
-        } else {
-          nestedLists.clear();
-          nestedLists[0] ??= [];
-          nestedLists[0]?.add(bulletedList);
-        }
-        return bulletedList;
-
-      case _orderedList:
-        final numberedList = numberedListNode(
-          delta: node.delta,
-        );
-        final indent = attributes[_indent] as int?;
-        if (indent != null) {
-          nestedLists[indent] ??= [];
-          nestedLists[indent]?.add(numberedList);
-        } else {
-          nestedLists.clear();
-          nestedLists[0] ??= [];
-          nestedLists[0]?.add(numberedList);
-        }
-        return numberedList;
-
-      case _checkedList:
-        final checkedList = todoListNode(
-          delta: node.delta,
-          checked: true,
-        );
-        return checkedList;
-
-      case _uncheckedList:
-        final uncheckedList = todoListNode(
-          delta: node.delta,
-          checked: false,
-        );
-        return uncheckedList;
-
-      default:
-        return node;
-    }
+    return node;
   }
 
-  int _indentLevel(Map? attributes) {
-    final indent = attributes?['indent'] as int?;
-
-    return indent ?? 1;
-  }
-
-  bool _isIndentBulletedList(Map<String, dynamic>? attributes) {
-    final list = attributes?[_list] as String?;
-    final indent = attributes?[_indent] as int?;
-
-    return [_bulletedList, _orderedList].contains(list) && indent != null;
-  }
 
   bool _containsStyle(Map<String, dynamic>? attributes, String key) {
     final value = attributes?[key] as bool?;

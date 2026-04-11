@@ -1,5 +1,7 @@
-import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
+
+import 'package:appflowy_editor/appflowy_editor.dart';
+import '../../block_component/rich_text/markdown_decorator.dart';
 
 /// The style of the editor.
 ///
@@ -7,7 +9,7 @@ import 'package:flutter/material.dart';
 ///  the [AppFlowyEditor].
 ///
 class EditorStyle {
-  const EditorStyle({
+  EditorStyle({
     required this.padding,
     required this.cursorColor,
     required this.dragHandleColor,
@@ -27,6 +29,7 @@ class EditorStyle {
     this.mobileDragHandleWidthExtend,
     this.mobileDragHandleLeftExtend,
     this.mobileDragHandleHeightExtend,
+    this.selectionMenuStyle,
     this.autoDismissCollapsedHandleDuration = const Duration(seconds: 3),
   });
 
@@ -97,6 +100,8 @@ class EditorStyle {
   /// Only works on Android.
   final Duration autoDismissCollapsedHandleDuration;
 
+  final SelectionMenuStyle? selectionMenuStyle;
+
   final double mobileDragHandleWidth;
 
   // only works on android
@@ -105,7 +110,7 @@ class EditorStyle {
 
   final double textScaleFactor;
 
-  const EditorStyle.desktop({
+  EditorStyle.desktop({
     EdgeInsets? padding,
     Color? cursorColor,
     Color? selectionColor,
@@ -116,16 +121,17 @@ class EditorStyle {
     this.cursorWidth = 2.0,
     this.textScaleFactor = 1.0,
     this.maxWidth,
+    this.selectionMenuStyle,
   })  : padding = padding ?? const EdgeInsets.symmetric(horizontal: 100),
         cursorColor = cursorColor ?? const Color(0xFF00BCF0),
         selectionColor =
             selectionColor ?? const Color.fromARGB(53, 111, 201, 231),
         textStyleConfiguration = textStyleConfiguration ??
             const TextStyleConfiguration(
-              text: TextStyle(fontSize: 16, color: Colors.black),
+              text: TextStyle(fontSize: 16),
             ),
         textSpanDecorator =
-            textSpanDecorator ?? defaultTextSpanDecoratorForAttribute,
+            textSpanDecorator ?? markdownTextSpanDecorator,
         magnifierSize = Size.zero,
         mobileDragHandleBallSize = Size.zero,
         mobileDragHandleWidth = 0.0,
@@ -137,7 +143,7 @@ class EditorStyle {
         mobileDragHandleHeightExtend = null,
         autoDismissCollapsedHandleDuration = const Duration(seconds: 0);
 
-  const EditorStyle.mobile({
+  EditorStyle.mobile({
     EdgeInsets? padding,
     Color? cursorColor,
     Color? dragHandleColor,
@@ -158,6 +164,7 @@ class EditorStyle {
     this.mobileDragHandleLeftExtend,
     this.mobileDragHandleHeightExtend,
     this.autoDismissCollapsedHandleDuration = const Duration(seconds: 3),
+    this.selectionMenuStyle,
   })  : padding = padding ?? const EdgeInsets.symmetric(horizontal: 20),
         cursorColor = cursorColor ?? const Color(0xFF00BCF0),
         dragHandleColor = dragHandleColor ?? const Color(0xFF00BCF0),
@@ -165,10 +172,10 @@ class EditorStyle {
             selectionColor ?? const Color.fromARGB(53, 111, 201, 231),
         textStyleConfiguration = textStyleConfiguration ??
             const TextStyleConfiguration(
-              text: TextStyle(fontSize: 16, color: Colors.black),
+              text: TextStyle(fontSize: 16),
             ),
         textSpanDecorator =
-            textSpanDecorator ?? mobileTextSpanDecoratorForAttribute;
+            textSpanDecorator ?? markdownTextSpanDecorator;
 
   EditorStyle copyWith({
     EdgeInsets? padding,
@@ -191,6 +198,7 @@ class EditorStyle {
     double? mobileDragHandleLeftExtend,
     double? mobileDragHandleHeightExtend,
     Duration? autoDismissCollapsedHandleDuration,
+    SelectionMenuStyle? selectionMenuStyle,
   }) {
     return EditorStyle(
       padding: padding ?? this.padding,
@@ -223,6 +231,7 @@ class EditorStyle {
           mobileDragHandleHeightExtend ?? this.mobileDragHandleHeightExtend,
       autoDismissCollapsedHandleDuration: autoDismissCollapsedHandleDuration ??
           this.autoDismissCollapsedHandleDuration,
+      selectionMenuStyle: selectionMenuStyle ?? this.selectionMenuStyle,
     );
   }
 }

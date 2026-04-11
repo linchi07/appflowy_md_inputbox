@@ -13,7 +13,8 @@ description: A highly customizable rich-text editor for Flutter. The AppFlowy
 
 dependencies:
   collection: "^1.18.0"
-  device_info_plus: ^12.3.0
+  device_info_plus: ^11.5.0
+  # 不知道为啥要这么高的版本……
   diff_match_patch: "^0.4.1"
   file_picker: ^10.3.10
   flutter:
@@ -27,7 +28,6 @@ dependencies:
   markdown: "^7.2.1"
   nanoid: "^1.0.0"
   numerus: "^2.1.2"
-  pdf: "^3.10.7"
   provider: "^6.0.5"
   scroll_to_index: "^3.0.1"
   string_validator: "^1.0.0"

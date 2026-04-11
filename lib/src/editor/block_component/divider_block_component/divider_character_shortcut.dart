@@ -48,8 +48,8 @@ Future<bool> _convertSyntaxToDivider(
   }
   final transaction = editorState.transaction
     ..insertNode(path, dividerNode())
-    ..insertNode(path, paragraphNode())
     ..deleteNode(node)
+    ..insertNode(path.next, paragraphNode())
     ..afterSelection = Selection.collapsed(Position(path: path.next));
   editorState.apply(transaction);
 

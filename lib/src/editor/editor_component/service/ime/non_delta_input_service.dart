@@ -147,9 +147,15 @@ class NonDeltaTextInputService extends TextInputService with TextInputClient {
   void updateCaretPosition(Size size, Matrix4 transform, Rect rect) {
     _textInputConnection
       ?..setEditableSizeAndTransform(size, transform)
-      ..setCaretRect(rect)
-      ..setComposingRect(rect.translate(0, rect.height));
+      ..setCaretRect(rect);
+
+    if (PlatformExtension.isWindows) {
+      _textInputConnection?.setComposingRect(rect);
+    } else {
+      _textInputConnection?.setComposingRect(rect.translate(0, rect.height));
+    }
   }
+
 
   @override
   void clearComposingTextRange() {

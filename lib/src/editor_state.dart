@@ -1,3 +1,4 @@
+// ignore_for_file: newline_before_return
 import 'dart:async';
 import 'dart:collection';
 
@@ -7,6 +8,8 @@ import 'package:appflowy_editor/src/editor/util/platform_extension.dart';
 import 'package:appflowy_editor/src/history/undo_manager.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'service/markdown_parser.dart';
 
 typedef EditorTransactionValue = (
   TransactionTime time,
@@ -238,6 +241,73 @@ class EditorState {
   /// Stores the toolbar items.
   @Deprecated('use floating toolbar or mobile toolbar instead')
   List<ToolbarItem> toolbarItems = [];
+
+  /// The callback that will be triggered when the document is changed.
+  void Function(EditorState editorState)? onInput;
+
+  /// The notifier that will be updated when the document is changed.
+  ///
+  /// If it is not null, the editor state will update the character count
+  /// after applying a transaction.
+  ValueNotifier<int>? characterCounter;
+
+  /// Returns the plain text of the document.
+  ///
+  /// Each block is separated by a newline character.
+  String get text {
+    if (document.root.children.isEmpty) {
+      return '';
+    }
+    return document.root.children.map((e) {
+      if (e.type == DividerBlockKeys.type) {
+        return '---';
+      }
+      return e.delta?.toPlainText() ?? '';
+    }).join('\n');
+  }
+
+  /// Sets the plain text of the document.
+  ///
+  /// This will clear the existing document and insert the new text.
+  /// The undo/redo history will be cleared.
+  set text(String value) {
+    if (isDisposed) return;
+
+    () async {
+      final List<Node> nodes;
+      if (value.length >= 1000) {
+        nodes = await compute(parseMarkdownToNodes, value);
+      } else {
+        nodes = parseMarkdownToNodes(value);
+      }
+
+      final transaction = this.transaction;
+
+      // Delete all existing nodes.
+      if (document.root.children.isNotEmpty) {
+        transaction.deleteNodesAtPath(
+          const [0],
+          document.root.children.length,
+        );
+      }
+
+      transaction.insertNodes(const [0], nodes);
+
+      // Reset selection to the end.
+      transaction.afterSelection = Selection.collapsed(
+        Position(
+          path: [nodes.length - 1],
+          offset: nodes.last.delta?.length ?? 0,
+        ),
+      );
+
+      await apply(transaction);
+
+      // Clear undo history.
+      undoManager.undoStack.clear();
+      undoManager.redoStack.clear();
+    }();
+  }
 
   /// listen to this stream to get notified when the transaction applies.
   Stream<EditorTransactionValue> get transactionStream => _observer.stream;
@@ -476,6 +546,11 @@ class EditorState {
           selectionExtraInfo = transaction.selectionExtraInfo;
         }
         selection = transaction.afterSelection;
+      }
+
+      onInput?.call(this);
+      if (characterCounter != null) {
+        characterCounter!.value = text.length;
       }
     }
 

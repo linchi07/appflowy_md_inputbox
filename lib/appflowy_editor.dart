@@ -23,6 +23,9 @@ export 'src/infra/flowy_svg.dart';
 export 'src/infra/log.dart';
 export 'src/infra/mobile/mobile.dart';
 export 'src/l10n/l10n.dart';
+// widgets
+export 'src/widgets.dart';
+
 // plugins part, including decoder and encoder.
 export 'src/plugins/plugins.dart';
 export 'src/render/selection/selectable.dart';

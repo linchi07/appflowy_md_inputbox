@@ -1,10 +1,6 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
 
-final _listTypes = [
-  BulletedListBlockKeys.type,
-  TodoListBlockKeys.type,
-  NumberedListBlockKeys.type,
-];
+final _listTypes = <String>[];
 
 extension EditorCopyPaste on EditorState {
   Future<void> pasteSingleLineNode(Node insertedNode) async {

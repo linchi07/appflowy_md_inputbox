@@ -2,9 +2,6 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 
 final indentableBlockTypes = {
-  BulletedListBlockKeys.type,
-  NumberedListBlockKeys.type,
-  TodoListBlockKeys.type,
   ParagraphBlockKeys.type,
 };
 
