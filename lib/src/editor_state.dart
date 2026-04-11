@@ -286,8 +286,6 @@ class EditorState {
     return _updateTextInternal(value, clearHistory: true);
   }
 
-  /// 在现有内容后追加文本并将光标移至末尾，保留撤销/重做历史。
-  /// 此方法通过增量插入实现，避免全量重新解析整个文档。
   Future<void> append(String value) async {
     if (isDisposed || value.isEmpty) return;
 
@@ -317,17 +315,25 @@ class EditorState {
       );
     }
 
-    // 将光标移至新内容的末尾
-    final lastPath = [document.root.children.length + nodes.length - 1];
-    final lastInsertedNode = nodes.isNotEmpty ? nodes.last : lastNode!;
-    transaction.afterSelection = Selection.collapsed(
-      Position(
-        path: lastPath,
-        offset: lastInsertedNode.delta?.length ?? 0,
-      ),
-    );
-
     await apply(transaction);
+
+    // 使用 postFrameCallback 确保在节点渲染完成后再强制更新光标到末尾
+    // 解决全量替换节点时光标可能由于 UI 重建而重置到开头的问题
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (isDisposed) return;
+      final lastNode = document.root.children.lastOrNull;
+      if (lastNode != null) {
+        updateSelectionWithReason(
+          Selection.collapsed(
+            Position(
+              path: [document.root.children.length - 1],
+              offset: lastNode.delta?.length ?? 0,
+            ),
+          ),
+          reason: SelectionUpdateReason.uiEvent,
+        );
+      }
+    });
   }
 
   Future<void> _updateTextInternal(
@@ -356,15 +362,21 @@ class EditorState {
     // 插入新节点
     transaction.insertNodes(const [0], nodes);
 
-    // 将光标移至末尾
-    transaction.afterSelection = Selection.collapsed(
-      Position(
-        path: [nodes.length - 1],
-        offset: nodes.last.delta?.length ?? 0,
-      ),
-    );
-
     await apply(transaction);
+
+    // 强制下一帧更新光标，防止 UI 重启导致的光标丢失
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (isDisposed) return;
+      updateSelectionWithReason(
+        Selection.collapsed(
+          Position(
+            path: [nodes.length - 1],
+            offset: nodes.last.delta?.length ?? 0,
+          ),
+        ),
+        reason: SelectionUpdateReason.uiEvent,
+      );
+    });
 
     if (clearHistory) {
       undoManager.undoStack.clear();
