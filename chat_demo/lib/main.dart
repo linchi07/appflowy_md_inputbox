@@ -71,6 +71,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
   final ValueNotifier<int> _charCount = ValueNotifier(0);
   final FocusNode _focusNode = FocusNode();
+  final TextEditingController _testInputController = TextEditingController(text: 'Hello AppFlowy!');
 
   @override
   void initState() {
@@ -87,6 +88,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollController.dispose();
     _charCount.dispose();
     _focusNode.dispose();
+    _testInputController.dispose();
     super.dispose();
   }
 
@@ -274,6 +276,46 @@ class _ChatScreenState extends State<ChatScreen> {
           onTap: () {
             _controller.clear();
             _charCount.value = 0;
+          },
+        ),
+        const SizedBox(height: 16),
+        const Divider(),
+        const SizedBox(height: 8),
+        const Text('API 压力/功能测试', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _testInputController,
+          decoration: InputDecoration(
+            hintText: '输入要设置的内容',
+            isDense: true,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          ),
+          style: const TextStyle(fontSize: 13),
+        ),
+        const SizedBox(height: 12),
+        _TestButton(
+          label: 'Set (保留 Undo)',
+          icon: Icons.edit_note,
+          onTap: () {
+            _controller.text = _testInputController.text;
+            _charCount.value = _controller.text.length;
+          },
+        ),
+        _TestButton(
+          label: 'Set (清空 Undo)',
+          icon: Icons.history_toggle_off,
+          onTap: () {
+            _controller.setText(_testInputController.text);
+            _charCount.value = _controller.text.length;
+          },
+        ),
+        _TestButton(
+          label: 'Append (追加)',
+          icon: Icons.playlist_add,
+          onTap: () {
+            _controller.append(_testInputController.text);
+            _charCount.value = _controller.text.length;
           },
         ),
         const Spacer(),
