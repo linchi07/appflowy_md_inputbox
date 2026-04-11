@@ -17,6 +17,8 @@ typedef EditorTransactionValue = (
   ApplyOptions options,
 );
 
+typedef OnPasteCallback = FutureOr<bool> Function(AppFlowyClipboardData data);
+
 class EditorStateDebugInfo {
   EditorStateDebugInfo({
     this.debugPaintSizeEnabled = false,
@@ -245,6 +247,12 @@ class EditorState {
   /// The callback that will be triggered when the document is changed.
   void Function(EditorState editorState)? onInput;
 
+  /// The callback that will be triggered when the user pastes content.
+  ///
+  /// If the callback returns true, the default paste behavior will be skipped.
+  /// If it returns false or is null, the default paste behavior will be executed.
+  OnPasteCallback? onPaste;
+
   /// The notifier that will be updated when the document is changed.
   ///
   /// If it is not null, the editor state will update the character count
@@ -266,47 +274,102 @@ class EditorState {
     }).join('\n');
   }
 
-  /// Sets the plain text of the document.
-  ///
-  /// This will clear the existing document and insert the new text.
-  /// The undo/redo history will be cleared.
+  /// 更新文档内容并将光标移至末尾，保留撤销/重做历史。
+  /// 适用于常规的内容更新，支持通过 Undo 撤回。
   set text(String value) {
+    _updateTextInternal(value, clearHistory: false);
+  }
+
+  /// 重新设置文档内容并将光标移至末尾，**会清空**撤销/重做历史。
+  /// 适用于初始化或强行重置文档。
+  Future<void> setText(String value) async {
+    return _updateTextInternal(value, clearHistory: true);
+  }
+
+  /// 在现有内容后追加文本并将光标移至末尾，保留撤销/重做历史。
+  /// 此方法通过增量插入实现，避免全量重新解析整个文档。
+  Future<void> append(String value) async {
+    if (isDisposed || value.isEmpty) return;
+
+    final lastNode = document.root.children.lastOrNull;
+    final transaction = this.transaction;
+
+    // 将追加的内容解析为节点
+    final List<Node> nodes = parseMarkdownToNodes(value);
+
+    if (lastNode != null &&
+        lastNode.type == nodes.first.type &&
+        lastNode.delta != null &&
+        nodes.first.delta != null) {
+      // 如果最后一个节点和追加内容的第一个节点类型相同（通常是 paragraph），则尝试合并
+      final firstAppendedNode = nodes.removeAt(0);
+      transaction.insertText(
+        lastNode,
+        lastNode.delta!.length,
+        firstAppendedNode.delta!.toPlainText(),
+      );
+    }
+
+    if (nodes.isNotEmpty) {
+      transaction.insertNodes(
+        [document.root.children.length],
+        nodes,
+      );
+    }
+
+    // 将光标移至新内容的末尾
+    final lastPath = [document.root.children.length + nodes.length - 1];
+    final lastInsertedNode = nodes.isNotEmpty ? nodes.last : lastNode!;
+    transaction.afterSelection = Selection.collapsed(
+      Position(
+        path: lastPath,
+        offset: lastInsertedNode.delta?.length ?? 0,
+      ),
+    );
+
+    await apply(transaction);
+  }
+
+  Future<void> _updateTextInternal(
+    String value, {
+    required bool clearHistory,
+  }) async {
     if (isDisposed) return;
 
-    () async {
-      final List<Node> nodes;
-      if (value.length >= 1000) {
-        nodes = await compute(parseMarkdownToNodes, value);
-      } else {
-        nodes = parseMarkdownToNodes(value);
-      }
+    final List<Node> nodes;
+    if (value.length >= 1000) {
+      nodes = await compute(parseMarkdownToNodes, value);
+    } else {
+      nodes = parseMarkdownToNodes(value);
+    }
 
-      final transaction = this.transaction;
+    final transaction = this.transaction;
 
-      // Delete all existing nodes.
-      if (document.root.children.isNotEmpty) {
-        transaction.deleteNodesAtPath(
-          const [0],
-          document.root.children.length,
-        );
-      }
-
-      transaction.insertNodes(const [0], nodes);
-
-      // Reset selection to the end.
-      transaction.afterSelection = Selection.collapsed(
-        Position(
-          path: [nodes.length - 1],
-          offset: nodes.last.delta?.length ?? 0,
-        ),
+    // 删除所有现有节点
+    if (document.root.children.isNotEmpty) {
+      transaction.deleteNodesAtPath(
+        const [0],
+        document.root.children.length,
       );
+    }
 
-      await apply(transaction);
+    // 插入新节点
+    transaction.insertNodes(const [0], nodes);
 
-      // Clear undo history.
+    // 将光标移至末尾
+    transaction.afterSelection = Selection.collapsed(
+      Position(
+        path: [nodes.length - 1],
+        offset: nodes.last.delta?.length ?? 0,
+      ),
+    );
+
+    await apply(transaction);
+
+    if (clearHistory) {
       undoManager.undoStack.clear();
       undoManager.redoStack.clear();
-    }();
+    }
   }
 
   /// listen to this stream to get notified when the transaction applies.

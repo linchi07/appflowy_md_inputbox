@@ -48,6 +48,7 @@ class AppFlowyEditor extends StatefulWidget {
     this.autoScrollEdgeOffset = appFlowyEditorAutoScrollEdgeOffset,
     this.documentRules = const [],
     this.blockWrapper,
+    this.onPaste,
   })  : editorStyle = editorStyle ?? EditorStyle.desktop(),
         blockComponentBuilders =
             blockComponentBuilders ?? standardBlockComponentBuilderMap,
@@ -233,6 +234,9 @@ class AppFlowyEditor extends StatefulWidget {
   /// Wrap the block component with a widget.
   final BlockComponentWrapper? blockWrapper;
 
+  /// The callback that will be triggered when the user pastes content.
+  final OnPasteCallback? onPaste;
+
   @override
   State<AppFlowyEditor> createState() => _AppFlowyEditorState();
 }
@@ -389,6 +393,7 @@ class _AppFlowyEditorState extends State<AppFlowyEditor> {
     editorState.disableAutoScroll = widget.disableAutoScroll;
     editorState.autoScrollEdgeOffset = widget.autoScrollEdgeOffset;
     editorState.documentRules = widget.documentRules;
+    editorState.onPaste = widget.onPaste;
   }
 
   BlockComponentRendererService get _renderer => BlockComponentRenderer(

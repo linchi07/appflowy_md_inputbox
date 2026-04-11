@@ -58,6 +58,16 @@ CommandShortcutEventHandler _pasteCommandHandler = (editorState) {
 
   () async {
     final data = await AppFlowyClipboard.getData();
+
+    // Trigger onPaste callback if available
+    final onPaste = editorState.onPaste;
+    if (onPaste != null) {
+      final handled = await onPaste(data);
+      if (handled) {
+        return;
+      }
+    }
+
     final text = data.text;
     if (text != null && text.isNotEmpty) {
       editorState.pastePlainText(text);
