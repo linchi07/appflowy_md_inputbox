@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../appflowy_editor.dart';
@@ -46,12 +48,12 @@ class MDEditor extends StatefulWidget {
     this.minHeight,
     this.hintText,
     this.onSend,
-    this.onDisposeCallback,
     this.focusNode,
     this.frontGroundColor = Colors.black,
     this.backgroundColor = Colors.white,
     this.decoration,
     this.padding = const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+    this.onPaste,
   });
   final bool multiLine;
   final MDEditorController controller;
@@ -59,8 +61,8 @@ class MDEditor extends StatefulWidget {
   final double? minHeight;
   final String? hintText;
   final FocusNode? focusNode;
-  final void Function()? onDisposeCallback;
   final void Function(String)? onSend;
+  final FutureOr<bool> Function()? onPaste;
   final Color frontGroundColor;
   final Color backgroundColor;
   final Decoration? decoration;
@@ -71,11 +73,6 @@ class MDEditor extends StatefulWidget {
 
 class _MDEditorState extends State<MDEditor> {
   EditorState get editorState => widget.controller.editorState;
-  @override
-  void dispose() {
-    widget.onDisposeCallback?.call();
-    super.dispose();
-  }
 
   void onSend() {
     widget.onSend?.call(editorState.text);
@@ -88,6 +85,7 @@ class _MDEditorState extends State<MDEditor> {
       shrinkWrap: false,
       focusNode: widget.focusNode,
       autoFocus: true,
+      onPaste: widget.onPaste,
       blockComponentBuilders: {
         ...standardBlockComponentBuilderMap,
         ParagraphBlockKeys.type: MarkdownBlockComponentBuilder(
@@ -98,12 +96,14 @@ class _MDEditorState extends State<MDEditor> {
         ),
       },
       editorStyle: EditorStyle.desktop(
-          padding: widget.padding,
-          cursorColor: widget.frontGroundColor,
-          selectionColor: widget.frontGroundColor.withValues(alpha: 0.15),
-          selectionMenuStyle: SelectionMenuStyle.fromColors(
-              backgroundColor: widget.backgroundColor,
-              foregroundColor: widget.frontGroundColor)),
+        padding: widget.padding,
+        cursorColor: widget.frontGroundColor,
+        selectionColor: widget.frontGroundColor.withValues(alpha: 0.15),
+        selectionMenuStyle: SelectionMenuStyle.fromColors(
+          backgroundColor: widget.backgroundColor,
+          foregroundColor: widget.frontGroundColor,
+        ),
+      ),
       commandShortcutEvents: (widget.onSend != null)
           ? [
               sendShortcutEvent(onSend: onSend),

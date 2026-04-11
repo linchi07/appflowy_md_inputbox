@@ -57,17 +57,15 @@ CommandShortcutEventHandler _pasteCommandHandler = (editorState) {
   }
 
   () async {
-    final data = await AppFlowyClipboard.getData();
-
     // Trigger onPaste callback if available
     final onPaste = editorState.onPaste;
     if (onPaste != null) {
-      final handled = await onPaste(data);
+      final handled = await onPaste();
       if (handled) {
         return;
       }
     }
-
+    final data = await AppFlowyClipboard.getData();
     final text = data.text;
     if (text != null && text.isNotEmpty) {
       editorState.pastePlainText(text);
@@ -87,7 +85,6 @@ RegExp _phoneRegex = RegExp(r'^\+?' // Optional '+' at start
     );
 
 extension on EditorState {
-
   Future<void> pastePlainText(String plainText) async {
     final selectionAttributes = getDeltaAttributesInSelectionStart();
     // TODO remove this deletion after refactoring pasteHtmlIfAvailable below
@@ -108,7 +105,8 @@ extension on EditorState {
         (plainText, selectionAttributes),
       );
     } else {
-      nodes = parseMarkdownToNodes(plainText, baseAttributes: selectionAttributes);
+      nodes =
+          parseMarkdownToNodes(plainText, baseAttributes: selectionAttributes);
     }
 
     if (nodes.isEmpty) {

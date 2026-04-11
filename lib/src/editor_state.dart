@@ -17,7 +17,7 @@ typedef EditorTransactionValue = (
   ApplyOptions options,
 );
 
-typedef OnPasteCallback = FutureOr<bool> Function(AppFlowyClipboardData data);
+typedef OnPasteCallback = FutureOr<bool> Function();
 
 class EditorStateDebugInfo {
   EditorStateDebugInfo({
