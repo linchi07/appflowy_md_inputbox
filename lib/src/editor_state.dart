@@ -102,6 +102,15 @@ enum TransactionTime {
   after,
 }
 
+final RegExp _hrefRegex = RegExp(
+  r'https?://(?:www\.)?[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s]*)?',
+);
+
+final RegExp _phoneRegex = RegExp(r'^\+?' // Optional '+' at start
+    r'(?:[0-9][\s-.]?)+' // Sequence of digits with optional separators
+    r'[0-9]$' // Ensure it ends with a digit
+    );
+
 /// The state of the editor.
 ///
 /// The state includes:
@@ -286,48 +295,233 @@ class EditorState {
     return _updateTextInternal(value, clearHistory: true);
   }
 
-  /// 在现有内容后追加文本并将光标移至末尾，保留撤销/重做历史。
-  /// 此方法通过增量插入实现，避免全量重新解析整个文档。
   Future<void> append(String value) async {
     if (isDisposed || value.isEmpty) return;
 
-    final lastNode = document.root.children.lastOrNull;
+    // Move cursor to the end
+    final lastNode = document.root.children.last;
+    await updateSelectionWithReason(
+      Selection.collapsed(
+        Position(
+          path: [document.root.children.length - 1],
+          offset: lastNode.delta?.length ?? 0,
+        ),
+      ),
+      reason: SelectionUpdateReason.uiEvent,
+    );
+
+    // Call robust insertion logic
+    await insertMarkdown(value);
+  }
+
+  Future<void> insertMarkdown(String markdown) async {
+    final selectionAttributes = getDeltaAttributesInSelectionStart();
+    final selection = await deleteSelectionIfNeeded();
+
+    if (selection == null) {
+      return;
+    }
+
+    if (await maybeConvertToUrlOrPhone(markdown)) {
+      return;
+    }
+
+    final List<Node> nodes;
+    if (markdown.length >= 1000) {
+      nodes = await compute(
+        parseMarkdownToNodesCompute,
+        (markdown, selectionAttributes),
+      );
+    } else {
+      nodes =
+          parseMarkdownToNodes(markdown, baseAttributes: selectionAttributes);
+    }
+
+    if (nodes.isEmpty) {
+      return;
+    }
+    if (nodes.length == 1) {
+      await _insertSingleLineNode(nodes.first);
+    } else {
+      await _insertMultiLineNodes(nodes.toList());
+    }
+  }
+
+  Future<bool> maybeConvertToUrlOrPhone(String plainText) async {
+    final selection = this.selection;
+    if (selection == null ||
+        !selection.isSingle ||
+        selection.isCollapsed ||
+        (!_hrefRegex.hasMatch(plainText) && !_phoneRegex.hasMatch(plainText))) {
+      return false;
+    }
+
+    final node = getNodeAtPath(selection.start.path);
+    if (node == null) {
+      return false;
+    }
+
+    final transaction = this.transaction;
+    final isPhone = _phoneRegex.hasMatch(plainText);
+    transaction.formatText(node, selection.startIndex, selection.length, {
+      AppFlowyRichTextKeys.href: isPhone ? 'tel:$plainText' : plainText,
+    });
+    await apply(transaction);
+
+    return true;
+  }
+
+  Future<void> _insertSingleLineNode(Node insertedNode) async {
+    final selection = await deleteSelectionIfNeeded();
+    if (selection == null) {
+      return;
+    }
+    final node = getNodeAtPath(selection.start.path);
+    final delta = node?.delta;
+    if (node == null || delta == null) {
+      return;
+    }
+    final transaction = this.transaction;
+    final insertedDelta = insertedNode.delta;
+    // if the node is empty paragraph (default), replace it with the inserted node.
+    if (delta.isEmpty && node.type == ParagraphBlockKeys.type) {
+      final List<Node> combinedChildren = [
+        ...insertedNode.children.map((e) => e.deepCopy()),
+        // if the original node has children, copy them to the inserted node.
+        ...node.children.map((e) => e.deepCopy()),
+      ];
+      insertedNode = insertedNode.copyWith(children: combinedChildren);
+      transaction.insertNode(selection.end.path, insertedNode);
+      transaction.deleteNode(node);
+      transaction.afterSelection = Selection.collapsed(
+        Position(
+          path: selection.end.path,
+          offset: insertedDelta?.length ?? 0,
+        ),
+      );
+    } else if (insertedDelta != null) {
+      // if the node is not empty, insert the delta from inserted node after the selection.
+      transaction.insertTextDelta(node, selection.endIndex, insertedDelta);
+    }
+    transaction.reason = SelectionUpdateReason.uiEvent;
+    await apply(transaction);
+  }
+
+  Future<void> _insertMultiLineNodes(List<Node> nodes) async {
+    assert(nodes.length > 1);
+
+    final selection = await deleteSelectionIfNeeded();
+    if (selection == null) {
+      return;
+    }
+    final node = getNodeAtPath(selection.start.path);
+    final delta = node?.delta;
+    if (node == null || delta == null) {
+      return;
+    }
+
     final transaction = this.transaction;
 
-    // 将追加的内容解析为节点
-    final List<Node> nodes = parseMarkdownToNodes(value);
+    // check if the first node is a non-delta node,
+    //  if so, insert the nodes after the current selection.
+    final startWithNonDeltaBlock = nodes.first.delta == null;
+    if (startWithNonDeltaBlock) {
+      transaction.insertNodes(node.path.next, nodes);
+      await apply(transaction);
 
-    if (lastNode != null &&
-        lastNode.type == nodes.first.type &&
-        lastNode.delta != null &&
-        nodes.first.delta != null) {
-      // 如果最后一个节点和追加内容的第一个节点类型相同（通常是 paragraph），则尝试合并
-      final firstAppendedNode = nodes.removeAt(0);
-      transaction.insertText(
-        lastNode,
-        lastNode.delta!.length,
-        firstAppendedNode.delta!.toPlainText(),
+      return;
+    }
+
+    final lastNodeLength = _calculateLength(nodes);
+    // merge the current selected node delta into the nodes.
+    if (delta.isNotEmpty) {
+      final firstNode = nodes.first;
+      if (firstNode.delta != null) {
+        nodes.first.insertMarkdownDelta(
+          delta.slice(0, selection.startIndex),
+          insertAfter: false,
+        );
+      }
+
+      final lastNode = nodes.last;
+      if (lastNode.delta != null) {
+        nodes.last.insertMarkdownDelta(
+          delta.slice(selection.endIndex),
+          insertAfter: true,
+        );
+      }
+    }
+
+    if (delta.isEmpty && node.type != ParagraphBlockKeys.type) {
+      nodes[0] = nodes.first.copyWith(
+        type: node.type,
+        attributes: {
+          ...node.attributes,
+          ...nodes.first.attributes,
+        },
       );
     }
 
-    if (nodes.isNotEmpty) {
-      transaction.insertNodes(
-        [document.root.children.length],
-        nodes,
-      );
+    for (final child in node.children) {
+      nodes.last.insert(child);
     }
 
-    // 将光标移至新内容的末尾
-    final lastPath = [document.root.children.length + nodes.length - 1];
-    final lastInsertedNode = nodes.isNotEmpty ? nodes.last : lastNode!;
+    transaction.insertNodes(selection.end.path, nodes);
+
+    // delete the current node.
+    transaction.deleteNode(node);
+
+    final path = _calculatePath(selection.start.path, nodes);
     transaction.afterSelection = Selection.collapsed(
       Position(
-        path: lastPath,
-        offset: lastInsertedNode.delta?.length ?? 0,
+        path: path,
+        offset: lastNodeLength,
       ),
     );
 
+    transaction.reason = SelectionUpdateReason.uiEvent;
     await apply(transaction);
+  }
+
+  // delete the selection if it's not collapsed.
+  Future<Selection?> deleteSelectionIfNeeded() async {
+    final selection = this.selection;
+    if (selection == null) {
+      return null;
+    }
+
+    // delete the selection first.
+    if (!selection.isCollapsed) {
+      await deleteSelection(selection);
+    }
+
+    assert(this.selection?.isCollapsed == true);
+
+    return this.selection;
+  }
+
+  Path _calculatePath(Path start, List<Node> nodes) {
+    var path = start;
+    for (var i = 0; i < nodes.length; i++) {
+      path = path.next;
+    }
+    path = path.previous;
+    if (nodes.last.children.isNotEmpty) {
+      return [
+        ...path,
+        ..._calculatePath([0], nodes.last.children.toList()),
+      ];
+    }
+
+    return path;
+  }
+
+  int _calculateLength(List<Node> nodes) {
+    if (nodes.last.children.isNotEmpty) {
+      return _calculateLength(nodes.last.children.toList());
+    }
+
+    return nodes.last.delta?.length ?? 0;
   }
 
   Future<void> _updateTextInternal(
@@ -356,13 +550,13 @@ class EditorState {
     // 插入新节点
     transaction.insertNodes(const [0], nodes);
 
-    // 将光标移至末尾
     transaction.afterSelection = Selection.collapsed(
       Position(
         path: [nodes.length - 1],
         offset: nodes.last.delta?.length ?? 0,
       ),
     );
+    transaction.reason = SelectionUpdateReason.uiEvent;
 
     await apply(transaction);
 
@@ -923,5 +1117,41 @@ class EditorState {
     }
 
     return selection;
+  }
+}
+
+extension EditorStateNodeMarkdownExtension on Node {
+  void insertMarkdownDelta(Delta delta, {bool insertAfter = true}) {
+    assert(delta.every((element) => element is TextInsert));
+    if (this.delta == null) {
+      updateAttributes({
+        blockComponentDelta: delta.toJson(),
+      });
+    } else if (insertAfter) {
+      updateAttributes(
+        {
+          blockComponentDelta: this
+              .delta!
+              .compose(
+                Delta()
+                  ..retain(this.delta!.length)
+                  ..addAll(delta),
+              )
+              .toJson(),
+        },
+      );
+    } else {
+      updateAttributes(
+        {
+          blockComponentDelta: delta
+              .compose(
+                Delta()
+                  ..retain(delta.length)
+                  ..addAll(this.delta!),
+              )
+              .toJson(),
+        },
+      );
+    }
   }
 }

@@ -33,9 +33,15 @@ class MDEditorController {
   /// 设置当前纯文本（会清空历史记录并重置光标）
   set text(String value) => editorState.text = value;
 
+  /// 重新设置文档内容并将光标移至末尾，**会清空**撤销/重做历史。
+  Future<void> setText(String value) => editorState.setText(value);
+
+  /// 在现有内容后追加文本并将光标移至末尾，保留撤销/重做历史。
+  Future<void> append(String value) => editorState.append(value);
+
   /// 清空编辑器
   void clear() {
-    editorState.text = '';
+    editorState.setText('');
   }
 }
 
