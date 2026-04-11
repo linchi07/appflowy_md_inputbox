@@ -99,20 +99,19 @@ class _MDEditorState extends State<MDEditor> {
         ),
       },
       editorStyle: EditorStyle.desktop(
-        padding: widget.padding,
-        cursorColor: widget.frontGroundColor,
-        selectionColor: widget.frontGroundColor.withValues(alpha: 0.15),
-      ),
-      commandShortcutEvents: [
-        if (widget.onSend != null) ...[
-          sendShortcutEvent(onSend: onSend),
-          newlineMarkdownShortcutEvent,
-          ...standardCommandShortcutEvents.where(
-            (e) => e.key != enterMarkdownShortcutEvent.key,
-          ),
-        ] else
-          ...standardCommandShortcutEvents,
-      ],
+          padding: widget.padding,
+          cursorColor: widget.frontGroundColor,
+          selectionColor: widget.frontGroundColor.withValues(alpha: 0.15),
+          selectionMenuStyle: SelectionMenuStyle.fromColors(
+              backgroundColor: widget.backgroundColor,
+              foregroundColor: widget.frontGroundColor)),
+      commandShortcutEvents: (widget.onSend != null)
+          ? [
+              sendShortcutEvent(onSend: onSend),
+              newlineMarkdownShortcutEvent,
+              ...standardCommandShortcutEvents,
+            ]
+          : [enterMarkdownShortcutEvent, ...standardCommandShortcutEvents],
     );
     if (widget.multiLine) {
       e = IntrinsicHeight(child: e);
