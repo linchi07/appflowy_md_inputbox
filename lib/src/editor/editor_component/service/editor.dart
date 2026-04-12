@@ -366,6 +366,7 @@ class _AppFlowyEditorState extends State<AppFlowyEditor> {
     if (widget.editable && widget.autoFocus) {
       editorState.updateSelectionWithReason(
         widget.focusedSelection ??
+            editorState.selection ??
             Selection.single(
               path: [0],
               startOffset: 0,

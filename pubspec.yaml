@@ -79,6 +79,3 @@ flutter_intl:
   main_locale: en
   arb_dir: lib/l10n
   output_dir: lib/src/l10n
-  use_deferred_loading: false
-  localizely:
-    project_id: b7199c7d-eca0-4025-894d-230cdcafa9aa

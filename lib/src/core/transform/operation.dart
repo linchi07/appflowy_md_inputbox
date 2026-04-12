@@ -249,8 +249,20 @@ Path transformPath(Path preInsertPath, Path b, [int delta = 1]) {
   final suffix = b.sublist(preInsertPath.length);
   final preInsertLast = preInsertPath.last;
   final bAtIndex = b[preInsertPath.length - 1];
-
-  prefix.add(preInsertLast <= bAtIndex ? bAtIndex + delta : bAtIndex);
+  if (delta < 0) {
+    final deleteStart = preInsertLast;
+    final deleteEnd = preInsertLast - delta;
+    if (bAtIndex >= deleteEnd) {
+      prefix.add(bAtIndex + delta);
+    } else if (bAtIndex >= deleteStart) {
+      prefix.add(deleteStart);
+    } else {
+      prefix.add(bAtIndex);
+    }
+  } else {
+    prefix.add(preInsertLast <= bAtIndex ? bAtIndex + delta : bAtIndex);
+  }
+  
   prefix.addAll(suffix);
 
   return prefix;

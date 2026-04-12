@@ -555,29 +555,28 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
   // This is a workaround for the issue that
   //  the caret height of the text is not calculated correctly if the parent style is null.
   TextSpan adjustTextSpan(TextSpan textSpan) {
-    if (textSpan.style == null && textSpan.children != null) {
+    if (textSpan.style == null) {
       double height = 0.0;
       double fontSize = 0.0;
-      textSpan.visitChildren((span) {
-        final style = span.style;
-        if (style != null) {
-          if (style.height != null) {
-            height = max(height, style.height!);
+      if (textSpan.children != null) {
+        textSpan.visitChildren((span) {
+          final style = span.style;
+          if (style != null) {
+            if (style.height != null) {
+              height = max(height, style.height!);
+            }
+            if (style.fontSize != null) {
+              fontSize = max(fontSize, style.fontSize!);
+            }
           }
-          if (style.fontSize != null) {
-            fontSize = max(fontSize, style.fontSize!);
-          }
-        }
-
-        return true;
-      });
-      if (height == 0.0 || fontSize == 0.0) {
-        return textSpan;
+          return true;
+        });
       }
+      
       textSpan = textSpan.copyWith(
         style: resolvedTextStyle.copyWith(
-          height: height,
-          fontSize: fontSize,
+          height: height > 0.0 ? height : resolvedTextStyle.height,
+          fontSize: fontSize > 0.0 ? fontSize : resolvedTextStyle.fontSize,
         ),
       );
     }

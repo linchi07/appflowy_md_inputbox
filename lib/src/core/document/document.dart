@@ -96,25 +96,24 @@ class Document {
       return false;
     }
 
-    final target = nodeAtPath(path);
-    if (target != null) {
+    final parent = nodeAtPath(path.parent);
+    if (parent == null) {
+      return false;
+    }
+
+    final index = path.last.clamp(0, parent.children.length);
+    if (index >= parent.children.length) {
+      for (final node in nodes) {
+        parent.insert(node);
+      }
+    } else {
+      final target = parent.children[index];
       for (final node in nodes) {
         target.insertBefore(node);
       }
-
-      return true;
     }
 
-    final parent = nodeAtPath(path.parent);
-    if (parent != null) {
-      for (var i = 0; i < nodes.length; i++) {
-        parent.insert(nodes.elementAt(i), index: path.last + i);
-      }
-
-      return true;
-    }
-
-    return false;
+    return true;
   }
 
   /// Deletes the [Node]s at the given [Path].
