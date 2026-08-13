@@ -255,7 +255,7 @@ class _ChatScreenState extends State<ChatScreen> {
           label: '插入 Markdown 模板',
           icon: Icons.description_outlined,
           onTap: () {
-            _controller.text = '# 标题\n- [ ] 任务 1\n- [x] 任务 2\n\n> 引用块';
+            _controller.text = '# 标题\n- [ ] 任务 1\n- [x] 任务 2\n\n> 引用块\n\n| 框架 | 性能 | 体验 |\n|---|---|---|\n| Flutter | 极高 | 丝滑 |\n| 其他 | 一般 | 卡顿 |';
             _charCount.value = _controller.text.length;
           },
         ),

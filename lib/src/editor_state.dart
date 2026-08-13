@@ -262,6 +262,38 @@ class EditorState {
       if (e.type == DividerBlockKeys.type) {
         return '---';
       }
+      if (e.type == TableBlockKeys.type) {
+        final tableNode = TableNode(node: e);
+        final rowsLen = tableNode.rowsLen;
+        final colsLen = tableNode.colsLen;
+        if (rowsLen == 0 || colsLen == 0) return '';
+
+        final List<String> tableMarkdown = [];
+        final List<List<String>> rows = List.generate(
+          rowsLen,
+          (_) => List.generate(colsLen, (_) => ''),
+        );
+
+        for (var c = 0; c < colsLen; c++) {
+          for (var r = 0; r < rowsLen; r++) {
+            final cellNode = tableNode.getCell(c, r);
+            final cellText = cellNode.children.isNotEmpty
+                ? (cellNode.children.first.delta?.toPlainText() ?? '')
+                    .replaceAll('\n', ' ')
+                : '';
+            rows[r][c] = cellText;
+          }
+        }
+
+        tableMarkdown.add('| ${rows[0].join(' | ')} |');
+        tableMarkdown.add('| ${List.generate(colsLen, (_) => '---').join(' | ')} |');
+
+        for (var r = 1; r < rowsLen; r++) {
+          tableMarkdown.add('| ${rows[r].join(' | ')} |');
+        }
+
+        return tableMarkdown.join('\n');
+      }
       return e.delta?.toPlainText() ?? '';
     }).join('\n');
   }
