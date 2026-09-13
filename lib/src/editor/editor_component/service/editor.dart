@@ -31,6 +31,7 @@ class AppFlowyEditor extends StatefulWidget {
     this.autoFocus = false,
     this.focusedSelection,
     this.shrinkWrap = false,
+    this.minCacheExtent,
     this.showMagnifier = true,
     this.editorScrollController,
     EditorStyle? editorStyle,
@@ -171,6 +172,9 @@ class AppFlowyEditor extends StatefulWidget {
   /// Notes: Must provide a scrollController when shrinkWrap is true.
   final bool shrinkWrap;
 
+  /// Minimum off-screen area, in logical pixels, built ahead of scrolling.
+  final double? minCacheExtent;
+
   /// Show the magnifier or not.
   ///
   /// only works on iOS or Android.
@@ -251,6 +255,7 @@ class _AppFlowyEditorState extends State<AppFlowyEditor> {
         EditorScrollController(
           editorState: editorState,
           shrinkWrap: widget.shrinkWrap,
+          minCacheExtent: widget.minCacheExtent,
         );
 
     _updateValues();
@@ -282,11 +287,17 @@ class _AppFlowyEditorState extends State<AppFlowyEditor> {
       editorState.renderer = _renderer;
     }
 
-    if (widget.editorScrollController != oldWidget.editorScrollController) {
+    if (widget.editorScrollController != oldWidget.editorScrollController ||
+        widget.shrinkWrap != oldWidget.shrinkWrap ||
+        widget.minCacheExtent != oldWidget.minCacheExtent) {
+      if (oldWidget.editorScrollController == null) {
+        editorScrollController.dispose();
+      }
       editorScrollController = widget.editorScrollController ??
           EditorScrollController(
             editorState: editorState,
             shrinkWrap: widget.shrinkWrap,
+            minCacheExtent: widget.minCacheExtent,
           );
     }
 

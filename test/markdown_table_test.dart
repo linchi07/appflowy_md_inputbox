@@ -33,7 +33,6 @@ void main() {
     );
 
     final text = editorState.text;
-    print('ACTUAL TEXT:\n$text');
     expect(text.contains('| A | B |'), true);
     expect(text.contains('| --- | --- |'), true);
     expect(text.contains('| 1 | 2 |'), true);

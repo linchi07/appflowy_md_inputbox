@@ -42,6 +42,9 @@ class MDEditor extends StatefulWidget {
     super.key,
     required this.controller,
     this.multiLine = false,
+    this.editable = true,
+    this.shrinkWrap = true,
+    this.minCacheExtent,
     this.maxHeight,
     this.minHeight,
     this.hintText,
@@ -54,6 +57,9 @@ class MDEditor extends StatefulWidget {
     this.padding = const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
   });
   final bool multiLine;
+  final bool editable;
+  final bool shrinkWrap;
+  final double? minCacheExtent;
   final MDEditorController controller;
   final double? maxHeight;
   final double? minHeight;
@@ -86,9 +92,14 @@ class _MDEditorState extends State<MDEditor> {
     Widget e = AppFlowyEditor(
       autoScrollEdgeOffset: 40,
       editorState: editorState,
-      shrinkWrap: true,
+      shrinkWrap: widget.shrinkWrap,
+      minCacheExtent: widget.minCacheExtent,
       focusNode: widget.focusNode,
-      autoFocus: true,
+      autoFocus: widget.editable,
+      editable: widget.editable,
+      disableKeyboardService: !widget.editable,
+      disableSelectionService: !widget.editable,
+      disableAutoScroll: !widget.editable,
       blockComponentBuilders: {
         ...standardBlockComponentBuilderMap,
         ParagraphBlockKeys.type: MarkdownBlockComponentBuilder(
@@ -114,7 +125,7 @@ class _MDEditorState extends State<MDEditor> {
           ...standardCommandShortcutEvents,
       ],
     );
-    if (widget.multiLine) {
+    if (widget.multiLine && widget.shrinkWrap) {
       e = IntrinsicHeight(child: e);
     }
 

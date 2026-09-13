@@ -1,7 +1,39 @@
+import 'dart:collection';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../appflowy_editor.dart';
+
+class _MathPreviewCache {
+  static const _capacity = 512;
+  static final LinkedHashMap<String, Math> _parsed = LinkedHashMap();
+
+  static Widget build({
+    required String expression,
+    required String source,
+    required bool display,
+    required TextStyle? textStyle,
+  }) {
+    final parsed = _parsed.remove(expression) ?? Math.tex(expression);
+    _parsed[expression] = parsed;
+    if (_parsed.length > _capacity) {
+      _parsed.remove(_parsed.keys.first);
+    }
+
+    if (parsed.ast == null || parsed.parseError != null) {
+      return Text(source, style: textStyle);
+    }
+
+    return Math(
+      ast: parsed.ast,
+      mathStyle: display ? MathStyle.display : MathStyle.text,
+      textStyle: textStyle,
+      onErrorFallback: (_) => Text(source, style: textStyle),
+    );
+  }
+}
 
 TextSpan markdownTextSpanDecorator(
   BuildContext context,
@@ -65,9 +97,12 @@ TextSpan markdownTextSpanDecorator(
       ) ??
       const TextStyle(fontSize: 0.1, height: 0.1, color: Colors.transparent);
 
-  // 1: Bold, 2: Italic, 3: Strike, 4: Code, 5: Full Header Line, 6: Checkbox (with optional list prefix), 7: Tag, 8: ListPrefix (Bullet), 9: ListPrefix (Ordered), 10: DividerLine
+  // 1: Bold, 2: Italic, 3: Strike, 4: Code, 5: Full Header Line,
+  // 6: Checkbox (with optional list prefix), 7: Tag, 8: ListPrefix (Bullet),
+  // 9: ListPrefix (Ordered), 10: DividerLine, 11: Display Math,
+  // 12: Inline Math.
   final RegExp exp = RegExp(
-    r'(\*\*.*?(?:\*\*|$))|(\*.*?(?:\*|$))|(~~.*?(?:~~|$))|(`.*?(?:`|$))|^(#{1,6}\s+.*)$|((?:^[-*]\s+)?\[[ x]])|(#[\w\u4e00-\u9fa5]+)|^([-*]\s+)|^(\d+\.\s+)|^([-*_]{3,})$',
+    r'(\*\*.*?(?:\*\*|$))|(\*.*?(?:\*|$))|(~~.*?(?:~~|$))|(`.*?(?:`|$))|^(#{1,6}\s+.*)$|((?:^[-*]\s+)?\[[ x]])|(#[\w\u4e00-\u9fa5]+)|^([-*]\s+)|^(\d+\.\s+)|^([-*_]{3,})$|((?<![\\$])\$\$.*?(?:(?<!\\)\$\$|$))|((?<![\\$])\$(?!\$)(?!\s).*?(?:(?<![\\\s])\$(?!\$)|$))',
     multiLine: true,
   );
 
@@ -96,11 +131,68 @@ TextSpan markdownTextSpanDecorator(
     bool isCaretIn = overlaps(
       globalMatchStart,
       globalMatchEnd,
-      isLineLevel: match.group(5) != null || match.group(10) != null,
+      isLineLevel: match.group(5) != null ||
+          match.group(10) != null ||
+          match.group(11) != null,
     );
 
+    // 11-12: LaTeX math. Keep the source visible while it is being edited,
+    // and replace it with an atomic preview after the caret leaves the range.
+    if (match.group(11) != null || match.group(12) != null) {
+      final isDisplayMath = match.group(11) != null;
+      final marker = isDisplayMath ? r'$$' : r'$';
+      final isClosed = fullMatchStr.length > marker.length * 2 &&
+          fullMatchStr.endsWith(marker);
+
+      if (isCaretIn || !isClosed) {
+        spans.add(TextSpan(text: fullMatchStr, style: baseStyle));
+      } else {
+        final expression = fullMatchStr.substring(
+          marker.length,
+          fullMatchStr.length - marker.length,
+        );
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: editorState.editable
+                  ? () {
+                      editorState.updateSelectionWithReason(
+                        Selection.collapsed(
+                          Position(
+                            path: node.path,
+                            offset: globalMatchStart + marker.length,
+                          ),
+                        ),
+                        reason: SelectionUpdateReason.uiEvent,
+                      );
+                    }
+                  : null,
+              child: RepaintBoundary(
+                child: _MathPreviewCache.build(
+                  expression: expression,
+                  source: fullMatchStr,
+                  display: isDisplayMath,
+                  textStyle: baseStyle,
+                ),
+              ),
+            ),
+          ),
+        );
+
+        // A WidgetSpan occupies one text offset. Preserve the remaining source
+        // offsets so selection, copy, and keyboard navigation stay aligned with
+        // the document's original Markdown text.
+        if (fullMatchStr.length > 1) {
+          spans.add(
+            TextSpan(text: fullMatchStr.substring(1), style: hiddenStyle),
+          );
+        }
+      }
+    }
     // 1-4: Inline formats
-    if (match.group(1) != null ||
+    else if (match.group(1) != null ||
         match.group(2) != null ||
         match.group(3) != null ||
         match.group(4) != null) {
@@ -192,46 +284,47 @@ TextSpan markdownTextSpanDecorator(
     }
     // 6: Checkbox
     else if (match.group(6) != null) {
-      if (isCaretIn) {
-        spans.add(TextSpan(text: fullMatchStr, style: baseStyle));
-      } else {
-        bool isChecked = fullMatchStr.contains('x');
-        spans.add(
-          WidgetSpan(
-            alignment: PlaceholderAlignment.middle,
-            child: GestureDetector(
-              onTap: () {
-                // Determine current checkbox content and preserve prefix if any
-                final checkboxMatch =
-                    RegExp(r'\[[ x]]').firstMatch(fullMatchStr)!;
-                final prefix = fullMatchStr.substring(0, checkboxMatch.start);
-                final newCheckbox = isChecked ? '[ ]' : '[x]';
-                final newText = '$prefix$newCheckbox';
-
-                final transaction = editorState.transaction
-                  ..replaceText(
-                    node,
-                    globalMatchStart,
-                    fullMatchStr.length,
-                    newText,
-                  );
-                editorState.apply(transaction);
-              },
-              child: Icon(
-                isChecked ? Icons.check_box : Icons.check_box_outline_blank,
-                size: (baseStyle?.fontSize ?? 16) * 1.2,
-                color: isChecked ? Colors.blue : Colors.grey,
+      final isChecked = fullMatchStr.contains('[x]');
+      spans.add(
+        WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: SizedBox.square(
+            dimension: (baseStyle?.fontSize ?? 16) * 1.35,
+            child: Material(
+              type: MaterialType.transparency,
+              child: Checkbox(
+                value: isChecked,
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                side: BorderSide(color: Colors.grey.shade500, width: 1.5),
+                onChanged: editorState.editable
+                    ? (checked) {
+                        final checkboxMatch =
+                            RegExp(r'\[[ x]]').firstMatch(fullMatchStr)!;
+                        final prefix =
+                            fullMatchStr.substring(0, checkboxMatch.start);
+                        final newText =
+                            '$prefix${checked == true ? '[x]' : '[ ]'}';
+                        final transaction = editorState.transaction
+                          ..replaceText(
+                            node,
+                            globalMatchStart,
+                            fullMatchStr.length,
+                            newText,
+                          );
+                        editorState.apply(transaction);
+                      }
+                    : null,
               ),
             ),
           ),
+        ),
+      );
+      // Preserve the source offsets while always keeping the visual checkbox.
+      if (fullMatchStr.length > 1) {
+        spans.add(
+          TextSpan(text: fullMatchStr.substring(1), style: hiddenStyle),
         );
-        // IMPORTANT: Pad with hidden characters to match original string length
-        // WidgetSpan occupies 1 char, so we hide fullMatchStr.length - 1 chars
-        if (fullMatchStr.length > 1) {
-          spans.add(
-            TextSpan(text: fullMatchStr.substring(1), style: hiddenStyle),
-          );
-        }
       }
     }
     // 7: Tag

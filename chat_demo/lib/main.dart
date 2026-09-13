@@ -1,26 +1,24 @@
+import 'dart:ui';
+
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter/scheduler.dart';
 
-void main() {
-  runApp(const AppFlowyChatDemo());
-}
+void main() => runApp(const MarkdownLabApp());
 
-class AppFlowyChatDemo extends StatelessWidget {
-  const AppFlowyChatDemo({super.key});
+class MarkdownLabApp extends StatelessWidget {
+  const MarkdownLabApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'AppFlowy MD Input Demo',
+      title: 'Markdown + LaTeX Lab',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.indigo,
-          brightness: Brightness.light,
-        ),
-        fontFamily: 'Inter',
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF6750A4)),
+        scaffoldBackgroundColor: const Color(0xFFF5F3FA),
       ),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
@@ -28,277 +26,271 @@ class AppFlowyChatDemo extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
         AppFlowyEditorLocalizations.delegate,
       ],
-      supportedLocales: const [Locale('zh', '')],
-      home: const ChatScreen(),
+      supportedLocales: const [Locale('zh', 'CN'), Locale('en')],
+      home: const MarkdownLabPage(),
     );
   }
 }
 
-class ChatMessage {
-  final String text;
-  final bool isMe;
-  final DateTime timestamp;
+enum LabMode { edit, preview }
 
-  ChatMessage({
-    required this.text,
-    required this.isMe,
-    required this.timestamp,
-  });
-}
-
-class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key});
+class MarkdownLabPage extends StatefulWidget {
+  const MarkdownLabPage({super.key});
 
   @override
-  State<ChatScreen> createState() => _ChatScreenState();
+  State<MarkdownLabPage> createState() => _MarkdownLabPageState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
-  final List<ChatMessage> _messages = [
-    ChatMessage(
-      text: '你好！欢迎使用 AppFlowy Markdown 输入框。',
-      isMe: false,
-      timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
-    ),
-    ChatMessage(
-      text: '这是一个基于 AppFlowy Editor 改造的轻量级输入组件，支持 **Markdown** 实时预览。',
-      isMe: false,
-      timestamp: DateTime.now().subtract(const Duration(minutes: 4)),
-    ),
-  ];
+class _MarkdownLabPageState extends State<MarkdownLabPage> {
+  static const _sample = r'''# Markdown + LaTeX 实验室
+
+这是一个接近 Obsidian Live Preview 手感的输入框。
+
+## 行内公式
+
+质能方程是 $E = mc^2$，欧拉恒等式是 $e^{i\pi} + 1 = 0$。
+
+概率密度可以写成 $f(x)=\frac{1}{\sqrt{2\pi}}e^{-x^2/2}$。
+
+## 单行展示公式
+
+$$\int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}$$
+
+$$\sum_{n=1}^{\infty}\frac{1}{n^2}=\frac{\pi^2}{6}$$
+
+## Markdown
+
+- [x] 光标在公式中时显示源码
+- [x] 离开公式后显示排版结果
+- [ ] 尝试修改上面的分数、积分和求和
+
+> 点击已经渲染的公式，可以回到公式源码继续编辑。
+
+普通的 **粗体**、*斜体*、~~删除线~~ 和 `inline code` 也可以一起工作。''';
 
   late final MDEditorController _controller;
-  final ScrollController _scrollController = ScrollController();
-  final ValueNotifier<int> _charCount = ValueNotifier(0);
   final FocusNode _focusNode = FocusNode();
+  final ValueNotifier<int> _characterCount = ValueNotifier(_sample.length);
+  final List<double> _buildTimes = [];
+  final List<double> _rasterTimes = [];
+  LabMode _mode = LabMode.edit;
+  int _paragraphCount = _sample.split('\n').length;
 
   @override
   void initState() {
     super.initState();
     _controller = MDEditorController(
-      onInput: (text) {
-        _charCount.value = text.length;
-      },
+      initialText: _sample,
+      characterCounter: _characterCount,
+      onInput: (text) => _paragraphCount = text.split('\n').length,
     );
+    SchedulerBinding.instance.addTimingsCallback(_onFrameTimings);
   }
 
   @override
   void dispose() {
-    _scrollController.dispose();
-    _charCount.dispose();
+    SchedulerBinding.instance.removeTimingsCallback(_onFrameTimings);
     _focusNode.dispose();
+    _characterCount.dispose();
     super.dispose();
   }
 
-  void _handleSend(String text) {
-    if (text.trim().isEmpty) return;
+  void _onFrameTimings(List<FrameTiming> timings) {
+    if (!mounted) return;
+    for (final timing in timings) {
+      _buildTimes.add(timing.buildDuration.inMicroseconds / 1000);
+      _rasterTimes.add(timing.rasterDuration.inMicroseconds / 1000);
+    }
+    if (_buildTimes.length > 120) {
+      _buildTimes.removeRange(0, _buildTimes.length - 120);
+      _rasterTimes.removeRange(0, _rasterTimes.length - 120);
+    }
+  }
 
-    setState(() {
-      _messages.add(ChatMessage(
-        text: text,
-        isMe: true,
-        timestamp: DateTime.now(),
-      ));
-    });
-    _controller.clear();
-    _charCount.value = 0;
+  void _setMode(LabMode mode) {
+    if (_mode == mode) return;
+    _focusNode.unfocus();
+    _controller.editorState.updateSelectionWithReason(null);
+    setState(() => _mode = mode);
+    if (mode == LabMode.edit) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focusNode.requestFocus();
+      });
+    }
+  }
 
-    // Scroll to bottom
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+  void _loadStressDocument(int formulaCount) {
+    final buffer = StringBuffer('# $formulaCount 条公式压力样本\n\n');
+    for (var i = 1; i <= formulaCount; i++) {
+      buffer.writeln(
+        '第 $i 条：\$x_$i^2 + y_$i^2 = r_$i^2\$，'
+        '以及 \$\\frac{$i}{${i + 1}} + \\sqrt{$i}\$。',
+      );
+    }
+    final text = buffer.toString();
+    _controller.text = text;
+    _characterCount.value = text.length;
+    _paragraphCount = formulaCount + 2;
+    setState(() {});
+  }
+
+  void _restoreSample() {
+    _controller.text = _sample;
+    _characterCount.value = _sample.length;
+    _paragraphCount = _sample.split('\n').length;
+    setState(() {});
+  }
+
+  double _average(List<double> values) {
+    if (values.isEmpty) return 0;
+    return values.reduce((a, b) => a + b) / values.length;
   }
 
   @override
   Widget build(BuildContext context) {
+    final preview = _mode == LabMode.preview;
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
-      appBar: AppBar(
-        title: const Column(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              _Toolbar(
+                mode: _mode,
+                onModeChanged: _setMode,
+                onRestore: _restoreSample,
+                onStress: _loadStressDocument,
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFE4DFEC)),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x10000000),
+                              blurRadius: 24,
+                              offset: Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: MDEditor(
+                            key: ValueKey(_mode),
+                            controller: _controller,
+                            focusNode: _focusNode,
+                            editable: !preview,
+                            shrinkWrap: false,
+                            minCacheExtent: 900,
+                            multiLine: true,
+                            hintText: '在这里输入 Markdown 和 LaTeX…',
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 48,
+                              vertical: 4,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    SizedBox(
+                      width: 250,
+                      child: _MetricsPanel(
+                        preview: preview,
+                        characterCount: _characterCount,
+                        paragraphCount: _paragraphCount,
+                        averageBuildMs: _average(_buildTimes),
+                        averageRasterMs: _average(_rasterTimes),
+                        sampleCount: _buildTimes.length,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Toolbar extends StatelessWidget {
+  const _Toolbar({
+    required this.mode,
+    required this.onModeChanged,
+    required this.onRestore,
+    required this.onStress,
+  });
+
+  final LabMode mode;
+  final ValueChanged<LabMode> onModeChanged;
+  final VoidCallback onRestore;
+  final ValueChanged<int> onStress;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Icon(Icons.functions_rounded, size: 30),
+        const SizedBox(width: 12),
+        const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('AppFlowy MD Input', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            Text('Obsidian-style Handfeel', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            Text(
+              'Markdown + LaTeX Lab',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+            ),
+            Text('大输入框 / Live Preview / 压力实验'),
           ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: () => setState(() => _messages.clear()),
-            tooltip: '清空聊天记录',
-          ),
-        ],
-      ),
-      body: Row(
-        children: [
-          // Left: Chat Main Area
-          Expanded(
-            flex: 3,
-            child: Column(
-              children: [
-                Expanded(
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(20),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) {
-                      return _MessageBubble(message: _messages[index]);
-                    },
-                  ),
-                ),
-                _buildInputArea(),
-              ],
-            ),
-          ),
-          // Right: Test & Info Panel
-          const VerticalDivider(width: 1),
-          Container(
-            width: 300,
-            color: Colors.white,
-            padding: const EdgeInsets.all(20),
-            child: _buildSidePanel(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInputArea() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            offset: const Offset(0, -2),
-            blurRadius: 10,
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.bolt, color: Colors.amber, size: 20),
-                const SizedBox(width: 8),
-                const Text('Markdown 已启用', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                const Spacer(),
-                ValueListenableBuilder<int>(
-                  valueListenable: _charCount,
-                  builder: (context, count, _) {
-                    return Text('$count 字符', style: const TextStyle(fontSize: 12, color: Colors.grey));
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: MDEditor(
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    multiLine: true,
-                    minHeight: 45,
-                    maxHeight: 200,
-                    hintText: '输入内容，Enter 发送，Shift + Enter 换行...',
-                    onSend: _handleSend,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF0F2F5),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.transparent),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.indigo,
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.white),
-                    onPressed: () => _handleSend(_controller.text),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSidePanel() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('功能测试', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
-        _TestButton(
-          label: '强制聚焦',
-          icon: Icons.center_focus_strong,
-          onTap: () => _focusNode.requestFocus(),
-        ),
-        _TestButton(
-          label: '插入 Markdown 模板',
-          icon: Icons.description_outlined,
-          onTap: () {
-            _controller.text = '# 标题\n- [ ] 任务 1\n- [x] 任务 2\n\n> 引用块\n\n| 框架 | 性能 | 体验 |\n|---|---|---|\n| Flutter | 极高 | 丝滑 |\n| 其他 | 一般 | 卡顿 |';
-            _charCount.value = _controller.text.length;
-          },
-        ),
-        _TestButton(
-          label: '插入带缩进列表',
-          icon: Icons.format_list_bulleted,
-          onTap: () {
-            _controller.text = '1. 第一项\n2. 第二项\n   - 子项 A\n   - 子项 B';
-            _charCount.value = _controller.text.length;
-          },
-        ),
-        _TestButton(
-          label: '清空输入框',
-          icon: Icons.clear_all,
-          color: Colors.redAccent,
-          onTap: () {
-            _controller.clear();
-            _charCount.value = 0;
-          },
         ),
         const Spacer(),
-        const Divider(),
-        const Text('实时预览 (Raw)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
-        const SizedBox(height: 8),
-        Expanded(
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8F9FA),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.shade300),
+        SegmentedButton<LabMode>(
+          segments: const [
+            ButtonSegment(
+              value: LabMode.edit,
+              icon: Icon(Icons.edit_outlined),
+              label: Text('编辑'),
             ),
-            child: SingleChildScrollView(
-              child: ValueListenableBuilder<int>(
-                valueListenable: _charCount,
-                builder: (context, _, __) {
-                  return Text(
-                    _controller.text,
-                    style: const TextStyle(fontFamily: 'Courier', fontSize: 13),
-                  );
-                },
-              ),
+            ButtonSegment(
+              value: LabMode.preview,
+              icon: Icon(Icons.visibility_outlined),
+              label: Text('纯预览'),
+            ),
+          ],
+          selected: {mode},
+          onSelectionChanged: (value) => onModeChanged(value.first),
+        ),
+        const SizedBox(width: 12),
+        PopupMenuButton<VoidCallback>(
+          tooltip: '加载样本',
+          onSelected: (callback) => callback(),
+          itemBuilder: (_) => [
+            PopupMenuItem(value: onRestore, child: const Text('恢复演示内容')),
+            PopupMenuItem(
+              value: () => onStress(100),
+              child: const Text('加载 100 条公式'),
+            ),
+            PopupMenuItem(
+              value: () => onStress(500),
+              child: const Text('加载 500 条公式'),
+            ),
+          ],
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Icon(Icons.science_outlined),
+                SizedBox(width: 8),
+                Text('压力样本'),
+              ],
             ),
           ),
         ),
@@ -307,90 +299,105 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
-class _MessageBubble extends StatelessWidget {
-  final ChatMessage message;
+class _MetricsPanel extends StatelessWidget {
+  const _MetricsPanel({
+    required this.preview,
+    required this.characterCount,
+    required this.paragraphCount,
+    required this.averageBuildMs,
+    required this.averageRasterMs,
+    required this.sampleCount,
+  });
 
-  const _MessageBubble({required this.message});
+  final bool preview;
+  final ValueNotifier<int> characterCount;
+  final int paragraphCount;
+  final double averageBuildMs;
+  final double averageRasterMs;
+  final int sampleCount;
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: message.isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.5),
-        decoration: BoxDecoration(
-          color: message.isMe ? Colors.indigo : Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(message.isMe ? 16 : 0),
-            bottomRight: Radius.circular(message.isMe ? 0 : 16),
-          ),
-          boxShadow: [
-            if (!message.isMe)
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 5,
-                offset: const Offset(0, 2),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFF211F26),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              preview ? 'PURE PREVIEW' : 'LIVE EDITING',
+              style: TextStyle(
+                color: preview
+                    ? const Color(0xFFB6F2C2)
+                    : const Color(0xFFD0BCFF),
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
               ),
+            ),
+            const SizedBox(height: 24),
+            ValueListenableBuilder<int>(
+              valueListenable: characterCount,
+              builder: (_, value, __) => _Metric('字符', '$value'),
+            ),
+            _Metric('段落', '$paragraphCount'),
+            _Metric('采样帧', '$sampleCount / 120'),
+            const Divider(color: Colors.white24, height: 32),
+            _Metric('平均 Build', '${averageBuildMs.toStringAsFixed(2)} ms'),
+            _Metric('平均 Raster', '${averageRasterMs.toStringAsFixed(2)} ms'),
+            const SizedBox(height: 12),
+            Text(
+              sampleCount == 0
+                  ? '运行 Profile 模式并滚动页面以采集帧数据；切换模式可刷新读数。'
+                  : averageBuildMs < 8 && averageRasterMs < 8
+                  ? '当前采样余量充足。'
+                  : '当前采样需要进一步 Profile。',
+              style: const TextStyle(color: Colors.white60, height: 1.5),
+            ),
+            const Spacer(),
+            const Text(
+              '建议使用：\nflutter run -d macos --profile',
+              style: TextStyle(
+                color: Colors.white54,
+                fontFamily: 'monospace',
+                fontSize: 12,
+                height: 1.5,
+              ),
+            ),
           ],
-        ),
-        child: Text(
-          message.text,
-          style: TextStyle(
-            color: message.isMe ? Colors.white : Colors.black87,
-            fontSize: 15,
-          ),
         ),
       ),
     );
   }
 }
 
-class _TestButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-  final Color? color;
+class _Metric extends StatelessWidget {
+  const _Metric(this.label, this.value);
 
-  const _TestButton({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-    this.color,
-  });
+  final String label;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Icon(icon, size: 18, color: color ?? Colors.indigo),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: TextStyle(fontSize: 13, color: color ?? Colors.black87),
-                  ),
-                ),
-              ],
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label, style: const TextStyle(color: Colors.white60)),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+              fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
-        ),
+        ],
       ),
     );
   }

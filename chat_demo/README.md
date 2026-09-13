@@ -1,16 +1,20 @@
-# chat_demo
+# Markdown + LaTeX Lab
 
-A new Flutter project.
+Desktop experiment for the Obsidian-style Markdown input component.
 
-## Getting Started
+## Run
 
-This project is a starting point for a Flutter application.
+Use profile mode when evaluating scrolling and formula rendering performance:
 
-A few resources to get you started if this is your first Flutter project:
+```sh
+flutter run -d macos --profile
+```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+The toolbar switches between live editing and pure preview. The stress-sample
+menu can load documents containing 100 or 500 rows with two formulas per row.
+The right panel reports average build and raster durations for the most recent
+120 frames. Scroll the document, then switch modes to refresh the displayed
+sample.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Pure preview uses a lazily built list and disables editing, keyboard, selection,
+and automatic scrolling services.

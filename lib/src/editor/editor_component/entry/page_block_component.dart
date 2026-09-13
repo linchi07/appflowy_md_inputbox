@@ -136,6 +136,7 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
         scrollOffsetController: scrollController.scrollOffsetController,
         itemPositionsListener: scrollController.itemPositionsListener,
         scrollOffsetListener: scrollController.scrollOffsetListener,
+        minCacheExtent: scrollController.minCacheExtent,
       );
     }
   }
