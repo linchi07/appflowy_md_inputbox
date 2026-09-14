@@ -1,8 +1,8 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor/src/editor/editor_component/service/ime/character_shortcut_event_helper.dart';
+import 'package:appflowy_editor/src/editor/util/platform_extension.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:universal_platform/universal_platform.dart';
 
 Future<void> onInsert(
   TextEditingDeltaInsertion insertion,
@@ -16,7 +16,7 @@ Future<void> onInsert(
   /// On mobile devices, the "/" is context-sensitive,which means it can't be
   /// recognized as a standalone character. This requires special handling.
   final isMobileSlash =
-      UniversalPlatform.isMobile && insertion.textInserted == '/';
+      PlatformExtension.isMobile && insertion.textInserted == '/';
 
   // In France, the backtick key is used to toggle a character style.
   // We should prevent the execution of character shortcut events when the

@@ -21,22 +21,50 @@ List<Node> parseMarkdownToNodes(
   final nodes = <Node>[];
 
   final dividerRegex = RegExp(r'^([-*_])\1{2,}$|^—-$|^——-$');
+  final tableLines = <String>[];
 
-  for (var line in lines) {
-    // Process Windows line endings if any
-    line = line.replaceAll('\r', '');
-
-    if (dividerRegex.hasMatch(line)) {
-      nodes.add(dividerNode());
-    } else {
-      final delta = _parseLineToDelta(line, baseAttributes: baseAttributes);
-      if (line.startsWith('> ')) {
-        nodes.add(quoteNode(delta: delta));
+  void flushTable() {
+    if (tableLines.isNotEmpty) {
+      final tableNode = _parseTableLinesToNode(tableLines);
+      if (tableNode != null) {
+        nodes.add(tableNode);
       } else {
-        nodes.add(paragraphNode(delta: delta));
+        for (final tLine in tableLines) {
+          final delta = _parseLineToDelta(tLine, baseAttributes: baseAttributes);
+          if (tLine.trim().startsWith('> ')) {
+            nodes.add(quoteNode(delta: delta));
+          } else {
+            nodes.add(paragraphNode(delta: delta));
+          }
+        }
+      }
+      tableLines.clear();
+    }
+  }
+
+  for (var i = 0; i < lines.length; i++) {
+    final line = lines[i].replaceAll('\r', '');
+    final trimmedLine = line.trim();
+
+    if (trimmedLine.startsWith('|') && trimmedLine.endsWith('|')) {
+      tableLines.add(line);
+    } else {
+      flushTable();
+
+      if (dividerRegex.hasMatch(trimmedLine)) {
+        nodes.add(dividerNode());
+      } else {
+        final delta = _parseLineToDelta(line, baseAttributes: baseAttributes);
+        if (trimmedLine.startsWith('> ')) {
+          nodes.add(quoteNode(delta: delta));
+        } else {
+          nodes.add(paragraphNode(delta: delta));
+        }
       }
     }
   }
+
+  flushTable();
 
   // Ensure there's at least one node
   if (nodes.isEmpty) {
@@ -44,6 +72,66 @@ List<Node> parseMarkdownToNodes(
   }
 
   return nodes;
+}
+
+Node? _parseTableLinesToNode(List<String> tableLines) {
+  if (tableLines.isEmpty) return null;
+
+  final List<List<String>> rows = [];
+  int maxCols = 0;
+  int separatorIndex = -1;
+
+  for (var i = 0; i < tableLines.length; i++) {
+    final line = tableLines[i].trim();
+    if (!line.startsWith('|') || !line.endsWith('|')) {
+      continue;
+    }
+
+    final parts = line.split('|');
+    if (parts.length < 2) continue;
+
+    final cells = parts
+        .sublist(1, parts.length - 1)
+        .map((e) => e.trim())
+        .toList();
+
+    final isSeparator = cells.isNotEmpty &&
+        cells.every((cell) =>
+            cell.isNotEmpty &&
+            cell.replaceAll(RegExp('[:-]'), '').isEmpty,
+        );
+
+    if (isSeparator && separatorIndex == -1) {
+      separatorIndex = i;
+      continue;
+    }
+
+    rows.add(cells);
+    if (cells.length > maxCols) {
+      maxCols = cells.length;
+    }
+  }
+
+  if (rows.isEmpty || maxCols == 0) return null;
+
+  for (var i = 0; i < rows.length; i++) {
+    while (rows[i].length < maxCols) {
+      rows[i].add('');
+    }
+  }
+
+  final List<List<String>> cols = List.generate(maxCols, (_) => []);
+  for (var r = 0; r < rows.length; r++) {
+    for (var c = 0; c < maxCols; c++) {
+      cols[c].add(rows[r][c]);
+    }
+  }
+
+  try {
+    return TableNode.fromList(cols).node;
+  } catch (e) {
+    return null;
+  }
 }
 
 Delta _parseLineToDelta(String text, {Attributes? baseAttributes}) {

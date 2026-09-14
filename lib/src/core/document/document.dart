@@ -102,16 +102,7 @@ class Document {
     }
 
     final index = path.last.clamp(0, parent.children.length);
-    if (index >= parent.children.length) {
-      for (final node in nodes) {
-        parent.insert(node);
-      }
-    } else {
-      final target = parent.children[index];
-      for (final node in nodes) {
-        target.insertBefore(node);
-      }
-    }
+    parent.insertAll(nodes, index: index);
 
     return true;
   }

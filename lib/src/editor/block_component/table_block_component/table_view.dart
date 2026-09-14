@@ -1,5 +1,4 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
-import 'package:appflowy_editor/src/editor/block_component/table_block_component/table_add_button.dart';
 import 'package:appflowy_editor/src/editor/block_component/table_block_component/table_col.dart';
 import 'package:flutter/material.dart';
 
@@ -30,37 +29,7 @@ class _TableViewState extends State<TableView> {
         Column(
           children: [
             Row(
-              children: [
-                ..._buildColumns(context),
-                TableActionButton(
-                  padding: const EdgeInsets.only(left: 0),
-                  icon: widget.tableStyle.addIcon,
-                  width: 28,
-                  height: widget.tableNode.colsHeight,
-                  onPressed: () {
-                    TableActions.add(
-                      widget.tableNode.node,
-                      widget.tableNode.colsLen,
-                      widget.editorState,
-                      TableDirection.col,
-                    );
-                  },
-                ),
-              ],
-            ),
-            TableActionButton(
-              padding: const EdgeInsets.only(top: 1, right: 30),
-              icon: widget.tableStyle.addIcon,
-              height: 28,
-              width: widget.tableNode.tableWidth,
-              onPressed: () {
-                TableActions.add(
-                  widget.tableNode.node,
-                  widget.tableNode.rowsLen,
-                  widget.editorState,
-                  TableDirection.row,
-                );
-              },
+              children: _buildColumns(context),
             ),
           ],
         ),

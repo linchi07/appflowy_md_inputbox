@@ -65,9 +65,10 @@ CommandShortcutEventHandler _pasteCommandHandler = (editorState) {
     final data = await AppFlowyClipboard.getData();
     final text = data.text;
     if (text != null && text.isNotEmpty) {
-      await editorState.insertMarkdown(text);
+      await editorState.pastePlainText(text);
     }
   }();
 
   return KeyEventResult.handled;
 };
+

@@ -4,6 +4,8 @@ import 'package:appflowy_editor/src/flutter/scrollable_positioned_list/scrollabl
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'indexed_document_scrollbar.dart';
+
 class PageBlockKeys {
   static const String type = 'page';
 }
@@ -59,10 +61,12 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
       return SingleChildScrollView(
         child: Builder(
           builder: (context) {
-            final scroller = Scrollable.maybeOf(context);
-            if (scroller != null) {
-              editorState.updateAutoScroller(scroller);
-            }
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              final scroller = Scrollable.maybeOf(context);
+              if (scroller != null) {
+                editorState.updateAutoScroller(scroller);
+              }
+            });
 
             return Column(
               children: [
@@ -95,12 +99,17 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
       if (header != null) extentCount++;
       if (footer != null) extentCount++;
 
-      return ScrollablePositionedList.builder(
+      final list = ScrollablePositionedList.builder(
         shrinkWrap: scrollController.shrinkWrap,
         scrollDirection: Axis.vertical,
         itemCount: items.length + extentCount,
         itemBuilder: (context, index) {
-          editorState.updateAutoScroller(Scrollable.of(context));
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final scroller = Scrollable.maybeOf(context);
+            if (scroller != null) {
+              editorState.updateAutoScroller(scroller);
+            }
+          });
           if (header != null && index == 0) {
             return IgnoreEditorSelectionGesture(
               child: header!,
@@ -136,6 +145,17 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
         scrollOffsetController: scrollController.scrollOffsetController,
         itemPositionsListener: scrollController.itemPositionsListener,
         scrollOffsetListener: scrollController.scrollOffsetListener,
+        minCacheExtent: scrollController.minCacheExtent,
+      );
+      if (!scrollController.useIndexedScrollbar) return list;
+
+      return IndexedDocumentScrollbar(
+        itemCount: items.length + extentCount,
+        itemScrollController: scrollController.itemScrollController,
+        itemPositionsListener: scrollController.itemPositionsListener,
+        color: editorState.editorStyle.colorScheme.mutedForeground
+            .withValues(alpha: 0.65),
+        child: list,
       );
     }
   }

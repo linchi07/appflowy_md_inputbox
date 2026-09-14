@@ -1,8 +1,7 @@
 import 'dart:math';
 
 import 'package:appflowy_editor/appflowy_editor.dart';
-import 'package:appflowy_editor/src/flutter/overlay.dart';
-import 'package:flutter/material.dart' hide Overlay, OverlayEntry;
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 // workaround for the issue:
@@ -31,6 +30,8 @@ class AppFlowyEditor extends StatefulWidget {
     this.autoFocus = false,
     this.focusedSelection,
     this.shrinkWrap = false,
+    this.minCacheExtent,
+    this.useIndexedScrollbar = false,
     this.showMagnifier = true,
     this.editorScrollController,
     EditorStyle? editorStyle,
@@ -172,6 +173,12 @@ class AppFlowyEditor extends StatefulWidget {
   /// Notes: Must provide a scrollController when shrinkWrap is true.
   final bool shrinkWrap;
 
+  /// Minimum off-screen area, in logical pixels, built ahead of scrolling.
+  final double? minCacheExtent;
+
+  /// Seek long virtual documents by block index instead of raw pixel offset.
+  final bool useIndexedScrollbar;
+
   /// Show the magnifier or not.
   ///
   /// only works on iOS or Android.
@@ -255,6 +262,8 @@ class _AppFlowyEditorState extends State<AppFlowyEditor> {
         EditorScrollController(
           editorState: editorState,
           shrinkWrap: widget.shrinkWrap,
+          minCacheExtent: widget.minCacheExtent,
+          useIndexedScrollbar: widget.useIndexedScrollbar,
         );
 
     _updateValues();
@@ -286,11 +295,19 @@ class _AppFlowyEditorState extends State<AppFlowyEditor> {
       editorState.renderer = _renderer;
     }
 
-    if (widget.editorScrollController != oldWidget.editorScrollController) {
+    if (widget.editorScrollController != oldWidget.editorScrollController ||
+        widget.shrinkWrap != oldWidget.shrinkWrap ||
+        widget.minCacheExtent != oldWidget.minCacheExtent ||
+        widget.useIndexedScrollbar != oldWidget.useIndexedScrollbar) {
+      if (oldWidget.editorScrollController == null) {
+        editorScrollController.dispose();
+      }
       editorScrollController = widget.editorScrollController ??
           EditorScrollController(
             editorState: editorState,
             shrinkWrap: widget.shrinkWrap,
+            minCacheExtent: widget.minCacheExtent,
+            useIndexedScrollbar: widget.useIndexedScrollbar,
           );
     }
 

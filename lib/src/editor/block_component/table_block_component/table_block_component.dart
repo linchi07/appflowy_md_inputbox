@@ -230,7 +230,7 @@ class _TableBlockComponentWidgetState extends State<TableBlockComponentWidget>
     Widget child = Scrollbar(
       controller: _scrollController,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.only(top: 10, left: 10, bottom: 4),
+        padding: const EdgeInsets.only(top: 15, left: 10, bottom: 4),
         controller: _scrollController,
         scrollDirection: Axis.horizontal,
         child: TableView(
@@ -245,7 +245,86 @@ class _TableBlockComponentWidgetState extends State<TableBlockComponentWidget>
     child = Padding(
       key: tableKey,
       padding: padding,
-      child: child,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          child,
+          Positioned(
+            top: -8,
+            left: 10,
+            child: Material(
+              elevation: 2,
+              borderRadius: BorderRadius.circular(4),
+              color: Colors.white,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline, size: 16, color: Colors.black54),
+                    tooltip: '增加行',
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(),
+                    onPressed: () {
+                      TableActions.add(
+                        widget.tableNode.node,
+                        widget.tableNode.rowsLen,
+                        editorState,
+                        TableDirection.row,
+                      );
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.add_circle, size: 16, color: Colors.black54),
+                    tooltip: '增加列',
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(),
+                    onPressed: () {
+                      TableActions.add(
+                        widget.tableNode.node,
+                        widget.tableNode.colsLen,
+                        editorState,
+                        TableDirection.col,
+                      );
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle_outline, size: 16, color: Colors.black54),
+                    tooltip: '删除末尾行',
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(),
+                    onPressed: () {
+                      if (widget.tableNode.rowsLen > 1) {
+                        TableActions.delete(
+                          widget.tableNode.node,
+                          widget.tableNode.rowsLen - 1,
+                          editorState,
+                          TableDirection.row,
+                        );
+                      }
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle, size: 16, color: Colors.black54),
+                    tooltip: '删除末尾列',
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(),
+                    onPressed: () {
+                      if (widget.tableNode.colsLen > 1) {
+                        TableActions.delete(
+                          widget.tableNode.node,
+                          widget.tableNode.colsLen - 1,
+                          editorState,
+                          TableDirection.col,
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
 
     child = BlockSelectionContainer(

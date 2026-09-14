@@ -147,10 +147,12 @@ class EditorState {
 
   EditorState.blank({
     bool withInitialText = true,
+    int? maxHistoryItemSize,
   }) : this(
           document: Document.blank(
             withInitialText: withInitialText,
           ),
+          maxHistoryItemSize: maxHistoryItemSize,
         );
 
   final Document document;
@@ -176,8 +178,11 @@ class EditorState {
   /// The edge offset of the auto scroll.
   double autoScrollEdgeOffset = appFlowyEditorAutoScrollEdgeOffset;
 
+  /// The callback that will be triggered when the user pastes content.
+  OnPasteCallback? onPaste;
+
   /// The style of the editor.
-  late EditorStyle editorStyle;
+  EditorStyle editorStyle = EditorStyle.desktop();
 
   /// The selection notifier of the editor.
   final PropertyValueNotifier<Selection?> selectionNotifier =
@@ -257,12 +262,6 @@ class EditorState {
   /// The callback that will be triggered when the document is changed.
   void Function(EditorState editorState)? onInput;
 
-  /// The callback that will be triggered when the user pastes content.
-  ///
-  /// If the callback returns true, the default paste behavior will be skipped.
-  /// If it returns false or is null, the default paste behavior will be executed.
-  OnPasteCallback? onPaste;
-
   /// The notifier that will be updated when the document is changed.
   ///
   /// If it is not null, the editor state will update the character count
@@ -273,80 +272,156 @@ class EditorState {
   ///
   /// Each block is separated by a newline character.
   String get text {
+    final cached = _cachedText;
+    if (cached != null) {
+      return cached;
+    }
     if (document.root.children.isEmpty) {
       return '';
     }
-    return document.root.children.map((e) {
+    return _cachedText = document.root.children.map((e) {
       if (e.type == DividerBlockKeys.type) {
         return '---';
+      }
+      if (e.type == TableBlockKeys.type) {
+        final tableNode = TableNode(node: e);
+        final rowsLen = tableNode.rowsLen;
+        final colsLen = tableNode.colsLen;
+        if (rowsLen == 0 || colsLen == 0) return '';
+
+        final List<String> tableMarkdown = [];
+        final List<List<String>> rows = List.generate(
+          rowsLen,
+          (_) => List.generate(colsLen, (_) => ''),
+        );
+
+        for (var c = 0; c < colsLen; c++) {
+          for (var r = 0; r < rowsLen; r++) {
+            final cellNode = tableNode.getCell(c, r);
+            final cellText = cellNode.children.isNotEmpty
+                ? (cellNode.children.first.delta?.toPlainText() ?? '')
+                    .replaceAll('\n', ' ')
+                : '';
+            rows[r][c] = cellText;
+          }
+        }
+
+        tableMarkdown.add('| ${rows[0].join(' | ')} |');
+        tableMarkdown
+            .add('| ${List.generate(colsLen, (_) => '---').join(' | ')} |');
+
+        for (var r = 1; r < rowsLen; r++) {
+          tableMarkdown.add('| ${rows[r].join(' | ')} |');
+        }
+
+        return tableMarkdown.join('\n');
       }
       return e.delta?.toPlainText() ?? '';
     }).join('\n');
   }
 
-  /// 更新文档内容并将光标移至末尾，保留撤销/重做历史。
-  /// 适用于常规的内容更新，支持通过 Undo 撤回。
-  set text(String value) {
-    _updateTextInternal(value, clearHistory: false);
-  }
+  String? _cachedText;
+  int _textRevision = 0;
 
-  /// 重新设置文档内容并将光标移至末尾，**会清空**撤销/重做历史。
-  /// 适用于初始化或强行重置文档。
+  /// Sets the plain text of the document.
+  ///
+  /// This will clear the existing document and insert the new text.
+  /// The undo/redo history will be cleared.
+  set text(String value) => unawaited(setText(value));
+
+  /// Replaces the document and completes after parsing and applying it.
   Future<void> setText(String value) async {
-    return _updateTextInternal(value, clearHistory: true);
+    if (isDisposed) return;
+    final revision = ++_textRevision;
+
+    final List<Node> nodes;
+    if (value.length >= 1000) {
+      nodes = await compute(parseMarkdownToNodes, value);
+    } else {
+      nodes = parseMarkdownToNodes(value);
+    }
+    if (isDisposed || revision != _textRevision) return;
+
+    final transaction = this.transaction;
+
+    // Delete all existing nodes.
+    if (document.root.children.isNotEmpty) {
+      transaction.deleteNodesAtPath(
+        const [0],
+        document.root.children.length,
+      );
+    }
+
+    transaction.insertNodes(const [0], nodes);
+
+    // Reset selection to the end.
+    transaction.afterSelection = Selection.collapsed(
+      Position(
+        path: [nodes.length - 1],
+        offset: nodes.last.delta?.length ?? 0,
+      ),
+    );
+    transaction.reason = SelectionUpdateReason.uiEvent;
+
+    await apply(transaction);
+
+    // Clear undo history.
+    undoManager.undoStack.clear();
+    undoManager.redoStack.clear();
   }
 
+  /// Appends markdown text to the end of the document.
   Future<void> append(String value) async {
     if (isDisposed || value.isEmpty) return;
 
     // Move cursor to the end
     final lastNode = document.root.children.last;
-    await updateSelectionWithReason(
-      Selection.collapsed(
-        Position(
-          path: [document.root.children.length - 1],
-          offset: lastNode.delta?.length ?? 0,
-        ),
+    selection = Selection.collapsed(
+      Position(
+        path: [document.root.children.length - 1],
+        offset: lastNode.delta?.length ?? 0,
       ),
-      reason: SelectionUpdateReason.uiEvent,
     );
 
     // Call robust insertion logic
-    await insertMarkdown(value);
+    await pastePlainText(value);
   }
 
-  Future<void> insertMarkdown(String markdown) async {
+  /// Pastes plain text (parsed as markdown) into the document.
+  Future<void> pastePlainText(String plainText) async {
     final selectionAttributes = getDeltaAttributesInSelectionStart();
-    final selection = await deleteSelectionIfNeeded();
 
-    if (selection == null) {
-      return;
-    }
-
-    if (await maybeConvertToUrlOrPhone(markdown)) {
+    if (await maybeConvertToUrlOrPhone(plainText)) {
       return;
     }
 
     final List<Node> nodes;
-    if (markdown.length >= 1000) {
+    if (plainText.length >= 1000) {
       nodes = await compute(
         parseMarkdownToNodesCompute,
-        (markdown, selectionAttributes),
+        (plainText, selectionAttributes),
       );
     } else {
       nodes =
-          parseMarkdownToNodes(markdown, baseAttributes: selectionAttributes);
+          parseMarkdownToNodes(plainText, baseAttributes: selectionAttributes);
     }
 
     if (nodes.isEmpty) {
       return;
     }
+    // Keep the current selection intact while a large payload is parsed in an
+    // isolate. The paste helpers delete/replace it atomically immediately
+    // before insertion, so the document does not visibly lose content while
+    // parsing is still in flight.
     if (nodes.length == 1) {
-      await _insertSingleLineNode(nodes.first);
+      await pasteSingleLineNode(nodes.first);
     } else {
-      await _insertMultiLineNodes(nodes.toList());
+      await pasteMultiLineNodes(nodes.toList());
     }
   }
+
+  /// Inserts markdown text into the document at current selection.
+  Future<void> insertMarkdown(String markdown) => pastePlainText(markdown);
 
   Future<bool> maybeConvertToUrlOrPhone(String plainText) async {
     final selection = this.selection;
@@ -370,203 +445,6 @@ class EditorState {
     await apply(transaction);
 
     return true;
-  }
-
-  Future<void> _insertSingleLineNode(Node insertedNode) async {
-    final selection = await deleteSelectionIfNeeded();
-    if (selection == null) {
-      return;
-    }
-    final node = getNodeAtPath(selection.start.path);
-    final delta = node?.delta;
-    if (node == null || delta == null) {
-      return;
-    }
-    final transaction = this.transaction;
-    final insertedDelta = insertedNode.delta;
-    // if the node is empty paragraph (default), replace it with the inserted node.
-    if (delta.isEmpty && node.type == ParagraphBlockKeys.type) {
-      final List<Node> combinedChildren = [
-        ...insertedNode.children.map((e) => e.deepCopy()),
-        // if the original node has children, copy them to the inserted node.
-        ...node.children.map((e) => e.deepCopy()),
-      ];
-      insertedNode = insertedNode.copyWith(children: combinedChildren);
-      transaction.insertNode(selection.end.path, insertedNode);
-      transaction.deleteNode(node);
-      transaction.afterSelection = Selection.collapsed(
-        Position(
-          path: selection.end.path,
-          offset: insertedDelta?.length ?? 0,
-        ),
-      );
-    } else if (insertedDelta != null) {
-      // if the node is not empty, insert the delta from inserted node after the selection.
-      transaction.insertTextDelta(node, selection.endIndex, insertedDelta);
-    }
-    transaction.reason = SelectionUpdateReason.uiEvent;
-    await apply(transaction);
-  }
-
-  Future<void> _insertMultiLineNodes(List<Node> nodes) async {
-    assert(nodes.length > 1);
-
-    final selection = await deleteSelectionIfNeeded();
-    if (selection == null) {
-      return;
-    }
-    final node = getNodeAtPath(selection.start.path);
-    final delta = node?.delta;
-    if (node == null || delta == null) {
-      return;
-    }
-
-    final transaction = this.transaction;
-
-    // check if the first node is a non-delta node,
-    //  if so, insert the nodes after the current selection.
-    final startWithNonDeltaBlock = nodes.first.delta == null;
-    if (startWithNonDeltaBlock) {
-      transaction.insertNodes(node.path.next, nodes);
-      await apply(transaction);
-
-      return;
-    }
-
-    final lastNodeLength = _calculateLength(nodes);
-    // merge the current selected node delta into the nodes.
-    if (delta.isNotEmpty) {
-      final firstNode = nodes.first;
-      if (firstNode.delta != null) {
-        nodes.first.insertMarkdownDelta(
-          delta.slice(0, selection.startIndex),
-          insertAfter: false,
-        );
-      }
-
-      final lastNode = nodes.last;
-      if (lastNode.delta != null) {
-        nodes.last.insertMarkdownDelta(
-          delta.slice(selection.endIndex),
-          insertAfter: true,
-        );
-      }
-    }
-
-    if (delta.isEmpty && node.type != ParagraphBlockKeys.type) {
-      nodes[0] = nodes.first.copyWith(
-        type: node.type,
-        attributes: {
-          ...node.attributes,
-          ...nodes.first.attributes,
-        },
-      );
-    }
-
-    for (final child in node.children) {
-      nodes.last.insert(child);
-    }
-
-    transaction.insertNodes(selection.end.path, nodes);
-
-    // delete the current node.
-    transaction.deleteNode(node);
-
-    final path = _calculatePath(selection.start.path, nodes);
-    transaction.afterSelection = Selection.collapsed(
-      Position(
-        path: path,
-        offset: lastNodeLength,
-      ),
-    );
-
-    transaction.reason = SelectionUpdateReason.uiEvent;
-    await apply(transaction);
-  }
-
-  // delete the selection if it's not collapsed.
-  Future<Selection?> deleteSelectionIfNeeded() async {
-    final selection = this.selection;
-    if (selection == null) {
-      return null;
-    }
-
-    // delete the selection first.
-    if (!selection.isCollapsed) {
-      await deleteSelection(selection);
-    }
-
-    assert(this.selection?.isCollapsed == true);
-
-    return this.selection;
-  }
-
-  Path _calculatePath(Path start, List<Node> nodes) {
-    var path = start;
-    for (var i = 0; i < nodes.length; i++) {
-      path = path.next;
-    }
-    path = path.previous;
-    if (nodes.last.children.isNotEmpty) {
-      return [
-        ...path,
-        ..._calculatePath([0], nodes.last.children.toList()),
-      ];
-    }
-
-    return path;
-  }
-
-  int _calculateLength(List<Node> nodes) {
-    if (nodes.last.children.isNotEmpty) {
-      return _calculateLength(nodes.last.children.toList());
-    }
-
-    return nodes.last.delta?.length ?? 0;
-  }
-
-
-
-  Future<void> _updateTextInternal(
-    String value, {
-    required bool clearHistory,
-  }) async {
-    if (isDisposed) return;
-
-    final List<Node> nodes;
-    if (value.length >= 1000) {
-      nodes = await compute(parseMarkdownToNodes, value);
-    } else {
-      nodes = parseMarkdownToNodes(value);
-    }
-
-    final transaction = this.transaction;
-
-    // 删除所有现有节点
-    if (document.root.children.isNotEmpty) {
-      transaction.deleteNodesAtPath(
-        const [0],
-        document.root.children.length,
-      );
-    }
-
-    // 插入新节点
-    transaction.insertNodes(const [0], nodes);
-
-    transaction.afterSelection = Selection.collapsed(
-      Position(
-        path: [nodes.length - 1],
-        offset: nodes.last.delta?.length ?? 0,
-      ),
-    );
-    transaction.reason = SelectionUpdateReason.uiEvent;
-
-    await apply(transaction);
-
-    if (clearHistory) {
-      undoManager.undoStack.clear();
-      undoManager.redoStack.clear();
-    }
   }
 
   /// listen to this stream to get notified when the transaction applies.
@@ -701,6 +579,10 @@ class EditorState {
 
     this.selection = selection;
 
+    if (!completer.isCompleted && reason != SelectionUpdateReason.uiEvent) {
+      completer.complete();
+    }
+
     return completer.future;
   }
 
@@ -733,7 +615,9 @@ class EditorState {
   bool isDisposed = false;
 
   void dispose() {
+    if (isDisposed) return;
     isDisposed = true;
+    _textRevision++;
     _observer.close();
     _asyncObserver.close();
     _debouncedSealHistoryItemTimer?.cancel();
@@ -741,6 +625,13 @@ class EditorState {
     onDispose.dispose();
     document.dispose();
     selectionNotifier.dispose();
+    remoteSelections.dispose();
+    editableNotifier.dispose();
+    toggledStyleNotifier.dispose();
+    undoManager.dispose();
+    autoScroller?.stopAutoScroll();
+    autoScroller = null;
+    scrollableState = null;
     _subscription?.cancel();
     _onScrollViewScrolledListeners.clear();
   }
@@ -1061,6 +952,7 @@ class EditorState {
   }
 
   void _applyTransactionInLocal(Transaction transaction) {
+    _cachedText = null;
     for (final op in transaction.operations) {
       AppFlowyEditorLog.editor.debug('apply op (local): ${op.toJson()}');
 
@@ -1080,6 +972,7 @@ class EditorState {
   }
 
   Selection? _applyTransactionFromRemote(Transaction transaction) {
+    _cachedText = null;
     var selection = this.selection;
 
     for (final op in transaction.operations) {
