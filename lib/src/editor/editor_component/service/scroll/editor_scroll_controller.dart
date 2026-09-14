@@ -20,6 +20,7 @@ class EditorScrollController {
     required this.editorState,
     this.shrinkWrap = false,
     this.minCacheExtent,
+    this.useIndexedScrollbar = false,
     ScrollController? scrollController,
   }) {
     // if shrinkWrap is true, we will render the document with Column layout.
@@ -50,6 +51,7 @@ class EditorScrollController {
   final EditorState editorState;
   final bool shrinkWrap;
   final double? minCacheExtent;
+  final bool useIndexedScrollbar;
 
   // provide the current scroll offset
   final ValueNotifier<double> offsetNotifier = ValueNotifier(0);

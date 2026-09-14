@@ -37,6 +37,17 @@ Avoid `autoFocus: true` on more than one editor. Avoid `multiLine: true` with
 `shrinkWrap: true` in dense lists because intrinsic sizing adds an extra layout
 pass.
 
+Use one color scheme for the editor and all Markdown preview widgets:
+
+```dart
+const colors = MDEditorColorScheme.light(
+  primary: Color(0xFF6750A4),
+  selection: Color(0x286750A4),
+);
+
+MDEditor(controller: controller, colorScheme: colors);
+```
+
 ## Large document editing
 
 Use the large-document controller, a bounded viewport, and lazy block layout:
@@ -50,6 +61,7 @@ Expanded(
   child: MDEditor(
     controller: controller,
     shrinkWrap: false,
+    useIndexedScrollbar: true,
     minCacheExtent: 800,
     multiLine: true,
   ),
@@ -61,6 +73,14 @@ serialization by 150 ms. `shrinkWrap: false` uses block virtualization, so only
 visible and cached blocks are mounted. Tune `minCacheExtent` between roughly
 one and two viewport heights: a larger value makes scrolling smoother at the
 cost of more live widgets.
+
+`useIndexedScrollbar` is enabled by default on `MDEditor`. Its thumb maps the
+document percentage to a block index and calls `ItemScrollController.jumpTo`,
+instead of assigning a distant raw pixel offset to a variable-height sliver.
+Heights of visited blocks are stored in a prefix-sum index, so the percentage
+mapping becomes more accurate as the document is explored. Thumb updates are
+coalesced to at most one jump per frame. Set it to `false` to compare against
+the platform scrollbar when profiling.
 
 When replacing a large document after construction, await parsing explicitly:
 

@@ -103,6 +103,7 @@ class MDEditor extends StatefulWidget {
     this.autoFocus = false,
     this.shrinkWrap = true,
     this.minCacheExtent,
+    this.useIndexedScrollbar = true,
     this.maxHeight,
     this.minHeight,
     this.hintText,
@@ -120,6 +121,7 @@ class MDEditor extends StatefulWidget {
   final bool autoFocus;
   final bool shrinkWrap;
   final double? minCacheExtent;
+  final bool useIndexedScrollbar;
   final MDEditorController controller;
   final double? maxHeight;
   final double? minHeight;
@@ -162,6 +164,7 @@ class _MDEditorState extends State<MDEditor> {
       editorState: editorState,
       shrinkWrap: widget.shrinkWrap,
       minCacheExtent: widget.minCacheExtent,
+      useIndexedScrollbar: widget.useIndexedScrollbar && !widget.shrinkWrap,
       focusNode: widget.focusNode,
       autoFocus: widget.editable && widget.autoFocus,
       editable: widget.editable,

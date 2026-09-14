@@ -42,6 +42,13 @@ class MarkdownLabPage extends StatefulWidget {
 }
 
 class _MarkdownLabPageState extends State<MarkdownLabPage> {
+  static const _editorColors = MDEditorColorScheme.light(
+    primary: Color(0xFF6750A4),
+    selection: Color(0x286750A4),
+    tagBackground: Color(0x146750A4),
+    tagBorder: Color(0x336750A4),
+  );
+
   static const _sample = r'''# Markdown + LaTeX 实验室
 
 这是一个接近 Obsidian Live Preview 手感的输入框。
@@ -195,6 +202,7 @@ $$\sum_{n=1}^{\infty}\frac{1}{n^2}=\frac{\pi^2}{6}$$
                             minCacheExtent: 900,
                             multiLine: true,
                             hintText: '在这里输入 Markdown 和 LaTeX…',
+                            colorScheme: _editorColors,
                             padding: const EdgeInsets.symmetric(
                               horizontal: 48,
                               vertical: 4,
