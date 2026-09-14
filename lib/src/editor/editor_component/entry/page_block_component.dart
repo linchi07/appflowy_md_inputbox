@@ -1,5 +1,6 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor/src/editor/block_component/base_component/widget/ignore_parent_gesture.dart';
+import 'package:appflowy_editor/src/editor/editor_component/service/scroll/editor_height_service.dart';
 import 'package:appflowy_editor/src/flutter/scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -55,16 +56,19 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
   Widget build(BuildContext context) {
     final editorState = context.read<EditorState>();
     final scrollController = context.read<EditorScrollController?>();
+    final heightService = context.read<EditorHeightService?>();
     final items = node.children;
 
     if (scrollController == null || scrollController.shrinkWrap) {
       return SingleChildScrollView(
         child: Builder(
           builder: (context) {
-            final scroller = Scrollable.maybeOf(context);
-            if (scroller != null) {
-              editorState.updateAutoScroller(scroller);
-            }
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              final scroller = Scrollable.maybeOf(context);
+              if (scroller != null) {
+                editorState.updateAutoScroller(scroller);
+              }
+            });
 
             return Column(
               children: [
@@ -102,7 +106,12 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
         scrollDirection: Axis.vertical,
         itemCount: items.length + extentCount,
         itemBuilder: (context, index) {
-          editorState.updateAutoScroller(Scrollable.of(context));
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final scroller = Scrollable.maybeOf(context);
+            if (scroller != null) {
+              editorState.updateAutoScroller(scroller);
+            }
+          });
           if (header != null && index == 0) {
             return IgnoreEditorSelectionGesture(
               child: header!,
@@ -150,6 +159,23 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
             .withValues(alpha: 0.65),
         child: list,
       );
+
+      if (heightService != null) {
+        return ValueListenableBuilder<double>(
+          valueListenable: heightService.totalHeightNotifier,
+          builder: (context, totalHeight, child) {
+            return ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: totalHeight > 0 ? totalHeight : double.infinity,
+              ),
+              child: child!,
+            );
+          },
+          child: list,
+        );
+      }
+
+      return list;
     }
   }
 }

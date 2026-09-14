@@ -177,7 +177,7 @@ class _ScrollServiceWidgetState extends State<ScrollServiceWidget>
           // Don't skip even if already scrolling, because direction may have changed
           startAutoScroll(
             endTouchPoint,
-            edgeOffset: editorState.autoScrollEdgeOffset,
+            edgeOffset: isDragOperation ? editorState.autoScrollEdgeOffset : 24.0,
             direction: direction,
             duration: scrollDuration,
           );
@@ -186,9 +186,11 @@ class _ScrollServiceWidgetState extends State<ScrollServiceWidget>
         if (_forwardKey.currentContext == null) {
           return;
         }
+        
+        final bool isDragOperation = dragMode != null;
         startAutoScroll(
           endTouchPoint,
-          edgeOffset: editorState.autoScrollEdgeOffset,
+          edgeOffset: isDragOperation ? editorState.autoScrollEdgeOffset : 24.0,
           direction: direction,
           duration: Duration.zero,
         );
