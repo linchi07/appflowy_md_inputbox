@@ -98,18 +98,14 @@ class Document {
 
     final target = nodeAtPath(path);
     if (target != null) {
-      for (final node in nodes) {
-        target.insertBefore(node);
-      }
+      target.parent?.insertAll(nodes, index: path.last);
 
       return true;
     }
 
     final parent = nodeAtPath(path.parent);
     if (parent != null) {
-      for (var i = 0; i < nodes.length; i++) {
-        parent.insert(nodes.elementAt(i), index: path.last + i);
-      }
+      parent.insertAll(nodes, index: path.last);
 
       return true;
     }

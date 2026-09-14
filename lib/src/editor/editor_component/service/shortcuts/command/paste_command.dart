@@ -60,7 +60,7 @@ CommandShortcutEventHandler _pasteCommandHandler = (editorState) {
     final data = await AppFlowyClipboard.getData();
     final text = data.text;
     if (text != null && text.isNotEmpty) {
-      editorState.pastePlainText(text);
+      await editorState.pastePlainText(text);
     }
   }();
 
@@ -77,15 +77,8 @@ RegExp _phoneRegex = RegExp(r'^\+?' // Optional '+' at start
     );
 
 extension on EditorState {
-
   Future<void> pastePlainText(String plainText) async {
     final selectionAttributes = getDeltaAttributesInSelectionStart();
-    // TODO remove this deletion after refactoring pasteHtmlIfAvailable below
-    final selection = await deleteSelectionIfNeeded();
-
-    if (selection == null) {
-      return;
-    }
 
     if (await maybeConvertToUrlOrPhone(plainText)) {
       return;
@@ -98,12 +91,17 @@ extension on EditorState {
         (plainText, selectionAttributes),
       );
     } else {
-      nodes = parseMarkdownToNodes(plainText, baseAttributes: selectionAttributes);
+      nodes =
+          parseMarkdownToNodes(plainText, baseAttributes: selectionAttributes);
     }
 
     if (nodes.isEmpty) {
       return;
     }
+    // Keep the current selection intact while a large payload is parsed in an
+    // isolate. The paste helpers delete/replace it atomically immediately
+    // before insertion, so the document does not visibly lose content while
+    // parsing is still in flight.
     if (nodes.length == 1) {
       await pasteSingleLineNode(nodes.first);
     } else {

@@ -79,7 +79,7 @@ $$\sum_{n=1}^{\infty}\frac{1}{n^2}=\frac{\pi^2}{6}$$
   @override
   void initState() {
     super.initState();
-    _controller = MDEditorController(
+    _controller = MDEditorController.largeDocument(
       initialText: _sample,
       characterCounter: _characterCount,
       onInput: (text) => _paragraphCount = text.split('\n').length,
@@ -90,6 +90,7 @@ $$\sum_{n=1}^{\infty}\frac{1}{n^2}=\frac{\pi^2}{6}$$
   @override
   void dispose() {
     SchedulerBinding.instance.removeTimingsCallback(_onFrameTimings);
+    _controller.dispose();
     _focusNode.dispose();
     _characterCount.dispose();
     super.dispose();
@@ -119,7 +120,7 @@ $$\sum_{n=1}^{\infty}\frac{1}{n^2}=\frac{\pi^2}{6}$$
     }
   }
 
-  void _loadStressDocument(int formulaCount) {
+  Future<void> _loadStressDocument(int formulaCount) async {
     final buffer = StringBuffer('# $formulaCount 条公式压力样本\n\n');
     for (var i = 1; i <= formulaCount; i++) {
       buffer.writeln(
@@ -128,14 +129,16 @@ $$\sum_{n=1}^{\infty}\frac{1}{n^2}=\frac{\pi^2}{6}$$
       );
     }
     final text = buffer.toString();
-    _controller.text = text;
+    await _controller.setText(text);
+    if (!mounted) return;
     _characterCount.value = text.length;
     _paragraphCount = formulaCount + 2;
     setState(() {});
   }
 
-  void _restoreSample() {
-    _controller.text = _sample;
+  Future<void> _restoreSample() async {
+    await _controller.setText(_sample);
+    if (!mounted) return;
     _characterCount.value = _sample.length;
     _paragraphCount = _sample.split('\n').length;
     setState(() {});
@@ -186,6 +189,7 @@ $$\sum_{n=1}^{\infty}\frac{1}{n^2}=\frac{\pi^2}{6}$$
                             key: ValueKey(_mode),
                             controller: _controller,
                             focusNode: _focusNode,
+                            autoFocus: true,
                             editable: !preview,
                             shrinkWrap: false,
                             minCacheExtent: 900,

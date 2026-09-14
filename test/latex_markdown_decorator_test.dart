@@ -71,6 +71,20 @@ void main() {
       expect(widgetSpans(result), hasLength(1));
       expect(result.toPlainText(), hasLength(r'ok $$\frac{a}{b}$$'.length));
     });
+
+    testWidgets('duplicate expressions use independent math trees',
+        (tester) async {
+      final result = await decorate(
+        tester,
+        r'$x^2$ then $x^2$',
+        caretOffset: 0,
+        selectionInOtherNode: true,
+      );
+
+      expect(widgetSpans(result), hasLength(2));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
   });
 
   group('Todo Markdown decoration', () {
@@ -112,6 +126,11 @@ void main() {
       final checkbox = tester.widget<Checkbox>(find.byType(Checkbox));
       expect(checkbox.value, isFalse);
       expect(checkbox.onChanged, isNotNull);
+      expect(checkbox.splashRadius, 0);
+      expect(
+        checkbox.overlayColor?.resolve({WidgetState.pressed}),
+        Colors.transparent,
+      );
 
       checkbox.onChanged!(true);
       await tester.pump(const Duration(milliseconds: 100));

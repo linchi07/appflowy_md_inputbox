@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../../../appflowy_editor.dart';
 
+final RegExp _orderedListPattern = RegExp(r'^\d+\. ');
+final RegExp _dividerPattern = RegExp(r'^([-*_])\1{2,}$|^—-$|^——-$');
+
 class MarkdownBlockComponentBuilder extends BlockComponentBuilder {
   MarkdownBlockComponentBuilder({super.configuration});
 
@@ -101,10 +104,10 @@ class _MarkdownBlockComponentWidgetState
     bool isList = !isTodo &&
         (text.startsWith('- ') ||
             text.startsWith('* ') ||
-            RegExp(r'^\d+\. ').hasMatch(text));
+            _orderedListPattern.hasMatch(text));
 
     // Divider check: exactly ---, *** or ___ at the beginning of a paragraph, including em-dash variants
-    final isDivider = RegExp(r'^([-*_])\1{2,}$|^—-$|^——-$').hasMatch(text);
+    final isDivider = _dividerPattern.hasMatch(text);
 
     if (isDivider) {
       final selection = editorState.selection;

@@ -248,4 +248,10 @@ class UndoManager {
       undoStack.pop();
     }
   }
+
+  void dispose() {
+    undoStack.clear();
+    redoStack.clear();
+    state = null;
+  }
 }

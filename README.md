@@ -72,6 +72,9 @@ final editor = AppFlowyEditor(
 
 You can also create an editor from a JSON object in order to configure your initial state. Or you can [create an editor from Markdown or Quill Delta](https://github.com/AppFlowy-IO/appflowy-editor/blob/main/documentation/importing.md).
 
+For this fork's compact-input and large-document configurations, see
+[the performance profiles](documentation/performance.md).
+
 ```dart
 final json = jsonDecode('YOUR INPUT JSON STRING');
 final editorState = EditorState(document: Document.fromJson(json));

@@ -135,10 +135,12 @@ class EditorState {
 
   EditorState.blank({
     bool withInitialText = true,
+    int? maxHistoryItemSize,
   }) : this(
           document: Document.blank(
             withInitialText: withInitialText,
           ),
+          maxHistoryItemSize: maxHistoryItemSize,
         );
 
   final Document document;
@@ -165,7 +167,7 @@ class EditorState {
   double autoScrollEdgeOffset = appFlowyEditorAutoScrollEdgeOffset;
 
   /// The style of the editor.
-  late EditorStyle editorStyle;
+  EditorStyle editorStyle = EditorStyle.desktop();
 
   /// The selection notifier of the editor.
   final PropertyValueNotifier<Selection?> selectionNotifier =
@@ -255,10 +257,14 @@ class EditorState {
   ///
   /// Each block is separated by a newline character.
   String get text {
+    final cached = _cachedText;
+    if (cached != null) {
+      return cached;
+    }
     if (document.root.children.isEmpty) {
       return '';
     }
-    return document.root.children.map((e) {
+    return _cachedText = document.root.children.map((e) {
       if (e.type == DividerBlockKeys.type) {
         return '---';
       }
@@ -286,7 +292,8 @@ class EditorState {
         }
 
         tableMarkdown.add('| ${rows[0].join(' | ')} |');
-        tableMarkdown.add('| ${List.generate(colsLen, (_) => '---').join(' | ')} |');
+        tableMarkdown
+            .add('| ${List.generate(colsLen, (_) => '---').join(' | ')} |');
 
         for (var r = 1; r < rowsLen; r++) {
           tableMarkdown.add('| ${rows[r].join(' | ')} |');
@@ -298,47 +305,53 @@ class EditorState {
     }).join('\n');
   }
 
+  String? _cachedText;
+  int _textRevision = 0;
+
   /// Sets the plain text of the document.
   ///
   /// This will clear the existing document and insert the new text.
   /// The undo/redo history will be cleared.
-  set text(String value) {
+  set text(String value) => unawaited(setText(value));
+
+  /// Replaces the document and completes after parsing and applying it.
+  Future<void> setText(String value) async {
     if (isDisposed) return;
+    final revision = ++_textRevision;
 
-    () async {
-      final List<Node> nodes;
-      if (value.length >= 1000) {
-        nodes = await compute(parseMarkdownToNodes, value);
-      } else {
-        nodes = parseMarkdownToNodes(value);
-      }
+    final List<Node> nodes;
+    if (value.length >= 1000) {
+      nodes = await compute(parseMarkdownToNodes, value);
+    } else {
+      nodes = parseMarkdownToNodes(value);
+    }
+    if (isDisposed || revision != _textRevision) return;
 
-      final transaction = this.transaction;
+    final transaction = this.transaction;
 
-      // Delete all existing nodes.
-      if (document.root.children.isNotEmpty) {
-        transaction.deleteNodesAtPath(
-          const [0],
-          document.root.children.length,
-        );
-      }
-
-      transaction.insertNodes(const [0], nodes);
-
-      // Reset selection to the end.
-      transaction.afterSelection = Selection.collapsed(
-        Position(
-          path: [nodes.length - 1],
-          offset: nodes.last.delta?.length ?? 0,
-        ),
+    // Delete all existing nodes.
+    if (document.root.children.isNotEmpty) {
+      transaction.deleteNodesAtPath(
+        const [0],
+        document.root.children.length,
       );
+    }
 
-      await apply(transaction);
+    transaction.insertNodes(const [0], nodes);
 
-      // Clear undo history.
-      undoManager.undoStack.clear();
-      undoManager.redoStack.clear();
-    }();
+    // Reset selection to the end.
+    transaction.afterSelection = Selection.collapsed(
+      Position(
+        path: [nodes.length - 1],
+        offset: nodes.last.delta?.length ?? 0,
+      ),
+    );
+
+    await apply(transaction);
+
+    // Clear undo history.
+    undoManager.undoStack.clear();
+    undoManager.redoStack.clear();
   }
 
   /// listen to this stream to get notified when the transaction applies.
@@ -505,7 +518,9 @@ class EditorState {
   bool isDisposed = false;
 
   void dispose() {
+    if (isDisposed) return;
     isDisposed = true;
+    _textRevision++;
     _observer.close();
     _asyncObserver.close();
     _debouncedSealHistoryItemTimer?.cancel();
@@ -513,6 +528,13 @@ class EditorState {
     onDispose.dispose();
     document.dispose();
     selectionNotifier.dispose();
+    remoteSelections.dispose();
+    editableNotifier.dispose();
+    toggledStyleNotifier.dispose();
+    undoManager.dispose();
+    autoScroller?.stopAutoScroll();
+    autoScroller = null;
+    scrollableState = null;
     _subscription?.cancel();
     _onScrollViewScrolledListeners.clear();
   }
@@ -832,6 +854,7 @@ class EditorState {
   }
 
   void _applyTransactionInLocal(Transaction transaction) {
+    _cachedText = null;
     for (final op in transaction.operations) {
       AppFlowyEditorLog.editor.debug('apply op (local): ${op.toJson()}');
 
@@ -851,6 +874,7 @@ class EditorState {
   }
 
   Selection? _applyTransactionFromRemote(Transaction transaction) {
+    _cachedText = null;
     var selection = this.selection;
 
     for (final op in transaction.operations) {

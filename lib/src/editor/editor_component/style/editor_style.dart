@@ -3,6 +3,58 @@ import 'package:flutter/material.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import '../../block_component/rich_text/markdown_decorator.dart';
 
+/// Colors used by the Markdown editor and its inline preview widgets.
+///
+/// Keeping these colors together avoids individual Markdown decorations
+/// silently choosing unrelated Material swatches.
+class MDEditorColorScheme {
+  const MDEditorColorScheme({
+    required this.foreground,
+    required this.background,
+    required this.primary,
+    required this.selection,
+    required this.mutedForeground,
+    required this.border,
+    required this.subtleBackground,
+    required this.tagBackground,
+    required this.tagBorder,
+  });
+
+  const MDEditorColorScheme.light({
+    this.foreground = const Color(0xFF202124),
+    this.background = const Color(0xFFFFFFFF),
+    this.primary = const Color(0xFF5B5BD6),
+    this.selection = const Color(0x245B5BD6),
+    this.mutedForeground = const Color(0xFF7A7D85),
+    this.border = const Color(0xFFD7D9E0),
+    this.subtleBackground = const Color(0xFFF1F2F5),
+    this.tagBackground = const Color(0x145B5BD6),
+    this.tagBorder = const Color(0x335B5BD6),
+  });
+
+  const MDEditorColorScheme.dark({
+    this.foreground = const Color(0xFFE7E7EA),
+    this.background = const Color(0xFF1E1F22),
+    this.primary = const Color(0xFFA8A7FF),
+    this.selection = const Color(0x38A8A7FF),
+    this.mutedForeground = const Color(0xFF9A9CA5),
+    this.border = const Color(0xFF44464E),
+    this.subtleBackground = const Color(0xFF2A2B30),
+    this.tagBackground = const Color(0x20A8A7FF),
+    this.tagBorder = const Color(0x55A8A7FF),
+  });
+
+  final Color foreground;
+  final Color background;
+  final Color primary;
+  final Color selection;
+  final Color mutedForeground;
+  final Color border;
+  final Color subtleBackground;
+  final Color tagBackground;
+  final Color tagBorder;
+}
+
 /// The style of the editor.
 ///
 /// You can customize the style of the editor by passing the [EditorStyle] to
@@ -16,6 +68,7 @@ class EditorStyle {
     required this.selectionColor,
     required this.textStyleConfiguration,
     required this.textSpanDecorator,
+    required this.colorScheme,
     this.textSpanOverlayBuilder,
     this.magnifierSize = const Size(72, 48),
     this.mobileDragHandleBallSize = const Size(8, 8),
@@ -52,6 +105,9 @@ class EditorStyle {
 
   // The selection color
   final Color selectionColor;
+
+  /// Unified colors for Markdown decorations and editor chrome.
+  final MDEditorColorScheme colorScheme;
 
   // Customize the text style of the editor.
   //
@@ -122,16 +178,20 @@ class EditorStyle {
     this.textScaleFactor = 1.0,
     this.maxWidth,
     this.selectionMenuStyle,
+    MDEditorColorScheme? colorScheme,
   })  : padding = padding ?? const EdgeInsets.symmetric(horizontal: 100),
-        cursorColor = cursorColor ?? const Color(0xFF00BCF0),
-        selectionColor =
-            selectionColor ?? const Color.fromARGB(53, 111, 201, 231),
+        colorScheme = colorScheme ?? const MDEditorColorScheme.light(),
+        cursorColor = cursorColor ??
+            colorScheme?.primary ??
+            const MDEditorColorScheme.light().primary,
+        selectionColor = selectionColor ??
+            colorScheme?.selection ??
+            const MDEditorColorScheme.light().selection,
         textStyleConfiguration = textStyleConfiguration ??
             const TextStyleConfiguration(
               text: TextStyle(fontSize: 16),
             ),
-        textSpanDecorator =
-            textSpanDecorator ?? markdownTextSpanDecorator,
+        textSpanDecorator = textSpanDecorator ?? markdownTextSpanDecorator,
         magnifierSize = Size.zero,
         mobileDragHandleBallSize = Size.zero,
         mobileDragHandleWidth = 0.0,
@@ -165,17 +225,23 @@ class EditorStyle {
     this.mobileDragHandleHeightExtend,
     this.autoDismissCollapsedHandleDuration = const Duration(seconds: 3),
     this.selectionMenuStyle,
+    MDEditorColorScheme? colorScheme,
   })  : padding = padding ?? const EdgeInsets.symmetric(horizontal: 20),
-        cursorColor = cursorColor ?? const Color(0xFF00BCF0),
-        dragHandleColor = dragHandleColor ?? const Color(0xFF00BCF0),
-        selectionColor =
-            selectionColor ?? const Color.fromARGB(53, 111, 201, 231),
+        colorScheme = colorScheme ?? const MDEditorColorScheme.light(),
+        cursorColor = cursorColor ??
+            colorScheme?.primary ??
+            const MDEditorColorScheme.light().primary,
+        dragHandleColor = dragHandleColor ??
+            colorScheme?.primary ??
+            const MDEditorColorScheme.light().primary,
+        selectionColor = selectionColor ??
+            colorScheme?.selection ??
+            const MDEditorColorScheme.light().selection,
         textStyleConfiguration = textStyleConfiguration ??
             const TextStyleConfiguration(
               text: TextStyle(fontSize: 16),
             ),
-        textSpanDecorator =
-            textSpanDecorator ?? markdownTextSpanDecorator;
+        textSpanDecorator = textSpanDecorator ?? markdownTextSpanDecorator;
 
   EditorStyle copyWith({
     EdgeInsets? padding,
@@ -199,12 +265,14 @@ class EditorStyle {
     double? mobileDragHandleHeightExtend,
     Duration? autoDismissCollapsedHandleDuration,
     SelectionMenuStyle? selectionMenuStyle,
+    MDEditorColorScheme? colorScheme,
   }) {
     return EditorStyle(
       padding: padding ?? this.padding,
       cursorColor: cursorColor ?? this.cursorColor,
       dragHandleColor: dragHandleColor ?? this.dragHandleColor,
       selectionColor: selectionColor ?? this.selectionColor,
+      colorScheme: colorScheme ?? this.colorScheme,
       textStyleConfiguration:
           textStyleConfiguration ?? this.textStyleConfiguration,
       textSpanDecorator: textSpanDecorator ?? this.textSpanDecorator,

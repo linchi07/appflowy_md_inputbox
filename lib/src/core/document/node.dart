@@ -164,7 +164,7 @@ final class Node extends ChangeNotifier with LinkedListEntry<Node> {
 
     if (_children.isEmpty) {
       _children.add(entry);
-      notifyListeners();
+      _notifyMutation();
 
       return;
     }
@@ -181,6 +181,48 @@ final class Node extends ChangeNotifier with LinkedListEntry<Node> {
     }
   }
 
+  /// Inserts multiple children while notifying listeners only once.
+  ///
+  /// Large Markdown pastes commonly add thousands of sibling nodes. Calling
+  /// [insert] for each one caused thousands of synchronous document change
+  /// notifications even though Flutter ultimately rendered a single frame.
+  void insertAll(Iterable<Node> entries, {int? index}) {
+    final nodes = entries.toList(growable: false);
+    if (nodes.isEmpty) return;
+
+    _batchMutation(() {
+      var insertionIndex = index ?? _children.length;
+      for (final node in nodes) {
+        insert(node, index: insertionIndex);
+        insertionIndex++;
+      }
+    });
+  }
+
+  int _mutationBatchDepth = 0;
+  bool _notificationPending = false;
+
+  void _batchMutation(void Function() mutation) {
+    _mutationBatchDepth++;
+    try {
+      mutation();
+    } finally {
+      _mutationBatchDepth--;
+      if (_mutationBatchDepth == 0 && _notificationPending) {
+        _notificationPending = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  void _notifyMutation() {
+    if (_mutationBatchDepth > 0) {
+      _notificationPending = true;
+    } else {
+      notifyListeners();
+    }
+  }
+
   @override
   void insertAfter(Node entry) {
     entry._resetRelationshipIfNeeded();
@@ -190,7 +232,7 @@ final class Node extends ChangeNotifier with LinkedListEntry<Node> {
     parent?._cacheChildren = null;
 
     // Notifies the new node.
-    parent?.notifyListeners();
+    parent?._notifyMutation();
   }
 
   @override
@@ -202,7 +244,7 @@ final class Node extends ChangeNotifier with LinkedListEntry<Node> {
     parent?._cacheChildren = null;
 
     // Notifies the new node.
-    parent?.notifyListeners();
+    parent?._notifyMutation();
   }
 
   @override

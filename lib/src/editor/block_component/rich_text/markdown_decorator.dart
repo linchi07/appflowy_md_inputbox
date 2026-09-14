@@ -6,32 +6,95 @@ import 'package:provider/provider.dart';
 
 import '../../../../appflowy_editor.dart';
 
+final RegExp _markdownPattern = RegExp(
+  r'(\*\*.*?(?:\*\*|$))|(\*.*?(?:\*|$))|(~~.*?(?:~~|$))|(`.*?(?:`|$))|^(#{1,6}\s+.*)$|((?:^[-*]\s+)?\[[ x]])|(#[\w\u4e00-\u9fa5]+)|^([-*]\s+)|^(\d+\.\s+)|^([-*_]{3,})$|((?<![\\$])\$\$.*?(?:(?<!\\)\$\$|$))|((?<![\\$])\$(?!\$)(?!\s).*?(?:(?<![\\\s])\$(?!\$)|$))',
+  multiLine: true,
+);
+final RegExp _headingPrefixPattern = RegExp(r'^#+\s+');
+final RegExp _headingHashesPattern = RegExp('^#+');
+final RegExp _checkboxPattern = RegExp(r'\[[ x]]');
+
+class _MathPreviewCacheKey {
+  const _MathPreviewCacheKey({
+    required this.editorId,
+    required this.nodeId,
+    required this.offset,
+    required this.expression,
+    required this.display,
+    required this.textStyle,
+  });
+
+  final int editorId;
+  final String nodeId;
+  final int offset;
+  final String expression;
+  final bool display;
+  final TextStyle? textStyle;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _MathPreviewCacheKey &&
+      other.editorId == editorId &&
+      other.nodeId == nodeId &&
+      other.offset == offset &&
+      other.expression == expression &&
+      other.display == display &&
+      other.textStyle == textStyle;
+
+  @override
+  int get hashCode => Object.hash(
+        editorId,
+        nodeId,
+        offset,
+        expression,
+        display,
+        textStyle,
+      );
+}
+
 class _MathPreviewCache {
   static const _capacity = 512;
-  static final LinkedHashMap<String, Math> _parsed = LinkedHashMap();
+  static const _sourceCharacterBudget = 64 * 1024;
+  static final Expando<int> _editorIds = Expando();
+  static int _nextEditorId = 0;
+  static final LinkedHashMap<_MathPreviewCacheKey, Math> _widgets =
+      LinkedHashMap();
+  static int _sourceCharacters = 0;
+
+  static int editorId(EditorState editorState) =>
+      _editorIds[editorState] ??= _nextEditorId++;
 
   static Widget build({
+    required _MathPreviewCacheKey cacheKey,
     required String expression,
     required String source,
     required bool display,
     required TextStyle? textStyle,
   }) {
-    final parsed = _parsed.remove(expression) ?? Math.tex(expression);
-    _parsed[expression] = parsed;
-    if (_parsed.length > _capacity) {
-      _parsed.remove(_parsed.keys.first);
+    // flutter_math_fork's SyntaxTree is mutable during layout and stores
+    // GlobalKeys. It is therefore unsafe to share one parsed AST between two
+    // simultaneously mounted formula occurrences. Cache the complete Math
+    // widget per document occurrence instead: the same occurrence can be
+    // reused after viewport eviction, while duplicate expressions never share
+    // an AST or its GlobalKeys.
+    final cached = _widgets.remove(cacheKey);
+    final parsed = cached ??
+        Math.tex(
+          expression,
+          mathStyle: display ? MathStyle.display : MathStyle.text,
+          textStyle: textStyle,
+          onErrorFallback: (_) => Text(source, style: textStyle),
+        );
+    if (cached == null) _sourceCharacters += expression.length;
+    _widgets[cacheKey] = parsed;
+    while (_widgets.length > _capacity ||
+        _sourceCharacters > _sourceCharacterBudget) {
+      final oldest = _widgets.keys.first;
+      _sourceCharacters -= oldest.expression.length;
+      _widgets.remove(oldest);
     }
 
-    if (parsed.ast == null || parsed.parseError != null) {
-      return Text(source, style: textStyle);
-    }
-
-    return Math(
-      ast: parsed.ast,
-      mathStyle: display ? MathStyle.display : MathStyle.text,
-      textStyle: textStyle,
-      onErrorFallback: (_) => Text(source, style: textStyle),
-    );
+    return parsed;
   }
 }
 
@@ -44,6 +107,7 @@ TextSpan markdownTextSpanDecorator(
   TextSpan after,
 ) {
   final editorState = context.read<EditorState>();
+  final colors = editorState.editorStyle.colorScheme;
   final selection = editorState.selection;
 
   bool sameNode(List<int>? p1) {
@@ -101,19 +165,15 @@ TextSpan markdownTextSpanDecorator(
   // 6: Checkbox (with optional list prefix), 7: Tag, 8: ListPrefix (Bullet),
   // 9: ListPrefix (Ordered), 10: DividerLine, 11: Display Math,
   // 12: Inline Math.
-  final RegExp exp = RegExp(
-    r'(\*\*.*?(?:\*\*|$))|(\*.*?(?:\*|$))|(~~.*?(?:~~|$))|(`.*?(?:`|$))|^(#{1,6}\s+.*)$|((?:^[-*]\s+)?\[[ x]])|(#[\w\u4e00-\u9fa5]+)|^([-*]\s+)|^(\d+\.\s+)|^([-*_]{3,})$|((?<![\\$])\$\$.*?(?:(?<!\\)\$\$|$))|((?<![\\$])\$(?!\$)(?!\s).*?(?:(?<![\\\s])\$(?!\$)|$))',
-    multiLine: true,
-  );
-
-  if (!exp.hasMatch(content)) {
+  final matches = _markdownPattern.allMatches(content).toList(growable: false);
+  if (matches.isEmpty) {
     return TextSpan(text: content, style: baseStyle);
   }
 
   List<InlineSpan> spans = [];
   int lastMatchEnd = 0;
 
-  for (final match in exp.allMatches(content)) {
+  for (final match in matches) {
     if (match.start > lastMatchEnd) {
       spans.add(
         TextSpan(
@@ -171,6 +231,14 @@ TextSpan markdownTextSpanDecorator(
                   : null,
               child: RepaintBoundary(
                 child: _MathPreviewCache.build(
+                  cacheKey: _MathPreviewCacheKey(
+                    editorId: _MathPreviewCache.editorId(editorState),
+                    nodeId: node.id,
+                    offset: globalMatchStart,
+                    expression: expression,
+                    display: isDisplayMath,
+                    textStyle: baseStyle,
+                  ),
                   expression: expression,
                   source: fullMatchStr,
                   display: isDisplayMath,
@@ -212,7 +280,7 @@ TextSpan markdownTextSpanDecorator(
       } else if (match.group(4) != null) {
         marker = '`';
         styledMatch = baseStyle?.copyWith(
-          backgroundColor: Colors.grey.withValues(alpha: 0.2),
+          backgroundColor: colors.subtleBackground,
           fontFamily: 'monospace',
         );
       }
@@ -246,7 +314,8 @@ TextSpan markdownTextSpanDecorator(
     else if (match.group(5) != null) {
       final headerContent = match.group(5)!;
       final int hashCount =
-          RegExp('^#+').firstMatch(headerContent)?.group(0)?.length ?? 0;
+          _headingHashesPattern.firstMatch(headerContent)?.group(0)?.length ??
+              0;
       double fontSize = 16;
       if (hashCount == 1) {
         fontSize = 28;
@@ -267,7 +336,7 @@ TextSpan markdownTextSpanDecorator(
         spans.add(TextSpan(text: headerContent, style: headerStyle));
       } else {
         // Hide only the prefix symbols like "### "
-        final prefixMatch = RegExp(r'^#+\s+').firstMatch(headerContent);
+        final prefixMatch = _headingPrefixPattern.firstMatch(headerContent);
         if (prefixMatch != null) {
           final prefix = prefixMatch.group(0)!;
           spans.add(TextSpan(text: prefix, style: hiddenStyle));
@@ -296,11 +365,16 @@ TextSpan markdownTextSpanDecorator(
                 value: isChecked,
                 visualDensity: VisualDensity.compact,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                side: BorderSide(color: Colors.grey.shade500, width: 1.5),
+                splashRadius: 0,
+                overlayColor:
+                    const WidgetStatePropertyAll<Color>(Colors.transparent),
+                activeColor: colors.primary,
+                checkColor: colors.background,
+                side: BorderSide(color: colors.border, width: 1.5),
                 onChanged: editorState.editable
                     ? (checked) {
                         final checkboxMatch =
-                            RegExp(r'\[[ x]]').firstMatch(fullMatchStr)!;
+                            _checkboxPattern.firstMatch(fullMatchStr)!;
                         final prefix =
                             fullMatchStr.substring(0, checkboxMatch.start);
                         final newText =
@@ -333,7 +407,7 @@ TextSpan markdownTextSpanDecorator(
         spans.add(
           TextSpan(
             text: fullMatchStr,
-            style: baseStyle?.copyWith(color: Colors.blue),
+            style: baseStyle?.copyWith(color: colors.primary),
           ),
         );
       } else {
@@ -343,14 +417,14 @@ TextSpan markdownTextSpanDecorator(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: Colors.blue.withValues(alpha: 0.1),
+                color: colors.tagBackground,
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                border: Border.all(color: colors.tagBorder),
               ),
               child: Text(
                 fullMatchStr,
                 style: baseStyle?.copyWith(
-                  color: Colors.blue,
+                  color: colors.primary,
                   fontSize: (baseStyle.fontSize ?? 16) * 0.9,
                 ),
               ),
@@ -404,7 +478,7 @@ TextSpan markdownTextSpanDecorator(
             child: Container(
               height: 10,
               alignment: Alignment.center,
-              child: const Divider(height: 1, thickness: 1, color: Colors.grey),
+              child: Divider(height: 1, thickness: 1, color: colors.border),
             ),
           ),
         );
