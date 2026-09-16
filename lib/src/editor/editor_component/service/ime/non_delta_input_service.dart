@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:appflowy_editor/appflowy_editor.dart';
@@ -18,7 +19,10 @@ class NonDeltaTextInputService extends TextInputService with TextInputClient {
     required super.onPerformAction,
     super.contentInsertionConfiguration,
     super.onFloatingCursor,
+    this.keepEditorFocusNotifier,
   });
+
+  final KeepEditorFocusNotifier? keepEditorFocusNotifier;
 
   @override
   TextRange? composingTextRange;
@@ -40,7 +44,7 @@ class NonDeltaTextInputService extends TextInputService with TextInputClient {
 
   TextInputConnection? _textInputConnection;
 
-  final String debounceKey = 'updateEditingValue';
+  Timer? _editingValueTimer;
 
   // when using gesture to move cursor on mobile, the floating cursor will be visible
   bool _isFloatingCursorVisible = false;
@@ -84,7 +88,8 @@ class NonDeltaTextInputService extends TextInputService with TextInputClient {
       );
     }
 
-    Debounce.cancel(debounceKey);
+    _editingValueTimer?.cancel();
+    _editingValueTimer = null;
 
     _textInputConnection!
       ..setEditingState(formattedValue)
@@ -115,28 +120,37 @@ class NonDeltaTextInputService extends TextInputService with TextInputClient {
     }
 
     final deltas = getTextEditingDeltas(currentTextEditingValue, value);
-    // On mobile, the IME will send a lot of updateEditingValue events, so we
-    // need to debounce it to combine them together.
-    Debounce.debounce(
-      debounceKey,
-      PlatformExtension.isMobile
-          ? const Duration(milliseconds: 10)
-          : Duration.zero,
-      () async {
-        final oldValue = _currentTextEditingValue?.copyWith();
-        currentTextEditingValue = value;
-        final willApply = await apply(deltas);
-        if (!willApply) {
-          currentTextEditingValue = oldValue;
-          _textInputConnection?.setEditingState(oldValue!);
+    Future<void> applyUpdate() async {
+      _editingValueTimer = null;
+      final oldValue = _currentTextEditingValue?.copyWith();
+      currentTextEditingValue = value;
+      final willApply = await apply(deltas);
+      if (!willApply) {
+        currentTextEditingValue = oldValue;
+        if (oldValue != null) {
+          _textInputConnection?.setEditingState(oldValue);
         }
-      },
-    );
+      }
+    }
+
+    // Each input client owns its timer. A process-wide debounce key allowed
+    // one editor to cancel another editor's pending IME update.
+    _editingValueTimer?.cancel();
+    if (PlatformExtension.isMobile) {
+      _editingValueTimer = Timer(
+        const Duration(milliseconds: 10),
+        applyUpdate,
+      );
+    } else {
+      unawaited(applyUpdate());
+    }
   }
 
   @override
   void close() {
-    keepEditorFocusNotifier.reset();
+    keepEditorFocusNotifier?.reset();
+    _editingValueTimer?.cancel();
+    _editingValueTimer = null;
     currentTextEditingValue = null;
     composingTextRange = null;
     _textInputConnection?.close();
@@ -155,7 +169,6 @@ class NonDeltaTextInputService extends TextInputService with TextInputClient {
       _textInputConnection?.setComposingRect(rect.translate(0, rect.height));
     }
   }
-
 
   @override
   void clearComposingTextRange() {

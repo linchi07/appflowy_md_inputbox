@@ -33,8 +33,6 @@ class _DesktopSelectionServiceWidgetState
     implements AppFlowySelectionService {
   @override
   List<Rect> get selectionRects => editorState.selectionRects();
-  final List<OverlayEntry> _selectionAreas = [];
-  final List<OverlayEntry> _cursorAreas = [];
   final List<OverlayEntry> _contextMenuAreas = [];
 
   @override
@@ -55,6 +53,8 @@ class _DesktopSelectionServiceWidgetState
   Offset? _lastPanOffset;
 
   OverlayEntry? _dropTargetEntry;
+  late final String _metricsDebounceKey =
+      'desktop selection metrics ${identityHashCode(this)}';
 
   late EditorState editorState = Provider.of<EditorState>(
     context,
@@ -79,7 +79,7 @@ class _DesktopSelectionServiceWidgetState
     // Need to refresh the selection when the metrics changed.
     if (currentSelection.value != null) {
       Debounce.debounce(
-        'didChangeMetrics - update selection ',
+        _metricsDebounceKey,
         const Duration(milliseconds: 100),
         () {
           final selection = currentSelection.value;
@@ -94,6 +94,7 @@ class _DesktopSelectionServiceWidgetState
 
   @override
   void dispose() {
+    Debounce.cancel(_metricsDebounceKey);
     clearSelection();
     _dropTargetEntry?.dispose();
     _dropTargetEntry = null;
@@ -141,21 +142,14 @@ class _DesktopSelectionServiceWidgetState
 
   void _clearSelection() {
     clearCursor();
-    // clear selection areas
-    _selectionAreas
-      ..forEach((overlay) => overlay.remove())
-      ..clear();
-
     // clear context menu
     _clearContextMenu();
   }
 
   @override
   void clearCursor() {
-    // clear cursor areas
-    _cursorAreas
-      ..forEach((overlay) => overlay.remove())
-      ..clear();
+    // The local cursor is derived directly from selection state by
+    // BlockSelectionArea; there is no separate desktop cursor overlay.
   }
 
   void _resetPanState() {

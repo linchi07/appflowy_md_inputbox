@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 class MobileSelectionHandle extends StatelessWidget {
   const MobileSelectionHandle({
     super.key,
+    required this.handleKey,
     required this.layerLink,
     required this.rect,
     this.handleType = HandleType.none,
@@ -15,6 +16,7 @@ class MobileSelectionHandle extends StatelessWidget {
   });
 
   final Rect rect;
+  final GlobalKey handleKey;
   final LayerLink layerLink;
   final HandleType handleType;
   final Color handleColor;
@@ -59,6 +61,7 @@ class MobileSelectionHandle extends StatelessWidget {
         offset: adjustedRect.topLeft,
         showWhenUnlinked: false,
         child: DragHandle(
+          handleKey: handleKey,
           handleType: handleType,
           handleColor: handleColor,
           handleHeight: adjustedRect.height,

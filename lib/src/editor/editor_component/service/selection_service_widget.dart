@@ -33,7 +33,7 @@ class SelectionServiceWidget extends StatefulWidget {
 
 class _SelectionServiceWidgetState extends State<SelectionServiceWidget>
     with WidgetsBindingObserver
-    implements AppFlowySelectionService {
+    implements AppFlowySelectionService, MobileSelectionServiceControl {
   final forwardKey = GlobalKey(
     debugLabel: 'forward_to_platform_selection_service',
   );
@@ -92,6 +92,22 @@ class _SelectionServiceWidgetState extends State<SelectionServiceWidget>
 
   @override
   List<Rect> get selectionRects => forward.selectionRects;
+
+  @override
+  GlobalKey? get collapsedHandleKey {
+    final service = forward;
+    return service is MobileSelectionServiceControl
+        ? (service as MobileSelectionServiceControl).collapsedHandleKey
+        : null;
+  }
+
+  @override
+  void setMagnifierEnabled(bool enabled) {
+    final service = forward;
+    if (service is MobileSelectionServiceControl) {
+      (service as MobileSelectionServiceControl).setMagnifierEnabled(enabled);
+    }
+  }
 
   @override
   void unregisterGestureInterceptor(String key) =>

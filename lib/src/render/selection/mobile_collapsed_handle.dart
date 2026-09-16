@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 class MobileCollapsedHandle extends StatefulWidget {
   const MobileCollapsedHandle({
     super.key,
+    required this.handleKey,
     required this.layerLink,
     required this.rect,
     this.handleColor = Colors.black,
@@ -17,6 +18,7 @@ class MobileCollapsedHandle extends StatefulWidget {
   });
 
   final Rect rect;
+  final GlobalKey handleKey;
   final LayerLink layerLink;
   final Color handleColor;
   final double handleWidth;
@@ -34,6 +36,7 @@ class _MobileCollapsedHandleState extends State<MobileCollapsedHandle> {
     final debugInfo = context.read<EditorState>().debugInfo;
     if (PlatformExtension.isIOS) {
       return _IOSCollapsedHandle(
+        handleKey: widget.handleKey,
         layerLink: widget.layerLink,
         rect: widget.rect,
         handleWidth: widget.handleWidth,
@@ -41,6 +44,7 @@ class _MobileCollapsedHandleState extends State<MobileCollapsedHandle> {
       );
     } else if (PlatformExtension.isAndroid) {
       return _AndroidCollapsedHandle(
+        handleKey: widget.handleKey,
         layerLink: widget.layerLink,
         rect: widget.rect,
         handleColor: widget.handleColor,
@@ -57,6 +61,7 @@ class _MobileCollapsedHandleState extends State<MobileCollapsedHandle> {
 
 class _IOSCollapsedHandle extends StatelessWidget {
   const _IOSCollapsedHandle({
+    required this.handleKey,
     required this.layerLink,
     required this.rect,
     this.handleWidth = 2.0,
@@ -64,6 +69,7 @@ class _IOSCollapsedHandle extends StatelessWidget {
   });
 
   final Rect rect;
+  final GlobalKey handleKey;
   final LayerLink layerLink;
   final double handleWidth;
   final bool debugPaintSizeEnabled;
@@ -97,6 +103,7 @@ class _IOSCollapsedHandle extends StatelessWidget {
           children: [
             Positioned(
               child: DragHandle(
+                handleKey: handleKey,
                 handleHeight: adjustedRect.height,
                 handleType: HandleType.collapsed,
                 handleColor: Colors.transparent,
@@ -113,6 +120,7 @@ class _IOSCollapsedHandle extends StatelessWidget {
 
 class _AndroidCollapsedHandle extends StatelessWidget {
   const _AndroidCollapsedHandle({
+    required this.handleKey,
     required this.layerLink,
     required this.rect,
     this.handleColor = Colors.black,
@@ -124,6 +132,7 @@ class _AndroidCollapsedHandle extends StatelessWidget {
   });
 
   final Rect rect;
+  final GlobalKey handleKey;
   final LayerLink layerLink;
   final Color handleColor;
   final double handleWidth;
@@ -162,6 +171,7 @@ class _AndroidCollapsedHandle extends StatelessWidget {
             Positioned(
               top: 4.0,
               child: DragHandle(
+                handleKey: handleKey,
                 handleHeight: adjustedRect.height,
                 handleType: HandleType.collapsed,
                 handleColor: handleColor,

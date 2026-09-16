@@ -24,6 +24,16 @@ typedef DragTargetNodeInterceptor = Node Function(
   Node node,
 );
 
+/// Optional controls implemented by the built-in mobile selection service.
+///
+/// Kept separate from [AppFlowySelectionService] so custom selection services
+/// do not need to implement platform-specific handle behavior.
+abstract interface class MobileSelectionServiceControl {
+  GlobalKey? get collapsedHandleKey;
+
+  void setMagnifierEnabled(bool enabled);
+}
+
 /// [AppFlowySelectionService] is responsible for processing
 /// the [Selection] changes and updates.
 ///

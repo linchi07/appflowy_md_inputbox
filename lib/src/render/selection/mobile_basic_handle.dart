@@ -8,10 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-GlobalKey _leftHandleKey = GlobalKey();
-GlobalKey _rightHandleKey = GlobalKey();
-GlobalKey _collapsedHandleKey = GlobalKey();
-
 enum HandleType {
   none,
   left,
@@ -49,27 +45,12 @@ enum HandleType {
         return CrossAxisAlignment.center;
     }
   }
-
-  GlobalKey get key {
-    switch (this) {
-      case HandleType.none:
-        throw UnsupportedError('Unsupported handle type');
-
-      case HandleType.left:
-        return _leftHandleKey;
-
-      case HandleType.right:
-        return _rightHandleKey;
-
-      case HandleType.collapsed:
-        return _collapsedHandleKey;
-    }
-  }
 }
 
 abstract class _IDragHandle extends StatelessWidget {
   const _IDragHandle({
     super.key,
+    required this.handleKey,
     required this.handleHeight,
     this.handleColor = Colors.black,
     this.handleWidth = 2.0,
@@ -80,6 +61,7 @@ abstract class _IDragHandle extends StatelessWidget {
   });
 
   final Color handleColor;
+  final GlobalKey handleKey;
   final double handleWidth;
   final double handleHeight;
   final double handleBallWidth;
@@ -91,6 +73,7 @@ abstract class _IDragHandle extends StatelessWidget {
 class DragHandle extends _IDragHandle {
   const DragHandle({
     super.key,
+    required super.handleKey,
     required super.handleHeight,
     super.handleColor,
     super.handleWidth,
@@ -106,6 +89,7 @@ class DragHandle extends _IDragHandle {
 
     if (PlatformExtension.isIOS) {
       child = _IOSDragHandle(
+        handleKey: handleKey,
         handleHeight: handleHeight,
         handleColor: handleColor,
         handleWidth: handleWidth,
@@ -116,6 +100,7 @@ class DragHandle extends _IDragHandle {
       );
     } else if (PlatformExtension.isAndroid) {
       child = _AndroidDragHandle(
+        handleKey: handleKey,
         handleHeight: handleHeight,
         handleColor: handleColor,
         handleWidth: handleWidth,
@@ -160,6 +145,7 @@ class DragHandle extends _IDragHandle {
 
 class _IOSDragHandle extends _IDragHandle {
   const _IOSDragHandle({
+    required super.handleKey,
     required super.handleHeight,
     super.handleColor,
     super.handleWidth,
@@ -174,7 +160,6 @@ class _IOSDragHandle extends _IDragHandle {
     Widget child;
     if (handleType == HandleType.collapsed) {
       child = Container(
-        key: handleType.key,
         width: handleWidth,
         color: handleColor,
         height: handleHeight,
@@ -230,6 +215,7 @@ class _IOSDragHandle extends _IDragHandle {
     }
 
     child = GestureDetector(
+      key: handleKey,
       behavior: HitTestBehavior.opaque,
       dragStartBehavior: DragStartBehavior.down,
       onPanStart: (details) {
@@ -263,6 +249,7 @@ class _IOSDragHandle extends _IDragHandle {
 // ignore: must_be_immutable
 class _AndroidDragHandle extends _IDragHandle {
   _AndroidDragHandle({
+    required super.handleKey,
     required super.handleHeight,
     super.handleColor,
     super.handleWidth,
@@ -339,6 +326,7 @@ class _AndroidDragHandle extends _IDragHandle {
     );
 
     child = GestureDetector(
+      key: handleKey,
       behavior: HitTestBehavior.opaque,
       dragStartBehavior: DragStartBehavior.down,
       onPanStart: (details) {

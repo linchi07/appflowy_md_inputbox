@@ -112,5 +112,24 @@ Obsidian replacement. Important remaining limits are:
 - no file-backed paging or unloaded block representation exists;
 - very long individual paragraphs are not virtualized internally.
 
-For book-sized or generated documents, add an incremental parser and persistence
-layer before treating this component as the sole document engine.
+Live Markdown decoration is bounded independently of document block
+virtualization. By default a paragraph longer than 64 KiB, or one containing
+more than 512 recognized Markdown constructs, remains editable as exact plain
+source. This prevents dense generated text from creating thousands of inline
+widgets in one frame. Override the character limit when constructing
+`MDEditor`; passing `null` disables both safeguards and should only be done
+after profiling the target devices.
+
+Selection-only rebuilds reuse a 256-entry lexical cache capped at 1 MiB of
+source. The cache is safe to share across editors because entries contain only
+immutable regexp match results. IME timers, transaction composition, selection
+handles, floating cursors, toolbars, delayed scrolling, and overlay-focus state
+are editor/widget scoped, so simultaneously mounted editors no longer cancel
+or redirect one another's pending work.
+
+For book-sized or generated documents, profile live parsing and paragraph
+layout, then add the required incremental rendering/parser and persistence
+layers before treating this component as the sole document engine.
+
+See [Large-paragraph parsing and document model evaluation](parser_and_node_evaluation.md)
+for the recommended dependency-free path and the `Node` removal assessment.

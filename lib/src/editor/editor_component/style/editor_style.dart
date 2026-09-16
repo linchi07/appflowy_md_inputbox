@@ -84,6 +84,7 @@ class EditorStyle {
     this.mobileDragHandleHeightExtend,
     this.selectionMenuStyle,
     this.autoDismissCollapsedHandleDuration = const Duration(seconds: 3),
+    this.maxMarkdownDecorationCharacters = 64 * 1024,
   });
 
   // The padding of the editor.
@@ -166,6 +167,14 @@ class EditorStyle {
 
   final double textScaleFactor;
 
+  /// Maximum paragraph size that receives live Markdown decoration.
+  ///
+  /// Larger paragraphs remain editable as plain source so regexp scanning and
+  /// inline-widget construction cannot grow without a bound. When enabled,
+  /// markup-dense paragraphs also fall back after 512 recognized constructs.
+  /// Set to null to disable both safeguards.
+  final int? maxMarkdownDecorationCharacters;
+
   EditorStyle.desktop({
     EdgeInsets? padding,
     Color? cursorColor,
@@ -179,6 +188,7 @@ class EditorStyle {
     this.maxWidth,
     this.selectionMenuStyle,
     MDEditorColorScheme? colorScheme,
+    this.maxMarkdownDecorationCharacters = 64 * 1024,
   })  : padding = padding ?? const EdgeInsets.symmetric(horizontal: 100),
         colorScheme = colorScheme ?? const MDEditorColorScheme.light(),
         cursorColor = cursorColor ??
@@ -226,6 +236,7 @@ class EditorStyle {
     this.autoDismissCollapsedHandleDuration = const Duration(seconds: 3),
     this.selectionMenuStyle,
     MDEditorColorScheme? colorScheme,
+    this.maxMarkdownDecorationCharacters = 64 * 1024,
   })  : padding = padding ?? const EdgeInsets.symmetric(horizontal: 20),
         colorScheme = colorScheme ?? const MDEditorColorScheme.light(),
         cursorColor = cursorColor ??
@@ -266,6 +277,7 @@ class EditorStyle {
     Duration? autoDismissCollapsedHandleDuration,
     SelectionMenuStyle? selectionMenuStyle,
     MDEditorColorScheme? colorScheme,
+    int? maxMarkdownDecorationCharacters,
   }) {
     return EditorStyle(
       padding: padding ?? this.padding,
@@ -300,6 +312,8 @@ class EditorStyle {
       autoDismissCollapsedHandleDuration: autoDismissCollapsedHandleDuration ??
           this.autoDismissCollapsedHandleDuration,
       selectionMenuStyle: selectionMenuStyle ?? this.selectionMenuStyle,
+      maxMarkdownDecorationCharacters: maxMarkdownDecorationCharacters ??
+          this.maxMarkdownDecorationCharacters,
     );
   }
 }

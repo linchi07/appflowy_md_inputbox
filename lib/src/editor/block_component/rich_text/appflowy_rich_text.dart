@@ -198,7 +198,6 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
       node: widget.node,
       cursorColor: widget.cursorColor,
       selectionColor: widget.selectionColor,
-      supportTypes: const [BlockSelectionType.selection],
       child: MouseRegion(
         cursor: SystemMouseCursors.text,
         child: child,
@@ -573,7 +572,7 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
           return true;
         });
       }
-      
+
       textSpan = textSpan.copyWith(
         style: resolvedTextStyle.copyWith(
           height: height > 0.0 ? height : resolvedTextStyle.height,

@@ -15,8 +15,8 @@ import 'package:provider/provider.dart';
 /// only used in mobile
 ///
 /// this will notify the developers when the selection is not collapsed.
-StreamController<int> appFlowyEditorOnTapSelectionArea =
-    StreamController<int>.broadcast();
+StreamController<EditorState> appFlowyEditorOnTapSelectionArea =
+    StreamController<EditorState>.broadcast();
 
 enum MobileSelectionDragMode {
   none,
@@ -34,7 +34,6 @@ enum MobileSelectionHandlerType {
 // the value type is MobileSelectionDragMode
 const String selectionDragModeKey = 'selection_drag_mode';
 bool disableIOSSelectWordEdgeOnTap = false;
-bool disableMagnifier = false;
 
 class MobileSelectionServiceWidget extends StatefulWidget {
   const MobileSelectionServiceWidget({
@@ -65,7 +64,25 @@ class MobileSelectionServiceWidget extends StatefulWidget {
 class _MobileSelectionServiceWidgetState
     extends State<MobileSelectionServiceWidget>
     with WidgetsBindingObserver
-    implements AppFlowySelectionService {
+    implements AppFlowySelectionService, MobileSelectionServiceControl {
+  final GlobalKey _leftHandleKey = GlobalKey();
+  final GlobalKey _rightHandleKey = GlobalKey();
+  final GlobalKey _collapsedHandleKey = GlobalKey();
+  bool _magnifierEnabled = true;
+
+  @override
+  GlobalKey get collapsedHandleKey => _collapsedHandleKey;
+
+  @override
+  void setMagnifierEnabled(bool enabled) {
+    if (_magnifierEnabled == enabled) return;
+    if (mounted) {
+      setState(() => _magnifierEnabled = enabled);
+    } else {
+      _magnifierEnabled = enabled;
+    }
+  }
+
   @override
   final List<Rect> selectionRects = [];
 
@@ -172,7 +189,7 @@ class _MobileSelectionServiceWidgetState
     return ValueListenableBuilder(
       valueListenable: _lastPanOffset,
       builder: (_, offset, __) {
-        if (offset == null || disableMagnifier) {
+        if (offset == null || !_magnifierEnabled) {
           return const SizedBox.shrink();
         }
         final renderBox = context.findRenderObject() as RenderBox;
@@ -237,6 +254,7 @@ class _MobileSelectionServiceWidgetState
         final editorStyle = editorState.editorStyle;
 
         return MobileCollapsedHandle(
+          handleKey: _collapsedHandleKey,
           layerLink: node.layerLink,
           rect: rect,
           handleColor: editorStyle.dragHandleColor,
@@ -321,6 +339,8 @@ class _MobileSelectionServiceWidgetState
         final editorStyle = editorState.editorStyle;
 
         return MobileSelectionHandle(
+          handleKey:
+              handleType == HandleType.left ? _leftHandleKey : _rightHandleKey,
           layerLink: node.layerLink,
           rect: handleType == HandleType.left ? rects.first : rects.last,
           handleType: handleType,
@@ -379,7 +399,7 @@ class _MobileSelectionServiceWidgetState
       extraInfo: {
         selectionDragModeKey: dragMode,
         selectionExtraInfoDoNotAttachTextService:
-            dragMode == MobileSelectionDragMode.cursor,
+            dragMode != MobileSelectionDragMode.none,
       },
     );
   }
@@ -634,7 +654,7 @@ class _MobileSelectionServiceWidgetState
 
     // if the tap happens on a selection area, don't change the selection
     if (_isClickOnSelectionArea(offset)) {
-      appFlowyEditorOnTapSelectionArea.add(0);
+      appFlowyEditorOnTapSelectionArea.add(editorState);
 
       return;
     }
@@ -788,6 +808,7 @@ class _MobileSelectionServiceWidgetState
       reason: SelectionUpdateReason.uiEvent,
       extraInfo: {
         selectionDragModeKey: dragMode,
+        selectionExtraInfoDoNotAttachTextService: true,
         selectionExtraInfoDisableFloatingToolbar: true,
       },
     );
@@ -837,6 +858,7 @@ class _MobileSelectionServiceWidgetState
         reason: SelectionUpdateReason.uiEvent,
         extraInfo: {
           selectionDragModeKey: dragMode,
+          selectionExtraInfoDoNotAttachTextService: true,
           selectionExtraInfoDisableFloatingToolbar: true,
         },
       );

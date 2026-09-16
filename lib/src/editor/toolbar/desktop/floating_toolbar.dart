@@ -173,7 +173,8 @@ class _FloatingToolbarState extends State<FloatingToolbar>
     _showAfterDelay();
   }
 
-  final String _debounceKey = 'show the toolbar';
+  late final String _debounceKey =
+      'show the desktop toolbar ${identityHashCode(this)}';
 
   void _clear() {
     Debounce.cancel(_debounceKey);

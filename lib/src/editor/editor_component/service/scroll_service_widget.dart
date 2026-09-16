@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor/src/editor/editor_component/service/scroll/desktop_scroll_service.dart';
 import 'package:appflowy_editor/src/editor/editor_component/service/scroll/mobile_scroll_service.dart';
@@ -34,6 +36,7 @@ class _ScrollServiceWidgetState extends State<ScrollServiceWidget>
   late ScrollController scrollController = ScrollController();
 
   Selection? lastSelection;
+  Timer? _keyboardScrollTimer;
 
   @override
   void initState() {
@@ -43,6 +46,7 @@ class _ScrollServiceWidgetState extends State<ScrollServiceWidget>
 
   @override
   void dispose() {
+    _keyboardScrollTimer?.cancel();
     scrollController.dispose();
     editorState.selectionNotifier.removeListener(_onSelectionChanged);
     super.dispose();
@@ -169,7 +173,9 @@ class _ScrollServiceWidgetState extends State<ScrollServiceWidget>
             ? const Duration(milliseconds: 250)
             : Duration.zero;
 
-        Future.delayed(keyboardDelay, () {
+        _keyboardScrollTimer?.cancel();
+        _keyboardScrollTimer = Timer(keyboardDelay, () {
+          _keyboardScrollTimer = null;
           if (_forwardKey.currentContext == null) {
             return;
           }
@@ -177,7 +183,8 @@ class _ScrollServiceWidgetState extends State<ScrollServiceWidget>
           // Don't skip even if already scrolling, because direction may have changed
           startAutoScroll(
             endTouchPoint,
-            edgeOffset: isDragOperation ? editorState.autoScrollEdgeOffset : 24.0,
+            edgeOffset:
+                isDragOperation ? editorState.autoScrollEdgeOffset : 24.0,
             direction: direction,
             duration: scrollDuration,
           );
@@ -186,7 +193,7 @@ class _ScrollServiceWidgetState extends State<ScrollServiceWidget>
         if (_forwardKey.currentContext == null) {
           return;
         }
-        
+
         final bool isDragOperation = dragMode != null;
         startAutoScroll(
           endTouchPoint,

@@ -285,7 +285,8 @@ class SelectionMenuStyle {
       selectionMenuItemSelectedTextColor: selectedTextColor,
       selectionMenuItemSelectedIconColor: selectedTextColor,
       selectionMenuItemSelectedColor: selectedBackgroundColor,
-      selectionMenuUnselectedLabelColor: unselectedTextColor.withValues(alpha: 0.7),
+      selectionMenuUnselectedLabelColor:
+          unselectedTextColor.withValues(alpha: 0.7),
       selectionMenuDividerColor: foregroundColor.withValues(alpha: 0.1),
       selectionMenuLinkBorderColor: foregroundColor,
       selectionMenuInvalidLinkColor: const Color(0xFFE53935),
@@ -297,7 +298,6 @@ class SelectionMenuStyle {
     );
   }
 }
-
 
 class SelectionMenuWidget extends StatefulWidget {
   const SelectionMenuWidget({
@@ -407,7 +407,7 @@ class _SelectionMenuWidgetState extends State<SelectionMenuWidget> {
       _scrollController = AutoScrollController();
     }
 
-    keepEditorFocusNotifier.increase();
+    widget.editorState.keepEditorFocusNotifier.increase();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
       if (widget.reverse) {
@@ -422,7 +422,7 @@ class _SelectionMenuWidgetState extends State<SelectionMenuWidget> {
   @override
   void dispose() {
     _focusNode.dispose();
-    keepEditorFocusNotifier.decrease();
+    widget.editorState.keepEditorFocusNotifier.decrease();
     _scrollController?.dispose();
 
     super.dispose();

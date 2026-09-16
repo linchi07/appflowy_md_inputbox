@@ -54,7 +54,8 @@ class BlockSelectionArea extends StatefulWidget {
   State<BlockSelectionArea> createState() => _BlockSelectionAreaState();
 }
 
-class _BlockSelectionAreaState extends State<BlockSelectionArea> {
+class _BlockSelectionAreaState extends State<BlockSelectionArea>
+    with WidgetsBindingObserver {
   // We need to keep the key to refresh the cursor status when typing continuously.
   late GlobalKey cursorKey = GlobalKey(
     debugLabel: 'cursor_${widget.node.path}',
@@ -66,23 +67,51 @@ class _BlockSelectionAreaState extends State<BlockSelectionArea> {
   List<Rect>? prevSelectionRects;
   // keep the block selection rect to avoid unnecessary rebuild
   Rect? prevBlockRect;
+  bool _updateScheduled = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    widget.listenable.addListener(_onSelectionChanged);
+    widget.node.addListener(_scheduleSelectionUpdate);
+    _scheduleSelectionUpdate();
+  }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _updateSelectionIfNeeded();
-    });
-    widget.listenable.addListener(_clearCursorRect);
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scheduleSelectionUpdate();
+  }
+
+  @override
+  void didUpdateWidget(covariant BlockSelectionArea oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.listenable != widget.listenable) {
+      oldWidget.listenable.removeListener(_onSelectionChanged);
+      widget.listenable.addListener(_onSelectionChanged);
+    }
+    if (oldWidget.node != widget.node) {
+      oldWidget.node.removeListener(_scheduleSelectionUpdate);
+      widget.node.addListener(_scheduleSelectionUpdate);
+      cursorKey = GlobalKey(debugLabel: 'cursor_${widget.node.path}');
+    }
+    _scheduleSelectionUpdate();
   }
 
   @override
   void dispose() {
-    widget.listenable.removeListener(_clearCursorRect);
-
+    WidgetsBinding.instance.removeObserver(this);
+    widget.listenable.removeListener(_onSelectionChanged);
+    widget.node.removeListener(_scheduleSelectionUpdate);
     super.dispose();
   }
+
+  @override
+  void didChangeMetrics() => _scheduleSelectionUpdate();
+
+  @override
+  void didChangeTextScaleFactor() => _scheduleSelectionUpdate();
 
   @override
   Widget build(BuildContext context) {
@@ -227,13 +256,23 @@ class _BlockSelectionAreaState extends State<BlockSelectionArea> {
         prevCursorRect = null;
       });
     }
+  }
 
-    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-      _updateSelectionIfNeeded();
+  void _scheduleSelectionUpdate() {
+    if (_updateScheduled) return;
+    _updateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateScheduled = false;
+      if (mounted) {
+        _updateSelectionIfNeeded();
+      }
     });
   }
 
-  void _clearCursorRect() {
+  void _onSelectionChanged() {
     prevCursorRect = null;
+    prevSelectionRects = null;
+    prevBlockRect = null;
+    _scheduleSelectionUpdate();
   }
 }

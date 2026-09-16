@@ -68,6 +68,7 @@ class _MobileFloatingToolbarState extends State<MobileFloatingToolbar>
     );
     _onTapSelectionAreaSubscription =
         appFlowyEditorOnTapSelectionArea.stream.listen((event) {
+      if (!identical(event, editorState)) return;
       _isToolbarVisible ? _clear() : _showAfterDelay();
     });
   }
@@ -163,7 +164,8 @@ class _MobileFloatingToolbarState extends State<MobileFloatingToolbar>
     }
   }
 
-  final String _debounceKey = 'show the toolbar';
+  late final String _debounceKey =
+      'show the mobile toolbar ${identityHashCode(this)}';
 
   void _clear() {
     Debounce.cancel(_debounceKey);

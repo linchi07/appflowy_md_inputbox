@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../appflowy_editor.dart';
+import 'editor/util/platform_extension.dart';
 
 class MDEditorController {
   MDEditorController({
@@ -118,6 +119,8 @@ class MDEditor extends StatefulWidget {
     this.decoration,
     this.padding = const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
     this.onPaste,
+    this.showMagnifier = true,
+    this.maxMarkdownDecorationCharacters = 64 * 1024,
   });
   final bool multiLine;
   final bool editable;
@@ -137,6 +140,8 @@ class MDEditor extends StatefulWidget {
   final MDEditorColorScheme? colorScheme;
   final Decoration? decoration;
   final EdgeInsets padding;
+  final bool showMagnifier;
+  final int? maxMarkdownDecorationCharacters;
   @override
   State<MDEditor> createState() => _MDEditorState();
 }
@@ -157,6 +162,35 @@ class _MDEditorState extends State<MDEditor> {
           primary: widget.frontGroundColor,
           selection: widget.frontGroundColor.withValues(alpha: 0.15),
         );
+    final selectionMenuStyle = SelectionMenuStyle.fromColors(
+      backgroundColor: colors.background,
+      foregroundColor: colors.foreground,
+    );
+    final textStyleConfiguration = TextStyleConfiguration(
+      text: TextStyle(fontSize: 16, color: colors.foreground),
+    );
+    final editorStyle = PlatformExtension.isMobile
+        ? EditorStyle.mobile(
+            padding: widget.padding,
+            cursorColor: colors.primary,
+            dragHandleColor: colors.primary,
+            selectionColor: colors.selection,
+            selectionMenuStyle: selectionMenuStyle,
+            colorScheme: colors,
+            textStyleConfiguration: textStyleConfiguration,
+            maxMarkdownDecorationCharacters:
+                widget.maxMarkdownDecorationCharacters,
+          )
+        : EditorStyle.desktop(
+            padding: widget.padding,
+            cursorColor: colors.primary,
+            selectionColor: colors.selection,
+            selectionMenuStyle: selectionMenuStyle,
+            colorScheme: colors,
+            textStyleConfiguration: textStyleConfiguration,
+            maxMarkdownDecorationCharacters:
+                widget.maxMarkdownDecorationCharacters,
+          );
     Widget e = AppFlowyEditor(
       autoScrollEdgeOffset: 40,
       editorState: editorState,
@@ -169,6 +203,7 @@ class _MDEditorState extends State<MDEditor> {
       disableKeyboardService: !widget.editable,
       disableSelectionService: !widget.editable,
       disableAutoScroll: !widget.editable,
+      showMagnifier: widget.showMagnifier,
       onPaste: widget.onPaste,
       blockComponentBuilders: {
         ...standardBlockComponentBuilderMap,
@@ -179,19 +214,7 @@ class _MDEditorState extends State<MDEditor> {
           ),
         ),
       },
-      editorStyle: EditorStyle.desktop(
-        padding: widget.padding,
-        cursorColor: colors.primary,
-        selectionColor: colors.selection,
-        selectionMenuStyle: SelectionMenuStyle.fromColors(
-          backgroundColor: colors.background,
-          foregroundColor: colors.foreground,
-        ),
-        colorScheme: colors,
-        textStyleConfiguration: TextStyleConfiguration(
-          text: TextStyle(fontSize: 16, color: colors.foreground),
-        ),
-      ),
+      editorStyle: editorStyle,
       commandShortcutEvents: [
         if (widget.onSend != null) ...[
           sendShortcutEvent(onSend: onSend),

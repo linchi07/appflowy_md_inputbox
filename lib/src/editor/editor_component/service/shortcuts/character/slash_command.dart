@@ -90,7 +90,7 @@ Future<bool> _showSlashMenu(
 
   // insert the slash character
   if (shouldInsertSlash) {
-    keepEditorFocusNotifier.increase();
+    editorState.keepEditorFocusNotifier.increase();
     await editorState.insertTextAtPosition('/', position: selection.start);
   }
 
@@ -105,8 +105,9 @@ Future<bool> _showSlashMenu(
       deleteSlashByDefault: shouldInsertSlash,
       deleteKeywordsByDefault: deleteKeywordsByDefault,
       singleColumn: singleColumn,
-      style:
-          style ?? editorState.editorStyle.selectionMenuStyle ?? SelectionMenuStyle.light,
+      style: style ??
+          editorState.editorStyle.selectionMenuStyle ??
+          SelectionMenuStyle.light,
     );
     if (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST')) {
       _selectionMenuService?.show();
@@ -117,7 +118,7 @@ Future<bool> _showSlashMenu(
 
   if (shouldInsertSlash) {
     WidgetsBinding.instance.addPostFrameCallback(
-      (timeStamp) => keepEditorFocusNotifier.decrease(),
+      (timeStamp) => editorState.keepEditorFocusNotifier.decrease(),
     );
   }
 

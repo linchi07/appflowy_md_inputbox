@@ -37,11 +37,12 @@ void showColorMenu(
     overlay = null;
   }
 
-  keepEditorFocusNotifier.increase();
+  editorState.keepEditorFocusNotifier.increase();
   overlay = FullScreenOverlayEntry(
     top: top,
     bottom: bottom,
     left: left,
+    dismissCallback: editorState.keepEditorFocusNotifier.decrease,
     builder: (context) {
       return ColorPicker(
         title: isTextColor
@@ -67,7 +68,7 @@ void showColorMenu(
                   withUpdateSelection: true,
                 );
           dismissOverlay();
-          keepEditorFocusNotifier.decrease();
+          editorState.keepEditorFocusNotifier.decrease();
         },
         resetText: isTextColor
             ? AppFlowyEditorL10n.current.resetToDefaultColor

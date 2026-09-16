@@ -36,6 +36,7 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
   late final EditorState editorState = context.read<EditorState>();
   late final TextInputService textInputService;
   late final FocusNode focusNode;
+  final FloatingCursorHandler _floatingCursorHandler = FloatingCursorHandler();
 
   final List<AppFlowyKeyboardServiceInterceptor> interceptors = [];
 
@@ -71,12 +72,14 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
 
     focusNode = widget.focusNode ?? FocusNode(debugLabel: 'keyboard service');
     focusNode.addListener(_onFocusChanged);
+    editorState.focusNotifier.value = focusNode.hasFocus;
 
-    keepEditorFocusNotifier.addListener(_onKeepEditorFocusChanged);
+    editorState.keepEditorFocusNotifier.addListener(_onKeepEditorFocusChanged);
   }
 
   @override
   void dispose() {
+    editorState.focusNotifier.value = false;
     textInputService.close();
     editorState.selectionNotifier.removeListener(_onSelectionChanged);
     editorState.service.selectionService.unregisterGestureInterceptor(
@@ -86,7 +89,8 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
     if (widget.focusNode == null) {
       focusNode.dispose();
     }
-    keepEditorFocusNotifier.removeListener(_onKeepEditorFocusChanged);
+    editorState.keepEditorFocusNotifier
+        .removeListener(_onKeepEditorFocusChanged);
     super.dispose();
   }
 
@@ -220,9 +224,9 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
       // For the deletion, we should attach the text input service immediately.
       _attachTextInputService(selection);
       _updateCaretPosition(selection);
-      
+
       // Delay an extra caret update until the next frame.
-      // This is crucial for node splitting (like Enter): at the moment the 
+      // This is crucial for node splitting (like Enter): at the moment the
       // selection changes, the new node's renderBox might not be mounted yet.
       // The IME needs the post-layout position.
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -278,13 +282,16 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
         .getNodesInSelection(selection)
         .where((element) => element.delta != null);
 
-    // if the selection is inline and the selection is updated by ui event,
-    // we should clear the composing range on Android.
+    // Moving the caret or a selection handle finishes an active mobile IME
+    // composition. Keeping the old composing range after the selection moves
+    // can make the next Chinese/Japanese IME update replace text at the stale
+    // location. Drag updates opt out of reattaching the input service and this
+    // is applied once when the gesture ends.
     final shouldClearComposingRange =
         editorState.selectionType == SelectionType.inline &&
             editorState.selectionUpdateReason == SelectionUpdateReason.uiEvent;
 
-    if (PlatformExtension.isAndroid && shouldClearComposingRange) {
+    if (PlatformExtension.isMobile && shouldClearComposingRange) {
       textInputService.clearComposingTextRange();
     }
 
@@ -315,6 +322,7 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
   }
 
   void _onFocusChanged() {
+    editorState.focusNotifier.value = focusNode.hasFocus;
     AppFlowyEditorLog.editor.debug(
       'keyboard service - focus changed: ${focusNode.hasFocus}}',
     );
@@ -326,7 +334,7 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
 
     // clear the selection when the focus is lost.
     if (!focusNode.hasFocus) {
-      if (keepEditorFocusNotifier.shouldKeepFocus) {
+      if (editorState.keepEditorFocusNotifier.shouldKeepFocus) {
         return;
       }
 
@@ -341,10 +349,10 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
 
   void _onKeepEditorFocusChanged() {
     AppFlowyEditorLog.editor.debug(
-      'keyboard service - on keep editor focus changed: ${keepEditorFocusNotifier.value}}',
+      'keyboard service - on keep editor focus changed: ${editorState.keepEditorFocusNotifier.value}}',
     );
 
-    if (!keepEditorFocusNotifier.shouldKeepFocus) {
+    if (!editorState.keepEditorFocusNotifier.shouldKeepFocus) {
       focusNode.requestFocus();
     }
   }
@@ -375,6 +383,7 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
 
   NonDeltaTextInputService buildTextInputService() {
     return NonDeltaTextInputService(
+      keepEditorFocusNotifier: editorState.keepEditorFocusNotifier,
       onInsert: (insertion) async {
         for (final interceptor in interceptors) {
           final result = await interceptor.interceptInsert(
@@ -504,7 +513,7 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
           }
         }
 
-        await onFloatingCursorUpdate(
+        await _floatingCursorHandler.update(
           point,
           editorState,
         );

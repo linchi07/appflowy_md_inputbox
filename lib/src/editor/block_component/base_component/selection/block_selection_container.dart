@@ -1,6 +1,7 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 class BlockSelectionContainer extends StatelessWidget {
   const BlockSelectionContainer({
@@ -100,14 +101,19 @@ class BlockSelectionContainer extends StatelessWidget {
           ),
         // local cursor
         if (supportTypes.contains(BlockSelectionType.cursor))
-          BlockSelectionArea(
-            node: node,
-            delegate: delegate,
-            listenable: listenable,
-            cursorColor: cursorColor,
-            selectionColor: selectionColor,
-            blockColor: blockColor,
-            supportTypes: const [BlockSelectionType.cursor],
+          ValueListenableBuilder<bool>(
+            valueListenable: context.read<EditorState>().focusNotifier,
+            builder: (_, hasFocus, __) => hasFocus
+                ? BlockSelectionArea(
+                    node: node,
+                    delegate: delegate,
+                    listenable: listenable,
+                    cursorColor: cursorColor,
+                    selectionColor: selectionColor,
+                    blockColor: blockColor,
+                    supportTypes: const [BlockSelectionType.cursor],
+                  )
+                : const SizedBox.shrink(),
           ),
       ],
     );

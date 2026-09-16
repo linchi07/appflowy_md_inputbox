@@ -16,6 +16,12 @@ class Transaction {
   /// The operations to be applied.
   final List<Operation> _operations = [];
 
+  /// Text deltas waiting to be composed for this transaction only.
+  ///
+  /// Transactions from multiple editors may be constructed concurrently in
+  /// the same isolate, so this queue must never be process-global.
+  final Map<Node, List<Delta>> _composeMap = {};
+
   List<Operation> get operations {
     if (markNeedsComposing) {
       // compose the delta operations
@@ -190,12 +196,6 @@ class Transaction {
 }
 
 extension TextTransaction on Transaction {
-  /// We use this map to cache the delta waiting to be composed.
-  ///
-  /// This is for make calling the below function as chained.
-  /// For example, transaction..deleteText(..)..insertText(..);
-  static final Map<Node, List<Delta>> _composeMap = {};
-
   /// Inserts the [text] at the given [index].
   ///
   /// If the [attributes] is null, the attributes of the previous character will be used.

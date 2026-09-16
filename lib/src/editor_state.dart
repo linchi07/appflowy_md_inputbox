@@ -111,7 +111,6 @@ final RegExp _phoneRegex = RegExp(r'^\+?' // Optional '+' at start
     r'[0-9]$' // Ensure it ends with a digit
     );
 
-
 /// The state of the editor.
 ///
 /// The state includes:
@@ -162,6 +161,20 @@ class EditorState {
 
   /// Whether the editor is editable.
   ValueNotifier<bool> editableNotifier = ValueNotifier(true);
+
+  /// Tracks temporary overlays that should preserve focus for this editor.
+  ///
+  /// This must be editor-scoped: a process-wide counter makes closing an
+  /// overlay in one editor request focus in every other mounted editor.
+  final KeepEditorFocusNotifier keepEditorFocusNotifier =
+      KeepEditorFocusNotifier();
+
+  /// Whether this editor's keyboard focus scope currently owns focus.
+  /// Local cursor painting listens to this notifier so inactive editors can
+  /// retain a selection without displaying an active caret.
+  final ValueNotifier<bool> focusNotifier = ValueNotifier(false);
+
+  bool get hasFocus => focusNotifier.value;
 
   bool get editable => editableNotifier.value;
 
@@ -627,6 +640,8 @@ class EditorState {
     selectionNotifier.dispose();
     remoteSelections.dispose();
     editableNotifier.dispose();
+    keepEditorFocusNotifier.dispose();
+    focusNotifier.dispose();
     toggledStyleNotifier.dispose();
     undoManager.dispose();
     autoScroller?.stopAutoScroll();
@@ -709,7 +724,6 @@ class EditorState {
 
     return completer.future;
   }
-
 
   /// Force rebuild the editor.
   void reload() {

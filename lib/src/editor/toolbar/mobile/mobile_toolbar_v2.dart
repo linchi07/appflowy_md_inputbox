@@ -210,6 +210,8 @@ class _MobileToolbarState extends State<_MobileToolbar>
   Selection? currentSelection;
 
   bool closeKeyboardInitiative = false;
+  late final String _keyboardHeightDebounceKey =
+      'mobile toolbar keyboard height ${identityHashCode(this)}';
 
   @override
   void initState() {
@@ -231,6 +233,7 @@ class _MobileToolbarState extends State<_MobileToolbar>
 
   @override
   void dispose() {
+    Debounce.cancel(_keyboardHeightDebounceKey);
     showMenuNotifier.dispose();
     cachedKeyboardHeight.dispose();
     KeyboardHeightObserver.instance.removeListener(_onKeyboardHeightChanged);
@@ -324,7 +327,7 @@ class _MobileToolbarState extends State<_MobileToolbar>
                   closeItemMenu();
                   _showKeyboard();
                   // update the cached keyboard height after the keyboard is shown
-                  Debounce.debounce('canUpdateCachedKeyboardHeight',
+                  Debounce.debounce(_keyboardHeightDebounceKey,
                       const Duration(milliseconds: 500), () {
                     canUpdateCachedKeyboardHeight = true;
                   });
@@ -337,7 +340,7 @@ class _MobileToolbarState extends State<_MobileToolbar>
                   closeItemMenu();
                   _showKeyboard();
                   // update the cached keyboard height after the keyboard is shown
-                  Debounce.debounce('canUpdateCachedKeyboardHeight',
+                  Debounce.debounce(_keyboardHeightDebounceKey,
                       const Duration(milliseconds: 500), () {
                     canUpdateCachedKeyboardHeight = true;
                   });

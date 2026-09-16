@@ -4,15 +4,6 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-// workaround for the issue:
-// the popover will grab the focus even if it's inside the editor
-// setup a global value to indicate whether the focus should be grabbed
-// increase the value when the popover is opened
-// decrease the value when the popover is closed
-// only grab the focus when the value is 0
-// the operation must be paired
-KeepEditorFocusNotifier keepEditorFocusNotifier = KeepEditorFocusNotifier();
-
 /// The default value of the auto scroll edge offset on mobile
 /// The editor will scroll when the cursor is close to the edge of the screen
 const double appFlowyEditorAutoScrollEdgeOffset = 220.0;

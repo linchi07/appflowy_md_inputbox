@@ -14,6 +14,53 @@ final RegExp _headingPrefixPattern = RegExp(r'^#+\s+');
 final RegExp _headingHashesPattern = RegExp('^#+');
 final RegExp _checkboxPattern = RegExp(r'\[[ x]]');
 
+// A paragraph can be shorter than the character limit yet contain thousands
+// of inline decorations. Building and laying out that many InlineSpan and
+// WidgetSpan objects is substantially more expensive than lexical scanning.
+const int _maxDecoratedMatchesPerParagraph = 512;
+
+class _MarkdownMatchCache {
+  static const _capacity = 256;
+  static const _sourceCharacterBudget = 1024 * 1024;
+  static final LinkedHashMap<String, List<RegExpMatch>> _entries =
+      LinkedHashMap();
+  static int _sourceCharacters = 0;
+  static int scanCount = 0;
+
+  static List<RegExpMatch> matches(String source) {
+    final cached = _entries.remove(source);
+    if (cached != null) {
+      _entries[source] = cached;
+      return cached;
+    }
+
+    scanCount++;
+    final matches = _markdownPattern.allMatches(source).toList(growable: false);
+    _entries[source] = matches;
+    _sourceCharacters += source.length;
+    while (_entries.length > _capacity ||
+        _sourceCharacters > _sourceCharacterBudget) {
+      final oldest = _entries.keys.first;
+      _sourceCharacters -= oldest.length;
+      _entries.remove(oldest);
+    }
+
+    return matches;
+  }
+
+  static void clear() {
+    _entries.clear();
+    _sourceCharacters = 0;
+    scanCount = 0;
+  }
+}
+
+@visibleForTesting
+int get markdownLexicalScanCount => _MarkdownMatchCache.scanCount;
+
+@visibleForTesting
+void clearMarkdownLexicalCache() => _MarkdownMatchCache.clear();
+
 class _MathPreviewCacheKey {
   const _MathPreviewCacheKey({
     required this.editorId,
@@ -154,6 +201,13 @@ TextSpan markdownTextSpanDecorator(
   final String content = text.text;
   TextStyle? baseStyle = before.style;
 
+  final decorationLimit =
+      editorState.editorStyle.maxMarkdownDecorationCharacters;
+  final paragraphLength = node.delta?.length ?? content.length;
+  if (decorationLimit != null && paragraphLength > decorationLimit) {
+    return TextSpan(text: content, style: baseStyle);
+  }
+
   final hiddenStyle = baseStyle?.copyWith(
         fontSize: 0.1,
         height: 0.1,
@@ -165,8 +219,12 @@ TextSpan markdownTextSpanDecorator(
   // 6: Checkbox (with optional list prefix), 7: Tag, 8: ListPrefix (Bullet),
   // 9: ListPrefix (Ordered), 10: DividerLine, 11: Display Math,
   // 12: Inline Math.
-  final matches = _markdownPattern.allMatches(content).toList(growable: false);
+  final matches = _MarkdownMatchCache.matches(content);
   if (matches.isEmpty) {
+    return TextSpan(text: content, style: baseStyle);
+  }
+  if (decorationLimit != null &&
+      matches.length > _maxDecoratedMatchesPerParagraph) {
     return TextSpan(text: content, style: baseStyle);
   }
 
