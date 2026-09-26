@@ -239,7 +239,13 @@ class EditorScrollController {
     //  the list to find the first and last visible items.
     final positions = _itemPositionsListener.itemPositions.value;
 
-    if (positions.isEmpty) {
+    final visible = positions
+        .where(
+          (position) =>
+              position.itemTrailingEdge > 0 && position.itemLeadingEdge < 1,
+        )
+        .toList(growable: false);
+    if (visible.isEmpty) {
       visibleRangeNotifier.value = (-1, -1);
 
       return;
@@ -248,8 +254,7 @@ class EditorScrollController {
     // Determine the first visible item by finding the item with the
     // smallest trailing edge that is greater than 0.  i.e. the first
     // item whose trailing edge in visible in the viewport.
-    int min = positions
-        .where((ItemPosition position) => position.itemTrailingEdge > 0)
+    int min = visible
         .reduce(
           (ItemPosition min, ItemPosition position) =>
               position.itemTrailingEdge < min.itemTrailingEdge ? position : min,
@@ -258,8 +263,7 @@ class EditorScrollController {
     // Determine the last visible item by finding the item with the
     // greatest leading edge that is less than 1.  i.e. the last
     // item whose leading edge in visible in the viewport.
-    int max = positions
-        .where((ItemPosition position) => position.itemLeadingEdge < 1)
+    int max = visible
         .reduce(
           (ItemPosition max, ItemPosition position) =>
               position.itemLeadingEdge > max.itemLeadingEdge ? position : max,

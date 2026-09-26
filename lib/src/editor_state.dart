@@ -352,6 +352,7 @@ class EditorState {
 
   String? _cachedText;
   int _textRevision = 0;
+  int _documentRevision = 0;
 
   /// Sets the plain text of the document.
   ///
@@ -363,6 +364,7 @@ class EditorState {
   Future<void> setText(String value) async {
     if (isDisposed) return;
     final revision = ++_textRevision;
+    final documentRevision = _documentRevision;
 
     final List<Node> nodes;
     if (value.length >= 1000) {
@@ -370,7 +372,11 @@ class EditorState {
     } else {
       nodes = parseMarkdownToNodes(value);
     }
-    if (isDisposed || revision != _textRevision) return;
+    if (isDisposed ||
+        revision != _textRevision ||
+        documentRevision != _documentRevision) {
+      return;
+    }
 
     final transaction = this.transaction;
 
@@ -419,9 +425,17 @@ class EditorState {
 
   /// Pastes plain text (parsed as markdown) into the document.
   Future<void> pastePlainText(String plainText) async {
+    if (isDisposed) return;
+    final documentRevision = _documentRevision;
+    final originalSelection = selection;
     final selectionAttributes = getDeltaAttributesInSelectionStart();
 
     if (await maybeConvertToUrlOrPhone(plainText)) {
+      return;
+    }
+    if (isDisposed ||
+        documentRevision != _documentRevision ||
+        selection != originalSelection) {
       return;
     }
 
@@ -439,10 +453,16 @@ class EditorState {
     if (nodes.isEmpty) {
       return;
     }
+    // A background parse belongs to the document and selection that started
+    // it. If either changed, cancel instead of pasting at a stale location.
+    if (isDisposed ||
+        documentRevision != _documentRevision ||
+        selection != originalSelection) {
+      return;
+    }
     // Keep the current selection intact while a large payload is parsed in an
-    // isolate. The paste helpers delete/replace it atomically immediately
-    // before insertion, so the document does not visibly lose content while
-    // parsing is still in flight.
+    // isolate. The paste helpers begin changing the document only after this
+    // revision and selection check.
     if (nodes.length == 1) {
       await pasteSingleLineNode(nodes.first);
     } else {
@@ -689,6 +709,8 @@ class EditorState {
     if (!editable || isDisposed) {
       return;
     }
+
+    if (transaction.operations.isNotEmpty) _documentRevision++;
 
     // it's a time consuming task, only enable it if necessary.
     if (_enableCheckIntegrity) {

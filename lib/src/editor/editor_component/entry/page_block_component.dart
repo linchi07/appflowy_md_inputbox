@@ -35,6 +35,9 @@ class PageBlockComponentBuilder extends BlockComponentBuilder {
 }
 
 class PageBlockComponent extends BlockComponentStatelessWidget {
+  static final Object _headerItemId = Object();
+  static final Object _footerItemId = Object();
+
   const PageBlockComponent({
     super.key,
     required super.node,
@@ -98,11 +101,17 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
       int extentCount = 0;
       if (header != null) extentCount++;
       if (footer != null) extentCount++;
+      final itemIds = <Object>[
+        if (header != null) _headerItemId,
+        ...items.map((item) => item.id),
+        if (footer != null) _footerItemId,
+      ];
 
       final list = ScrollablePositionedList.builder(
         shrinkWrap: scrollController.shrinkWrap,
         scrollDirection: Axis.vertical,
         itemCount: items.length + extentCount,
+        itemIds: itemIds,
         itemBuilder: (context, index) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             final scroller = Scrollable.maybeOf(context);
@@ -150,7 +159,7 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
       if (!scrollController.useIndexedScrollbar) return list;
 
       return IndexedDocumentScrollbar(
-        itemCount: items.length + extentCount,
+        itemIds: itemIds,
         itemScrollController: scrollController.itemScrollController,
         itemPositionsListener: scrollController.itemPositionsListener,
         color: editorState.editorStyle.colorScheme.mutedForeground

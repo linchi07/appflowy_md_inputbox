@@ -77,10 +77,12 @@ cost of more live widgets.
 `useIndexedScrollbar` is enabled by default on `MDEditor`. Its thumb maps the
 document percentage to a block index and calls `ItemScrollController.jumpTo`,
 instead of assigning a distant raw pixel offset to a variable-height sliver.
-Heights of visited blocks are stored in a prefix-sum index, so the percentage
-mapping becomes more accurate as the document is explored. Thumb updates are
-coalesced to at most one jump per frame. Set it to `false` to compare against
-the platform scrollbar when profiling.
+Heights of visited blocks are keyed by stable block IDs in a prefix-sum index,
+so inserting or deleting earlier blocks does not attach a measurement to the
+wrong block. The virtual list keeps the first surviving visible block at its
+screen position after structural edits. Thumb updates are coalesced to at most
+one jump per frame. Set `useIndexedScrollbar` to `false` to compare against the
+platform scrollbar when profiling.
 
 When replacing a large document after construction, await parsing explicitly:
 
@@ -88,10 +90,13 @@ When replacing a large document after construction, await parsing explicitly:
 await controller.setText(markdown);
 ```
 
-Large clipboard payloads are parsed in an isolate and then inserted atomically.
-Sibling insertion is batched so a paste containing thousands of lines emits one
-document notification rather than one notification per line. The selected text
-is kept in place until parsing succeeds.
+Large clipboard payloads are parsed in an isolate. Before applying the result,
+the editor checks that the document revision and selection still match the
+paste request; a stale result is discarded. Sibling insertion is batched so a
+paste containing thousands of lines emits one document notification rather
+than one notification per line. The selected text is kept in place while
+parsing runs. Replacing a non-collapsed selection still uses a separate delete
+transaction before the insertion transaction.
 
 Parsing clipboard input in fixed pages is not currently the default. It would
 make the first page appear earlier, but it also breaks Markdown constructs at

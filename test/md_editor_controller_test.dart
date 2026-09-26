@@ -55,6 +55,32 @@ void main() {
     expect(controller.editorState.isDisposed, isTrue);
   });
 
+  test('an edit cancels an in-flight large document replacement', () async {
+    final state = EditorState.blank();
+    final replacement = state.setText(List.filled(2000, 'x').join());
+    await state.apply(
+      state.transaction
+        ..insertText(state.document.root.children.first, 0, 'local'),
+    );
+
+    await replacement;
+    expect(state.text, 'local');
+    state.dispose();
+  });
+
+  test('moving the caret cancels an in-flight large paste', () async {
+    final state = EditorState.blank();
+    await state.setText('base');
+    state.selection = Selection.single(path: [0], startOffset: 4);
+    final paste = state.pastePlainText(List.filled(2000, 'x').join());
+    state.selection = Selection.single(path: [0], startOffset: 1);
+
+    await paste;
+    expect(state.text, 'base');
+    expect(state.selection, Selection.single(path: [0], startOffset: 1));
+    state.dispose();
+  });
+
   test('append adds markdown text to the end of the document', () async {
     final controller = MDEditorController();
     await controller.setText('line 1');

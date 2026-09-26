@@ -14,14 +14,14 @@ import 'package:flutter/scheduler.dart';
 class IndexedDocumentScrollbar extends StatefulWidget {
   const IndexedDocumentScrollbar({
     super.key,
-    required this.itemCount,
+    required this.itemIds,
     required this.itemScrollController,
     required this.itemPositionsListener,
     required this.child,
     this.color = const Color(0x667A7D85),
   });
 
-  final int itemCount;
+  final List<Object> itemIds;
   final ItemScrollController itemScrollController;
   final ItemPositionsListener itemPositionsListener;
   final Widget child;
@@ -47,7 +47,7 @@ class _IndexedDocumentScrollbarState extends State<IndexedDocumentScrollbar> {
   @override
   void initState() {
     super.initState();
-    _extents = BlockExtentIndex(widget.itemCount);
+    _extents = BlockExtentIndex(widget.itemIds);
     widget.itemPositionsListener.itemPositions.addListener(_onPositionsChanged);
   }
 
@@ -60,9 +60,7 @@ class _IndexedDocumentScrollbarState extends State<IndexedDocumentScrollbar> {
       widget.itemPositionsListener.itemPositions
           .addListener(_onPositionsChanged);
     }
-    if (oldWidget.itemCount != widget.itemCount) {
-      _extents.resize(widget.itemCount);
-    }
+    _extents.updateItems(widget.itemIds);
   }
 
   @override
@@ -161,7 +159,7 @@ class _IndexedDocumentScrollbarState extends State<IndexedDocumentScrollbar> {
   }) {
     if (!viewportExtent.isFinite ||
         viewportExtent <= 0 ||
-        widget.itemCount <= 0 ||
+        widget.itemIds.isEmpty ||
         positions.isEmpty) {
       return null;
     }
@@ -221,7 +219,7 @@ class _IndexedDocumentScrollbarState extends State<IndexedDocumentScrollbar> {
   }
 
   void _scheduleJump(int index) {
-    _pendingIndex = index.clamp(0, math.max(0, widget.itemCount - 1));
+    _pendingIndex = index.clamp(0, math.max(0, widget.itemIds.length - 1));
     if (_jumpScheduled) return;
     _jumpScheduled = true;
     SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -257,60 +255,80 @@ class _ScrollbarMetrics {
   final double totalExtent;
 }
 
-/// Prefix-sum index for measured block heights. Unknown blocks use a stable
-/// estimate, while every visited block adds a correction to the Fenwick tree.
+/// Prefix-sum index for measured block heights. Measurements belong to stable
+/// block IDs, so inserting or removing an earlier block cannot move a height
+/// onto a different block. Reordering rebuilds the prefix sums in O(n); height
+/// updates and offset lookups take O(log n).
 class BlockExtentIndex {
-  BlockExtentIndex(int count) : _count = count {
-    _tree = List.filled(count + 1, 0);
-    _measured = List.filled(count, null);
+  BlockExtentIndex(List<Object> itemIds) {
+    updateItems(itemIds);
   }
 
   static const double _estimatedExtent = 28;
-  int _count;
-  late List<double> _tree;
-  late List<double?> _measured;
+  List<Object> _itemIds = const [];
+  List<double> _tree = const [];
+  final Map<Object, double> _measured = {};
 
-  double get totalExtent => offsetOf(_count);
+  double get totalExtent => offsetOf(_itemIds.length);
 
-  void resize(int count) {
-    if (count == _count) return;
-    final previous = _measured;
-    _count = count;
-    _tree = List.filled(count + 1, 0);
-    _measured = List.filled(count, null);
-    for (var index = 0; index < math.min(count, previous.length); index++) {
-      final extent = previous[index];
-      if (extent != null) record(index, extent);
+  void updateItems(List<Object> itemIds) {
+    if (_itemIds.length == itemIds.length) {
+      var unchanged = true;
+      for (var i = 0; i < itemIds.length; i++) {
+        if (_itemIds[i] != itemIds[i]) {
+          unchanged = false;
+          break;
+        }
+      }
+      if (unchanged) return;
+    }
+
+    _itemIds = List<Object>.of(itemIds, growable: false);
+    final liveIds = _itemIds.toSet();
+    _measured.removeWhere((id, _) => !liveIds.contains(id));
+    _tree = List<double>.filled(_itemIds.length + 1, 0);
+    for (var i = 1; i < _tree.length; i++) {
+      _tree[i] += _measured[_itemIds[i - 1]] ?? _estimatedExtent;
+      final parent = i + (i & -i);
+      if (parent < _tree.length) _tree[parent] += _tree[i];
     }
   }
 
   void record(int index, double extent) {
-    if (index < 0 || index >= _count || !extent.isFinite || extent <= 0) return;
+    if (index < 0 ||
+        index >= _itemIds.length ||
+        !extent.isFinite ||
+        extent <= 0) {
+      return;
+    }
     final normalized = extent.clamp(1.0, 10000.0);
-    final oldExtent = _measured[index] ?? _estimatedExtent;
+    final id = _itemIds[index];
+    final oldExtent = _measured[id] ?? _estimatedExtent;
     if ((oldExtent - normalized).abs() < 0.5) return;
-    _measured[index] = normalized;
+    _measured[id] = normalized;
     _add(index, normalized - oldExtent);
   }
 
   double offsetOf(int index) {
-    final bounded = index.clamp(0, _count);
-    return bounded * _estimatedExtent + _prefixCorrection(bounded);
+    return _prefixExtent(index.clamp(0, _itemIds.length));
   }
 
   int indexAtOffset(double offset) {
-    if (_count == 0) return 0;
-    var low = 0;
-    var high = _count;
-    while (low < high) {
-      final middle = (low + high) >> 1;
-      if (offsetOf(middle + 1) <= offset) {
-        low = middle + 1;
-      } else {
-        high = middle;
+    if (_itemIds.isEmpty) return 0;
+    var index = 0;
+    var sum = 0.0;
+    var bit = 1;
+    while (bit < _tree.length) {
+      bit <<= 1;
+    }
+    for (bit >>= 1; bit > 0; bit >>= 1) {
+      final next = index + bit;
+      if (next < _tree.length && sum + _tree[next] <= offset) {
+        index = next;
+        sum += _tree[next];
       }
     }
-    return low.clamp(0, _count - 1);
+    return index.clamp(0, _itemIds.length - 1);
   }
 
   void _add(int index, double delta) {
@@ -321,7 +339,7 @@ class BlockExtentIndex {
     }
   }
 
-  double _prefixCorrection(int length) {
+  double _prefixExtent(int length) {
     var result = 0.0;
     for (var cursor = length; cursor > 0; cursor -= cursor & -cursor) {
       result += _tree[cursor];

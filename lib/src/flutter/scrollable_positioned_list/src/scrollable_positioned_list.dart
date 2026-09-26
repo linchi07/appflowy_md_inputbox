@@ -43,6 +43,7 @@ class ScrollablePositionedList extends StatefulWidget {
   const ScrollablePositionedList.builder({
     required this.itemCount,
     required this.itemBuilder,
+    this.itemIds,
     super.key,
     this.itemScrollController,
     this.shrinkWrap = false,
@@ -60,7 +61,8 @@ class ScrollablePositionedList extends StatefulWidget {
     this.addAutomaticKeepAlives = true,
     this.addRepaintBoundaries = true,
     this.minCacheExtent,
-  })  : itemPositionsNotifier = itemPositionsListener as ItemPositionsNotifier?,
+  })  : assert(itemIds == null || itemIds.length == itemCount),
+        itemPositionsNotifier = itemPositionsListener as ItemPositionsNotifier?,
         scrollOffsetNotifier = scrollOffsetListener as ScrollOffsetNotifier?,
         separatorBuilder = null;
 
@@ -70,6 +72,7 @@ class ScrollablePositionedList extends StatefulWidget {
     required this.itemCount,
     required this.itemBuilder,
     required this.separatorBuilder,
+    this.itemIds,
     super.key,
     this.shrinkWrap = false,
     this.itemScrollController,
@@ -88,11 +91,16 @@ class ScrollablePositionedList extends StatefulWidget {
     this.addRepaintBoundaries = true,
     this.minCacheExtent,
   })  : assert(separatorBuilder != null),
+        assert(itemIds == null || itemIds.length == itemCount),
         itemPositionsNotifier = itemPositionsListener as ItemPositionsNotifier?,
         scrollOffsetNotifier = scrollOffsetListener as ScrollOffsetNotifier?;
 
   /// Number of items the [itemBuilder] can produce.
   final int itemCount;
+
+  /// Stable identity of each logical item. When supplied, a structural edit
+  /// keeps the first visible surviving item at its previous screen position.
+  final List<Object>? itemIds;
 
   /// Called to build children for the list with
   /// 0 <= index < itemCount.
@@ -403,6 +411,8 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
       widget.itemScrollController?._attach(this);
     }
 
+    _preserveVisibleAnchor(oldWidget);
+
     if (widget.itemCount == 0) {
       setState(() {
         primary.target = 0;
@@ -420,6 +430,52 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
         });
       }
     }
+  }
+
+  void _preserveVisibleAnchor(ScrollablePositionedList oldWidget) {
+    final oldIds = oldWidget.itemIds;
+    final newIds = widget.itemIds;
+    if (oldIds == null || newIds == null || oldIds.isEmpty || newIds.isEmpty) {
+      return;
+    }
+    if (oldIds.length == newIds.length) {
+      var unchanged = true;
+      for (var i = 0; i < oldIds.length; i++) {
+        if (oldIds[i] != newIds[i]) {
+          unchanged = false;
+          break;
+        }
+      }
+      if (unchanged) return;
+    }
+
+    final newIndices = <Object, int>{
+      for (var i = 0; i < newIds.length; i++) newIds[i]: i,
+    };
+    final visible = primary.itemPositionsNotifier.itemPositions.value
+        .where(
+          (position) =>
+              position.index >= 0 &&
+              position.index < oldIds.length &&
+              position.itemLeadingEdge < 1 &&
+              position.itemTrailingEdge > 0 &&
+              newIndices.containsKey(oldIds[position.index]),
+        )
+        .toList()
+      ..sort((a, b) => a.itemLeadingEdge.compareTo(b.itemLeadingEdge));
+    if (visible.isEmpty) return;
+
+    final anchor = visible.first;
+    final newIndex = newIndices[oldIds[anchor.index]]!;
+    // The target index and pixel offset are internal coordinates of the
+    // PositionedList. Rebase both in the same build so the surviving block
+    // keeps its screen position even when blocks above it were inserted.
+    if (primary.scrollController.hasClients) {
+      primary.scrollController.position.correctPixels(0);
+      previousOffset = 0;
+    }
+    primary.target = newIndex;
+    primary.alignment = anchor.itemLeadingEdge;
   }
 
   @override
