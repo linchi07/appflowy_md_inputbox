@@ -172,7 +172,7 @@ class EditorState {
   /// Whether this editor's keyboard focus scope currently owns focus.
   /// Local cursor painting listens to this notifier so inactive editors can
   /// retain a selection without displaying an active caret.
-  final ValueNotifier<bool> focusNotifier = ValueNotifier(false);
+  final ValueNotifier<bool> focusNotifier = IndexedValueNotifier(false);
 
   bool get hasFocus => focusNotifier.value;
 
@@ -199,14 +199,14 @@ class EditorState {
 
   /// The selection notifier of the editor.
   final PropertyValueNotifier<Selection?> selectionNotifier =
-      PropertyValueNotifier<Selection?>(null);
+      IndexedPropertyValueNotifier<Selection?>(null);
 
   /// The selection of the editor.
   Selection? get selection => selectionNotifier.value;
 
   /// Remote selection is the selection from other users.
   final PropertyValueNotifier<List<RemoteSelection>> remoteSelections =
-      PropertyValueNotifier<List<RemoteSelection>>([]);
+      IndexedPropertyValueNotifier<List<RemoteSelection>>([]);
 
   /// Sets the selection of the editor.
   set selection(Selection? value) {

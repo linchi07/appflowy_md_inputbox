@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/scheduler.dart';
@@ -81,7 +82,7 @@ $$\sum_{n=1}^{\infty}\frac{1}{n^2}=\frac{\pi^2}{6}$$
   final List<double> _buildTimes = [];
   final List<double> _rasterTimes = [];
   LabMode _mode = LabMode.edit;
-  int _paragraphCount = _sample.split('\n').length;
+  final ValueNotifier<int> _blockCount = ValueNotifier(0);
 
   @override
   void initState() {
@@ -89,17 +90,24 @@ $$\sum_{n=1}^{\infty}\frac{1}{n^2}=\frac{\pi^2}{6}$$
     _controller = MDEditorController.largeDocument(
       initialText: _sample,
       characterCounter: _characterCount,
-      onInput: (text) => _paragraphCount = text.split('\n').length,
     );
+    _controller.editorState.document.root.addListener(_updateBlockCount);
+    _updateBlockCount();
     SchedulerBinding.instance.addTimingsCallback(_onFrameTimings);
+  }
+
+  void _updateBlockCount() {
+    _blockCount.value = _controller.editorState.document.root.children.length;
   }
 
   @override
   void dispose() {
     SchedulerBinding.instance.removeTimingsCallback(_onFrameTimings);
+    _controller.editorState.document.root.removeListener(_updateBlockCount);
     _controller.dispose();
     _focusNode.dispose();
     _characterCount.dispose();
+    _blockCount.dispose();
     super.dispose();
   }
 
@@ -139,7 +147,6 @@ $$\sum_{n=1}^{\infty}\frac{1}{n^2}=\frac{\pi^2}{6}$$
     await _controller.setText(text);
     if (!mounted) return;
     _characterCount.value = text.length;
-    _paragraphCount = formulaCount + 2;
     setState(() {});
   }
 
@@ -147,7 +154,6 @@ $$\sum_{n=1}^{\infty}\frac{1}{n^2}=\frac{\pi^2}{6}$$
     await _controller.setText(_sample);
     if (!mounted) return;
     _characterCount.value = _sample.length;
-    _paragraphCount = _sample.split('\n').length;
     setState(() {});
   }
 
@@ -217,7 +223,7 @@ $$\sum_{n=1}^{\infty}\frac{1}{n^2}=\frac{\pi^2}{6}$$
                       child: _MetricsPanel(
                         preview: preview,
                         characterCount: _characterCount,
-                        paragraphCount: _paragraphCount,
+                        blockCount: _blockCount,
                         averageBuildMs: _average(_buildTimes),
                         averageRasterMs: _average(_rasterTimes),
                         sampleCount: _buildTimes.length,
@@ -315,7 +321,7 @@ class _MetricsPanel extends StatelessWidget {
   const _MetricsPanel({
     required this.preview,
     required this.characterCount,
-    required this.paragraphCount,
+    required this.blockCount,
     required this.averageBuildMs,
     required this.averageRasterMs,
     required this.sampleCount,
@@ -323,7 +329,7 @@ class _MetricsPanel extends StatelessWidget {
 
   final bool preview;
   final ValueNotifier<int> characterCount;
-  final int paragraphCount;
+  final ValueListenable<int> blockCount;
   final double averageBuildMs;
   final double averageRasterMs;
   final int sampleCount;
@@ -355,7 +361,10 @@ class _MetricsPanel extends StatelessWidget {
               valueListenable: characterCount,
               builder: (_, value, __) => _Metric('字符', '$value'),
             ),
-            _Metric('段落', '$paragraphCount'),
+            ValueListenableBuilder<int>(
+              valueListenable: blockCount,
+              builder: (_, value, __) => _Metric('顶层块', '$value'),
+            ),
             _Metric('采样帧', '$sampleCount / 120'),
             const Divider(color: Colors.white24, height: 32),
             _Metric('平均 Build', '${averageBuildMs.toStringAsFixed(2)} ms'),
