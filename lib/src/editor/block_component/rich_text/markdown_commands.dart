@@ -35,181 +35,92 @@ CommandShortcutEvent sendShortcutEvent({
       getDescription: () => 'Send the message',
     );
 
-/// When hit shift + enter , create a new line
+/// Continue a Markdown line. The IME path only calls this for Markdown syntax;
+/// ordinary paragraphs keep using the editor's normal block-splitting logic.
+bool insertMarkdownNewLine(
+  EditorState editorState, {
+  bool includePlainParagraph = true,
+}) {
+  final selection = editorState.selection;
+  if (selection == null || !selection.isCollapsed) return false;
+
+  final node = editorState.getNodeAtPath(selection.start.path);
+  final delta = node?.delta;
+  if (node == null || delta == null) return false;
+  if (node.findParent((ancestor) => ancestor.type == TableBlockKeys.type) !=
+      null) {
+    return false;
+  }
+
+  final text = delta.toPlainText();
+  final offset = selection.start.offset;
+  if (_insertLiteralNewlineInFencedBlock(editorState, node, offset)) {
+    return true;
+  }
+
+  String nextPrefix = '';
+  // 1: Checkbox, 2: Bullet, 3: Numbered, 4: Quote.
+  final match =
+      RegExp(r'^([-*]\s+\[[ x]]\s+)|^([-*]\s+)|^(\d+)\.\s+|^((>\s*)+)')
+          .firstMatch(text);
+  if (match == null && !includePlainParagraph) return false;
+
+  if (match != null) {
+    final prefix = match.group(0)!;
+    if (text.trim() == prefix.trim() && offset <= prefix.length) {
+      final transaction = editorState.transaction
+        ..deleteText(node, 0, text.length)
+        ..afterSelection = Selection.collapsed(
+          Position(path: node.path, offset: 0),
+        );
+      editorState.apply(transaction);
+      return true;
+    }
+
+    if (match.group(1) != null) {
+      nextPrefix = '${match.group(1)!.substring(0, 2)}[ ] ';
+    } else if (match.group(2) != null || match.group(4) != null) {
+      nextPrefix = prefix;
+    } else if (match.group(3) != null) {
+      nextPrefix = '${int.parse(match.group(3)!) + 1}. ';
+    }
+  }
+
+  // Split into a new node so Flutter does not inherit a multiline caret.
+  final transaction = editorState.transaction;
+  final nextPath = selection.start.path.next;
+  final remainingText = delta.slice(offset);
+  transaction.deleteText(node, offset, delta.length - offset);
+  final newDelta = Delta()..insert(nextPrefix);
+  for (final op in remainingText) {
+    newDelta.add(op);
+  }
+  transaction.insertNode(nextPath, paragraphNode(delta: newDelta));
+  transaction.afterSelection = Selection.collapsed(
+    Position(path: nextPath, offset: nextPrefix.length),
+  );
+  editorState.apply(transaction);
+  return true;
+}
+
+/// Shift+Enter creates a new line when Enter is reserved for sending.
 final CommandShortcutEvent newlineMarkdownShortcutEvent = CommandShortcutEvent(
-  key: 'enter markdown continuation',
+  key: 'shift+enter markdown continuation',
   command: 'shift+enter',
-  handler: (editorState) {
-    final selection = editorState.selection;
-    if (selection == null || !selection.isCollapsed) {
-      return KeyEventResult.ignored;
-    }
-
-    final node = editorState.getNodeAtPath(selection.start.path);
-    final delta = node?.delta;
-    if (node == null || delta == null) {
-      return KeyEventResult.ignored;
-    }
-
-    final text = delta.toPlainText();
-    final offset = selection.start.offset;
-    if (_insertLiteralNewlineInFencedBlock(editorState, node, offset)) {
-      return KeyEventResult.handled;
-    }
-
-    // We will determine if the new line needs any prefix
-    String nextPrefix = '';
-
-    // Check for Lists/Quotes/Checkboxes Regex:
-    // 1: Checkbox, 2: Bullet, 3: Numbered, 4: Quote
-    final match =
-        RegExp(r'^([-*]\s+\[[ x]]\s+)|^([-*]\s+)|^(\d+)\.\s+|^((>\s*)+)')
-            .firstMatch(text);
-    if (match != null) {
-      final fullMatchStr = match.group(0)!;
-
-      // Termination Check: if line is ONLY the prefix and we are at the end of it
-      if (text.trim() == fullMatchStr.trim() && offset <= fullMatchStr.length) {
-        final transaction = editorState.transaction;
-        transaction.deleteText(node, 0, text.length);
-        editorState.apply(transaction);
-        return KeyEventResult.handled;
-      }
-
-      // Continuation Logic:
-      if (match.group(1) != null) {
-        // Checkbox: convert current (x or space) to empty [ ]
-        final prefix = match.group(1)!;
-        nextPrefix = '${prefix.substring(0, 2)}[ ] ';
-      } else if (match.group(2) != null || match.group(4) != null) {
-        // Unordered list or Quote
-        nextPrefix = fullMatchStr;
-      } else if (match.group(3) != null) {
-        // Ordered list
-        int currentNum = int.parse(match.group(3)!);
-        nextPrefix = '${currentNum + 1}. ';
-      }
-    }
-
-    // Perform manual split to guarantee a clean new Node.
-    // This prevents the "tall caret" bug caused by Flutter's multiline inheritance.
-    final transaction = editorState.transaction;
-    final nextPath = selection.start.path.next;
-
-    // Text after cursor moves to new node
-    final remainingText = delta.slice(offset);
-
-    // Remove remaining text from current node
-    transaction.deleteText(node, offset, delta.length - offset);
-
-    // Create new node with prefix + remaining text
-    final newDelta = Delta()..insert(nextPrefix);
-    for (final op in remainingText) {
-      newDelta.add(op);
-    }
-
-    final newNode = paragraphNode(delta: newDelta);
-    transaction.insertNode(nextPath, newNode);
-
-    // SET CARET POSITION: right after the prefix
-    transaction.afterSelection = Selection.collapsed(
-      Position(path: nextPath, offset: nextPrefix.length),
-    );
-
-    editorState.apply(transaction);
-    return KeyEventResult.handled;
-  },
-  getDescription: () =>
-      'Continues list/quote or terminates it with correct caret placement',
+  handler: (editorState) => insertMarkdownNewLine(editorState)
+      ? KeyEventResult.handled
+      : KeyEventResult.ignored,
+  getDescription: () => 'Continue a Markdown line',
 );
 
-/// When hit enter , create a new line
-/// CANNOT BE USED WITH SEND SHORTCUT (USE NEWLINE INSTEAD)
+/// Enter creates a new Markdown line in editors without a send shortcut.
 final CommandShortcutEvent enterMarkdownShortcutEvent = CommandShortcutEvent(
   key: 'enter markdown continuation',
   command: 'Enter',
-  handler: (editorState) {
-    final selection = editorState.selection;
-    if (selection == null || !selection.isCollapsed) {
-      return KeyEventResult.ignored;
-    }
-
-    final node = editorState.getNodeAtPath(selection.start.path);
-    final delta = node?.delta;
-    if (node == null || delta == null) {
-      return KeyEventResult.ignored;
-    }
-
-    final text = delta.toPlainText();
-    final offset = selection.start.offset;
-    if (_insertLiteralNewlineInFencedBlock(editorState, node, offset)) {
-      return KeyEventResult.handled;
-    }
-
-    // We will determine if the new line needs any prefix
-    String nextPrefix = '';
-
-    // Check for Lists/Quotes/Checkboxes Regex:
-    // 1: Checkbox, 2: Bullet, 3: Numbered, 4: Quote
-    final match =
-        RegExp(r'^([-*]\s+\[[ x]]\s+)|^([-*]\s+)|^(\d+)\.\s+|^((>\s*)+)')
-            .firstMatch(text);
-    if (match != null) {
-      final fullMatchStr = match.group(0)!;
-
-      // Termination Check: if line is ONLY the prefix and we are at the end of it
-      if (text.trim() == fullMatchStr.trim() && offset <= fullMatchStr.length) {
-        final transaction = editorState.transaction;
-        transaction.deleteText(node, 0, text.length);
-        editorState.apply(transaction);
-        return KeyEventResult.handled;
-      }
-
-      // Continuation Logic:
-      if (match.group(1) != null) {
-        // Checkbox: convert current (x or space) to empty [ ]
-        final prefix = match.group(1)!;
-        nextPrefix = '${prefix.substring(0, 2)}[ ] ';
-      } else if (match.group(2) != null || match.group(4) != null) {
-        // Unordered list or Quote
-        nextPrefix = fullMatchStr;
-      } else if (match.group(3) != null) {
-        // Ordered list
-        int currentNum = int.parse(match.group(3)!);
-        nextPrefix = '${currentNum + 1}. ';
-      }
-    }
-
-    // Perform manual split to guarantee a clean new Node.
-    // This prevents the "tall caret" bug caused by Flutter's multiline inheritance.
-    final transaction = editorState.transaction;
-    final nextPath = selection.start.path.next;
-
-    // Text after cursor moves to new node
-    final remainingText = delta.slice(offset);
-
-    // Remove remaining text from current node
-    transaction.deleteText(node, offset, delta.length - offset);
-
-    // Create new node with prefix + remaining text
-    final newDelta = Delta()..insert(nextPrefix);
-    for (final op in remainingText) {
-      newDelta.add(op);
-    }
-
-    final newNode = paragraphNode(delta: newDelta);
-    transaction.insertNode(nextPath, newNode);
-
-    // SET CARET POSITION: right after the prefix
-    transaction.afterSelection = Selection.collapsed(
-      Position(path: nextPath, offset: nextPrefix.length),
-    );
-
-    editorState.apply(transaction);
-    return KeyEventResult.handled;
-  },
-  getDescription: () =>
-      'Continues list/quote or terminates it with correct caret placement',
+  handler: (editorState) => insertMarkdownNewLine(editorState)
+      ? KeyEventResult.handled
+      : KeyEventResult.ignored,
+  getDescription: () => 'Continue a Markdown line',
 );
 
 /// —— Markdown Slash Menu ——

@@ -1,8 +1,6 @@
-
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor/src/editor/block_component/heading_block_component/heading_command_shortcut.dart';
 import 'package:appflowy_editor/src/editor/util/platform_extension.dart';
-
 
 const standardBlockComponentConfiguration = BlockComponentConfiguration();
 
@@ -54,11 +52,12 @@ final List<CommandShortcutEvent> standardCommandShortcutEvents = [
   // undo, redo
   undoCommand,
   redoCommand,
-  
 
   // backspace
   convertToParagraphCommand,
   ...tableCommands,
+  // Keep table-cell Enter navigation ahead of Markdown line continuation.
+  enterMarkdownShortcutEvent,
   backspaceCommand,
   deleteLeftWordCommand,
   deleteLeftSentenceCommand,
