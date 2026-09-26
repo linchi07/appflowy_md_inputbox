@@ -68,4 +68,34 @@ void main() {
     }
     document.dispose();
   });
+
+  test('deleting a large plain-text selection batches sibling removal',
+      () async {
+    final document = Document.blank();
+    final lines = List.generate(2000, (index) => 'line $index');
+    document.insert(
+      const [0],
+      lines.map((line) => paragraphNode(text: line)),
+    );
+    final state = EditorState(document: document);
+    final selection = Selection(
+      start: Position(path: [0], offset: 1),
+      end: Position(path: [lines.length - 1], offset: 2),
+    );
+
+    expect(await state.deleteSelection(selection), isTrue);
+    expect(state.document.root.children, hasLength(1));
+    expect(state.text, 'lne 1999');
+    expect(state.undoManager.undoStack.last.operations, hasLength(2));
+
+    state.undoManager.undo();
+    await Future<void>.delayed(Duration.zero);
+    expect(state.document.root.children, hasLength(lines.length));
+    expect(state.text, lines.join('\n'));
+
+    state.undoManager.redo();
+    await Future<void>.delayed(Duration.zero);
+    expect(state.text, 'lne 1999');
+    state.dispose();
+  });
 }

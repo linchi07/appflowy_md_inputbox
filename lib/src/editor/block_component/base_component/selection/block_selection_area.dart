@@ -270,9 +270,8 @@ class _BlockSelectionAreaState extends State<BlockSelectionArea>
   }
 
   void _onSelectionChanged() {
-    prevCursorRect = null;
-    prevSelectionRects = null;
-    prevBlockRect = null;
+    // Keep the previous geometry visible until the post-layout update. Clearing
+    // it here makes a dragged selection disappear for one frame on every move.
     _scheduleSelectionUpdate();
   }
 }

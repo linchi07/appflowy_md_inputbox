@@ -1,4 +1,5 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:appflowy_editor/src/editor/block_component/base_component/selection/selection_area_painter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -46,6 +47,29 @@ void main() {
     });
     await tester.pump();
     expect(key.currentState!.geometryUpdates, initialUpdates + 3);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    editorState.dispose();
+  });
+
+  testWidgets('dragging keeps the previous selection painted until layout',
+      (tester) async {
+    final editorState = EditorState.blank();
+    final node = editorState.document.root.children.single;
+    editorState.selection =
+        Selection.single(path: [0], startOffset: 0, endOffset: 2);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: _SelectionHarness(editorState: editorState, node: node),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(SelectionAreaPaint), findsOneWidget);
+
+    editorState.selection =
+        Selection.single(path: [0], startOffset: 0, endOffset: 3);
+    await tester.pump();
+    expect(find.byType(SelectionAreaPaint), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     editorState.dispose();

@@ -112,16 +112,30 @@ mixin NestedBlockComponentStatefulWidgetMixin<
   }
 
   double? cachedLeft;
+  bool _cachedLeftUpdateScheduled = false;
 
   @override
   void initState() {
     super.initState();
 
-    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-      final left =
-          node.selectable?.getBlockRect(shiftWithBaseOffset: true).left;
-      if (cachedLeft != left) {
-        setState(() => cachedLeft = left);
+    if (node.children.isNotEmpty) {
+      _updateCachedLeftAfterLayout();
+    }
+  }
+
+  void _updateCachedLeftAfterLayout() {
+    if (_cachedLeftUpdateScheduled) return;
+    _cachedLeftUpdateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _cachedLeftUpdateScheduled = false;
+      if (!mounted || node.children.isEmpty) return;
+      final rect = node.selectable?.getBlockRect(shiftWithBaseOffset: true);
+      if (rect == null || rect == Rect.zero) {
+        _updateCachedLeftAfterLayout();
+        return;
+      }
+      if (cachedLeft != rect.left) {
+        setState(() => cachedLeft = rect.left);
       }
     });
   }
@@ -134,6 +148,7 @@ mixin NestedBlockComponentStatefulWidgetMixin<
   }
 
   Widget buildComponentWithChildren(BuildContext context) {
+    if (cachedLeft == null) _updateCachedLeftAfterLayout();
     return Stack(
       children: [
         Positioned.fill(

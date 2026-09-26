@@ -15,7 +15,10 @@ mixin DefaultSelectableMixin {
     if (shiftWithBaseOffset) {
       final parentBox = containerKey.currentContext?.findRenderObject();
       final childBox = forwardKey.currentContext?.findRenderObject();
-      if (parentBox is RenderBox && childBox is RenderBox) {
+      if (parentBox is RenderBox &&
+          childBox is RenderBox &&
+          parentBox.hasSize &&
+          childBox.hasSize) {
         return childBox.localToGlobal(Offset.zero, ancestor: parentBox);
       }
     }
@@ -28,7 +31,10 @@ mixin DefaultSelectableMixin {
   }) {
     final parentBox = containerKey.currentContext?.findRenderObject();
     final childBox = blockComponentKey.currentContext?.findRenderObject();
-    if (parentBox is RenderBox && childBox is RenderBox) {
+    if (parentBox is RenderBox &&
+        childBox is RenderBox &&
+        parentBox.hasSize &&
+        childBox.hasSize) {
       final offset = childBox.localToGlobal(Offset.zero, ancestor: parentBox);
       final size = parentBox.size;
       if (shiftWithBaseOffset) {

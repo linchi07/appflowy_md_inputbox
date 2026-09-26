@@ -87,7 +87,21 @@ extension SelectionTransform on EditorState {
     }
 
     // Otherwise, multiple nodes are selected, so we have to do more work.
-    else {
+    else if (nodes.first.delta != null &&
+        nodes.last.delta != null &&
+        nodes.every(
+          (node) => node.parent == document.root && node.children.isEmpty,
+        )) {
+      // A plain top-level range can be deleted as one operation. Adding one
+      // DeleteOperation per block transforms it against every earlier delete.
+      transaction.mergeText(
+        nodes.first,
+        nodes.last,
+        leftOffset: selection.startIndex,
+        rightOffset: selection.endIndex,
+      );
+      transaction.deleteNodesAtPath(nodes[1].path, nodes.length - 1);
+    } else {
       // The nodes are guaranteed to be in order, so we can determine which
       // nodes are at the beginning, middle, and end of the selection.
       assert(nodes.first.path < nodes.last.path);
