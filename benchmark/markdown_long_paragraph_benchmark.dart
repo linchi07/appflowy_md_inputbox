@@ -1,5 +1,6 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor/src/editor/block_component/rich_text/markdown_decorator.dart';
+import 'package:appflowy_editor/src/service/markdown_parser.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -10,6 +11,15 @@ void main() {
     await _pumpCase(tester, '10 KiB density-guarded', _source(10 * 1024));
     await _pumpCase(tester, '64 KiB density-guarded', _source(64 * 1024));
     await _pumpCase(tester, '100 KiB guarded', _source(100 * 1024));
+    await _pumpCase(tester, '64 KiB fenced code', _codeSource(64 * 1024));
+    await _pumpCase(tester, '20-line display math', _displayMathSource(20));
+
+    final parserSource = _codeSource(256 * 1024);
+    final parserStopwatch = Stopwatch()..start();
+    final parsed = parseMarkdownToNodes(parserSource);
+    parserStopwatch.stop();
+    _report('256 KiB fenced parser', parserStopwatch.elapsed, 0);
+    expect(parsed, hasLength(1));
 
     final first = MDEditorController();
     final second = MDEditorController();
@@ -85,6 +95,21 @@ String _source(int length) {
     buffer.write(chunk);
   }
   return buffer.toString().substring(0, length);
+}
+
+String _codeSource(int minimumLength) {
+  const line = 'final value = source.map(transform).toList();\n';
+  final buffer = StringBuffer('```dart\n');
+  while (buffer.length < minimumLength - 4) {
+    buffer.write(line);
+  }
+  buffer.write('```');
+  return buffer.toString();
+}
+
+String _displayMathSource(int lines) {
+  final rows = List.generate(lines, (index) => 'x_{$index} &= y_{$index} + 1');
+  return '\$\$\n\\begin{aligned}\n${rows.join(' \\\\\n')}\n\\end{aligned}\n\$\$';
 }
 
 Future<void> _dispose(

@@ -133,3 +133,21 @@ layers before treating this component as the sole document engine.
 
 See [Large-paragraph parsing and document model evaluation](parser_and_node_evaluation.md)
 for the recommended dependency-free path and the `Node` removal assessment.
+
+### Fenced code and display math
+
+Multi-line fenced code and `$$` display math are kept in one text node so the
+editor can render and edit them as a visual block. Fence detection is linear,
+uses an LRU capped at 128 entries and 1 MiB of source, and ordinary paragraphs
+take a constant-time prefix fast path. Code blocks bypass the general Markdown
+regexp scanner.
+
+The tradeoff is that one very large fenced block is one `RenderParagraph` and
+cannot benefit from document-level block virtualization. The synthetic debug
+widget benchmark on the development host measured about 23 ms for a 64 KiB
+code block and 3.6 ms to parse a 256 KiB fenced block. A 20-line display formula
+took about 109 ms on its first debug render; TeX parsing/layout, rather than
+fence detection, dominates that case. Treat these numbers as directional and
+profile in release/profile mode on target devices. Split generated code blocks
+larger than roughly 64 KiB, and avoid continuously rewriting large formulas on
+low-end devices.

@@ -72,6 +72,27 @@ void main() {
       expect(result.toPlainText(), hasLength(r'ok $$\frac{a}{b}$$'.length));
     });
 
+    testWidgets('renders a multi-line display formula as one preview',
+        (tester) async {
+      const source = r'''$$
+\begin{aligned}
+a &= b + c \\
+d &= e - f
+\end{aligned}
+$$''';
+      final result = await decorate(
+        tester,
+        source,
+        caretOffset: 0,
+        selectionInOtherNode: true,
+      );
+
+      expect(widgetSpans(result), hasLength(1));
+      expect(result.toPlainText(), hasLength(source.length));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('duplicate expressions use independent math trees',
         (tester) async {
       final result = await decorate(
@@ -136,6 +157,27 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(editorState.text, '- [x] todo');
+    });
+  });
+
+  group('Fenced code decoration', () {
+    testWidgets('keeps one source offset per character', (tester) async {
+      const source = '```dart\nfinal answer = 42;\n```';
+      final result = await decorate(
+        tester,
+        source,
+        caretOffset: 0,
+        selectionInOtherNode: true,
+      );
+
+      expect(widgetSpans(result), isEmpty);
+      expect(result.toPlainText(), hasLength(source.length));
+      expect(
+        result.children!
+            .whereType<TextSpan>()
+            .any((span) => span.style?.fontFamily == 'monospace'),
+        isTrue,
+      );
     });
   });
 }

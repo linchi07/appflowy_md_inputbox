@@ -181,8 +181,9 @@ extension SelectionTransform on EditorState {
     // After the selection is deleted, we want to move the selection to the
     // beginning of the deleted selection.
     transaction.afterSelection = selection.collapse(atStart: true);
-    AppFlowyEditorLog.editor
-        .debug(transaction.operations.map((e) => e.toString()).toString());
+    AppFlowyEditorLog.editor.debugLazy(
+      () => transaction.operations.map((e) => e.toString()).toString(),
+    );
 
     // Apply the transaction.
     await apply(transaction);

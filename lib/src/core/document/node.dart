@@ -41,8 +41,10 @@ final class Node extends ChangeNotifier with LinkedListEntry<Node> {
           ), // unlink the given children to avoid the error of "node has already a parent"
         _attributes = attributes,
         id = id ?? nanoid(6) {
+    var index = 0;
     for (final child in children) {
       child.parent = this;
+      child._indexInParent = index++;
     }
   }
 
@@ -92,6 +94,14 @@ final class Node extends ChangeNotifier with LinkedListEntry<Node> {
   }
 
   List<Node>? _cacheChildren;
+
+  int get childCount => _children.length;
+
+  bool get hasDelta => _attributes['delta'] is List;
+
+  // Updated when siblings change, so resolving a node path does not scan all
+  // siblings. A batch mutation reindexes the shifted suffix only once.
+  int _indexInParent = -1;
 
   /// The attributes of the node.
   Attributes _attributes;
@@ -151,34 +161,7 @@ final class Node extends ChangeNotifier with LinkedListEntry<Node> {
   /// end of the [Node].
   ///
   void insert(Node entry, {int? index}) {
-    final length = _children.length;
-    index ??= length;
-
-    AppFlowyEditorLog.editor
-        .debug('insert Node $entry at path ${path + [index]}}');
-
-    entry._resetRelationshipIfNeeded();
-    entry.parent = this;
-
-    _cacheChildren = null;
-
-    if (_children.isEmpty) {
-      _children.add(entry);
-      _notifyMutation();
-
-      return;
-    }
-
-    // If index is out of range, insert at the end.
-    // If index is negative, insert at the beginning.
-    // If index is positive, insert at the index.
-    if (index >= length) {
-      _children.last.insertAfter(entry);
-    } else if (index <= 0) {
-      _children.first.insertBefore(entry);
-    } else {
-      childAtIndexOrNull(index)?.insertBefore(entry);
-    }
+    insertAll([entry], index: index);
   }
 
   /// Inserts multiple children while notifying listeners only once.
@@ -191,12 +174,65 @@ final class Node extends ChangeNotifier with LinkedListEntry<Node> {
     if (nodes.isEmpty) return;
 
     _batchMutation(() {
-      var insertionIndex = index ?? _children.length;
       for (final node in nodes) {
-        insert(node, index: insertionIndex);
-        insertionIndex++;
+        node._resetRelationshipIfNeeded();
       }
+      final insertionIndex =
+          (index ?? _children.length).clamp(0, _children.length);
+      AppFlowyEditorLog.editor.debugLazy(
+        () => 'insert ${nodes.length} Nodes at path ${path + [insertionIndex]}',
+      );
+      final anchor = insertionIndex == _children.length
+          ? null
+          : childAtIndexOrNull(insertionIndex);
+      for (final node in nodes) {
+        node.parent = this;
+        if (anchor == null) {
+          _children.add(node);
+        } else {
+          anchor._linkBeforeWithoutNotification(node);
+        }
+      }
+      _cacheChildren = null;
+      _reindexChildrenFrom(nodes.first, insertionIndex);
+      _notifyMutation();
     });
+  }
+
+  /// Removes siblings as one structural mutation.
+  void removeAllAt(int index, int length) {
+    if (length <= 0) return;
+    var node = childAtIndexOrNull(index);
+    if (node == null) return;
+
+    _batchMutation(() {
+      var remaining = length;
+      while (node != null && remaining-- > 0) {
+        final nextNode = node!.next;
+        AppFlowyEditorLog.editor.debugLazy(
+          () => 'delete Node $node from path ${node!.path}',
+        );
+        node!._unlinkWithoutNotification();
+        node = nextNode;
+      }
+      _cacheChildren = null;
+      _reindexChildrenFrom(node, index);
+      _notifyMutation();
+    });
+  }
+
+  void _linkBeforeWithoutNotification(Node entry) => super.insertBefore(entry);
+
+  void _unlinkWithoutNotification() {
+    super.unlink();
+    parent = null;
+    _indexInParent = -1;
+  }
+
+  void _reindexChildrenFrom(Node? first, int index) {
+    for (var child = first; child != null; child = child.next) {
+      child._indexInParent = index++;
+    }
   }
 
   int _mutationBatchDepth = 0;
@@ -226,25 +262,29 @@ final class Node extends ChangeNotifier with LinkedListEntry<Node> {
   @override
   void insertAfter(Node entry) {
     entry._resetRelationshipIfNeeded();
-    entry.parent = parent;
+    final owner = parent;
+    entry.parent = owner;
     super.insertAfter(entry);
 
-    parent?._cacheChildren = null;
+    owner?._cacheChildren = null;
+    owner?._reindexChildrenFrom(entry, _indexInParent + 1);
 
     // Notifies the new node.
-    parent?._notifyMutation();
+    owner?._notifyMutation();
   }
 
   @override
   void insertBefore(Node entry) {
     entry._resetRelationshipIfNeeded();
-    entry.parent = parent;
+    final owner = parent;
+    entry.parent = owner;
     super.insertBefore(entry);
 
-    parent?._cacheChildren = null;
+    owner?._cacheChildren = null;
+    owner?._reindexChildrenFrom(entry, _indexInParent);
 
     // Notifies the new node.
-    parent?._notifyMutation();
+    owner?._notifyMutation();
   }
 
   @override
@@ -253,13 +293,17 @@ final class Node extends ChangeNotifier with LinkedListEntry<Node> {
     if (parent == null || list == null) {
       return false;
     }
-    AppFlowyEditorLog.editor.debug('delete Node $this from path $path');
-    super.unlink();
+    AppFlowyEditorLog.editor.debugLazy(
+      () => 'delete Node $this from path $path',
+    );
+    final owner = parent!;
+    final following = next;
+    final index = _indexInParent;
+    _unlinkWithoutNotification();
 
-    parent?._cacheChildren = null;
-
-    parent?.notifyListeners();
-    parent = null;
+    owner._cacheChildren = null;
+    owner._reindexChildrenFrom(following, index);
+    owner._notifyMutation();
 
     return true;
   }
@@ -324,9 +368,9 @@ final class Node extends ChangeNotifier with LinkedListEntry<Node> {
     );
     if (children == null && _children.isNotEmpty) {
       for (final child in _children) {
-        node._children.add(
-          child.copyWith()..parent = node,
-        );
+        final copied = child.copyWith()..parent = node;
+        copied._indexInParent = node._children.length;
+        node._children.add(copied);
       }
     }
     node.externalValues = externalValues;
@@ -347,7 +391,7 @@ final class Node extends ChangeNotifier with LinkedListEntry<Node> {
     if (parent == null) {
       return previous;
     }
-    final index = parent.children.indexOf(this);
+    final index = _indexInParent;
 
     return parent._computePath([index, ...previous]);
   }

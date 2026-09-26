@@ -101,7 +101,7 @@ class Document {
       return false;
     }
 
-    final index = path.last.clamp(0, parent.children.length);
+    final index = path.last.clamp(0, parent.childCount);
     parent.insertAll(nodes, index: index);
 
     return true;
@@ -112,16 +112,11 @@ class Document {
     if (path.isEmpty || length <= 0) {
       return false;
     }
-    var target = nodeAtPath(path);
-    if (target == null) {
+    final parent = nodeAtPath(path.parent);
+    if (parent?.childAtIndexOrNull(path.last) == null) {
       return false;
     }
-    while (target != null && length > 0) {
-      final next = target.next;
-      target.unlink();
-      target = next;
-      length--;
-    }
+    parent!.removeAllAt(path.last, length);
 
     return true;
   }

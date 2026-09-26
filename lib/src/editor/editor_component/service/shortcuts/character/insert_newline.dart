@@ -1,4 +1,5 @@
 import 'package:appflowy_editor/src/editor/command/transform.dart';
+import 'package:appflowy_editor/src/editor/block_component/rich_text/markdown_block_syntax.dart';
 import 'package:appflowy_editor/src/editor/editor_component/service/shortcuts/character_shortcut_event.dart';
 import 'package:appflowy_editor/src/editor/util/platform_extension.dart';
 import 'package:flutter/services.dart';
@@ -27,6 +28,19 @@ CharacterShortcutEventHandler _insertNewLineHandler = (editorState) async {
   final selection = editorState.selection?.normalized;
   if (selection == null) {
     return false;
+  }
+
+  if (selection.isCollapsed) {
+    final node = editorState.getNodeAtPath(selection.start.path);
+    final source = node?.delta?.toPlainText();
+    if (source != null &&
+        shouldInsertNewlineInFencedBlock(source, selection.start.offset)) {
+      await editorState.insertTextAtPosition(
+        '\n',
+        position: selection.start,
+      );
+      return true;
+    }
   }
 
   // delete the selection

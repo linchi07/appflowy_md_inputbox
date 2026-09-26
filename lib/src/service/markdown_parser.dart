@@ -1,4 +1,5 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:appflowy_editor/src/editor/block_component/rich_text/markdown_block_syntax.dart';
 
 final RegExp _hrefRegex = RegExp(
   r'https?://(?:www\.)?[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s]*)?',
@@ -30,7 +31,8 @@ List<Node> parseMarkdownToNodes(
         nodes.add(tableNode);
       } else {
         for (final tLine in tableLines) {
-          final delta = _parseLineToDelta(tLine, baseAttributes: baseAttributes);
+          final delta =
+              _parseLineToDelta(tLine, baseAttributes: baseAttributes);
           if (tLine.trim().startsWith('> ')) {
             nodes.add(quoteNode(delta: delta));
           } else {
@@ -42,11 +44,42 @@ List<Node> parseMarkdownToNodes(
     }
   }
 
+  void addTextNode(String text) {
+    final delta = _parseLineToDelta(text, baseAttributes: baseAttributes);
+    if (text.trim().startsWith('> ')) {
+      nodes.add(quoteNode(delta: delta));
+    } else {
+      nodes.add(paragraphNode(delta: delta));
+    }
+  }
+
   for (var i = 0; i < lines.length; i++) {
     final line = lines[i].replaceAll('\r', '');
     final trimmedLine = line.trim();
 
-    if (trimmedLine.startsWith('|') && trimmedLine.endsWith('|')) {
+    final isCodeFence = isFencedCodeOpeningLine(line);
+    final isMathFence = isDisplayMathFenceLine(line);
+    if (isCodeFence || isMathFence) {
+      flushTable();
+      final blockLines = <String>[line];
+      while (++i < lines.length) {
+        final blockLine = lines[i].replaceAll('\r', '');
+        blockLines.add(blockLine);
+        final isClosing = isCodeFence
+            ? isFencedCodeClosingLine(blockLine)
+            : isDisplayMathFenceLine(blockLine);
+        if (isClosing) break;
+      }
+      nodes.add(
+        paragraphNode(
+          delta: Delta()
+            ..insert(
+              blockLines.join('\n'),
+              attributes: baseAttributes,
+            ),
+        ),
+      );
+    } else if (trimmedLine.startsWith('|') && trimmedLine.endsWith('|')) {
       tableLines.add(line);
     } else {
       flushTable();
@@ -54,12 +87,7 @@ List<Node> parseMarkdownToNodes(
       if (dividerRegex.hasMatch(trimmedLine)) {
         nodes.add(dividerNode());
       } else {
-        final delta = _parseLineToDelta(line, baseAttributes: baseAttributes);
-        if (trimmedLine.startsWith('> ')) {
-          nodes.add(quoteNode(delta: delta));
-        } else {
-          nodes.add(paragraphNode(delta: delta));
-        }
+        addTextNode(line);
       }
     }
   }
@@ -90,15 +118,13 @@ Node? _parseTableLinesToNode(List<String> tableLines) {
     final parts = line.split('|');
     if (parts.length < 2) continue;
 
-    final cells = parts
-        .sublist(1, parts.length - 1)
-        .map((e) => e.trim())
-        .toList();
+    final cells =
+        parts.sublist(1, parts.length - 1).map((e) => e.trim()).toList();
 
     final isSeparator = cells.isNotEmpty &&
-        cells.every((cell) =>
-            cell.isNotEmpty &&
-            cell.replaceAll(RegExp('[:-]'), '').isEmpty,
+        cells.every(
+          (cell) =>
+              cell.isNotEmpty && cell.replaceAll(RegExp('[:-]'), '').isEmpty,
         );
 
     if (isSeparator && separatorIndex == -1) {

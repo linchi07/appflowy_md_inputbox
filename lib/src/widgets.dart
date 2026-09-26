@@ -56,6 +56,8 @@ class MDEditorController {
   bool _isDisposed = false;
 
   void _handleInput(EditorState state) {
+    characterCounter?.value = state.textLength;
+    if (onInput == null) return;
     _inputTimer?.cancel();
     if (inputDebounce == Duration.zero) {
       _emitInput(state);
@@ -66,9 +68,7 @@ class MDEditorController {
 
   void _emitInput(EditorState state) {
     if (_isDisposed) return;
-    final currentText = state.text;
-    characterCounter?.value = currentText.length;
-    onInput?.call(currentText);
+    onInput?.call(state.text);
   }
 
   /// 获取当前纯文本

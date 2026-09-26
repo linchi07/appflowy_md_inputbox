@@ -1,5 +1,26 @@
 import 'package:flutter/material.dart';
 import '../../../../appflowy_editor.dart';
+import 'markdown_block_syntax.dart';
+
+bool _insertLiteralNewlineInFencedBlock(
+  EditorState editorState,
+  Node node,
+  int offset,
+) {
+  final source = node.delta?.toPlainText();
+  if (source == null || !shouldInsertNewlineInFencedBlock(source, offset)) {
+    return false;
+  }
+
+  final transaction = editorState.transaction
+    ..insertText(node, offset, '\n')
+    ..afterSelection = Selection.collapsed(
+      Position(path: node.path, offset: offset + 1),
+    );
+  editorState.apply(transaction);
+  return true;
+}
+
 CommandShortcutEvent sendShortcutEvent({
   required VoidCallback onSend,
 }) =>
@@ -32,6 +53,9 @@ final CommandShortcutEvent newlineMarkdownShortcutEvent = CommandShortcutEvent(
 
     final text = delta.toPlainText();
     final offset = selection.start.offset;
+    if (_insertLiteralNewlineInFencedBlock(editorState, node, offset)) {
+      return KeyEventResult.handled;
+    }
 
     // We will determine if the new line needs any prefix
     String nextPrefix = '';
@@ -39,8 +63,8 @@ final CommandShortcutEvent newlineMarkdownShortcutEvent = CommandShortcutEvent(
     // Check for Lists/Quotes/Checkboxes Regex:
     // 1: Checkbox, 2: Bullet, 3: Numbered, 4: Quote
     final match =
-    RegExp(r'^([-*]\s+\[[ x]]\s+)|^([-*]\s+)|^(\d+)\.\s+|^((>\s*)+)')
-        .firstMatch(text);
+        RegExp(r'^([-*]\s+\[[ x]]\s+)|^([-*]\s+)|^(\d+)\.\s+|^((>\s*)+)')
+            .firstMatch(text);
     if (match != null) {
       final fullMatchStr = match.group(0)!;
 
@@ -96,9 +120,8 @@ final CommandShortcutEvent newlineMarkdownShortcutEvent = CommandShortcutEvent(
     return KeyEventResult.handled;
   },
   getDescription: () =>
-  'Continues list/quote or terminates it with correct caret placement',
+      'Continues list/quote or terminates it with correct caret placement',
 );
-
 
 /// When hit enter , create a new line
 /// CANNOT BE USED WITH SEND SHORTCUT (USE NEWLINE INSTEAD)
@@ -119,6 +142,9 @@ final CommandShortcutEvent enterMarkdownShortcutEvent = CommandShortcutEvent(
 
     final text = delta.toPlainText();
     final offset = selection.start.offset;
+    if (_insertLiteralNewlineInFencedBlock(editorState, node, offset)) {
+      return KeyEventResult.handled;
+    }
 
     // We will determine if the new line needs any prefix
     String nextPrefix = '';

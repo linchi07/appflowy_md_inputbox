@@ -87,6 +87,8 @@ class AppFlowyEditorLog {
   /// For example, uses the logger when building the widget.
   static AppFlowyEditorLog ui = AppFlowyEditorLog._(name: 'ui');
 
+  bool get isFineEnabled => _logger.isLoggable(Level.FINE);
+
   void error(String message) => _logger.severe(message);
 
   void warn(String message) => _logger.warning(message);
@@ -94,6 +96,12 @@ class AppFlowyEditorLog {
   void info(String message) => _logger.info(message);
 
   void debug(String message) => _logger.fine(message);
+
+  void debugLazy(String Function() message) {
+    if (isFineEnabled) {
+      _logger.fine(message());
+    }
+  }
 }
 
 extension on AppFlowyEditorLogLevel {

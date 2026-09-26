@@ -38,4 +38,34 @@ void main() {
     firstDocument.dispose();
     secondDocument.dispose();
   });
+
+  test('middle batch mutations keep sibling paths consistent', () {
+    final document = Document.blank();
+    document.insert(
+      const [0],
+      List.generate(2000, (index) => paragraphNode(text: 'old $index')),
+    );
+    document.insert(
+      const [700],
+      List.generate(500, (index) => paragraphNode(text: 'new $index')),
+    );
+
+    for (var index = 0; index < document.root.children.length; index++) {
+      expect(document.root.children[index].path, [index]);
+    }
+
+    document.delete(const [650], 600);
+    for (var index = 0; index < document.root.children.length; index++) {
+      expect(document.root.children[index].path, [index]);
+    }
+
+    final first = document.root.children.first;
+    final last = document.root.children.last;
+    first.insertBefore(paragraphNode(text: 'before'));
+    last.insertAfter(paragraphNode(text: 'after'));
+    for (var index = 0; index < document.root.children.length; index++) {
+      expect(document.root.children[index].path, [index]);
+    }
+    document.dispose();
+  });
 }

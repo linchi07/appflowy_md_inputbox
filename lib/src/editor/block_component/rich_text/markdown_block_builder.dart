@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../../../appflowy_editor.dart';
+import 'markdown_block_syntax.dart';
 
 final RegExp _orderedListPattern = RegExp(r'^\d+\. ');
 final RegExp _dividerPattern = RegExp(r'^([-*_])\1{2,}$|^—-$|^——-$');
+
+const markdownCodeBlockKey = ValueKey('markdown-code-block');
+const markdownDisplayMathBlockKey = ValueKey('markdown-display-math-block');
 
 class MarkdownBlockComponentBuilder extends BlockComponentBuilder {
   MarkdownBlockComponentBuilder({super.configuration});
@@ -99,15 +103,20 @@ class _MarkdownBlockComponentWidgetState
     bool withBackgroundColor = true,
   }) {
     final text = node.delta?.toPlainText() ?? '';
-    bool isQuote = text.startsWith('> ');
-    bool isTodo = text.startsWith('- [ ]') || text.startsWith('- [x]');
+    final fencedBlock = parseMarkdownFencedBlock(text);
+    final isCodeBlock = fencedBlock?.kind == MarkdownFencedBlockKind.code;
+    final isDisplayMathBlock =
+        fencedBlock?.kind == MarkdownFencedBlockKind.displayMath;
+    bool isQuote = fencedBlock == null && text.startsWith('> ');
+    bool isTodo = fencedBlock == null &&
+        (text.startsWith('- [ ]') || text.startsWith('- [x]'));
     bool isList = !isTodo &&
         (text.startsWith('- ') ||
             text.startsWith('* ') ||
             _orderedListPattern.hasMatch(text));
 
     // Divider check: exactly ---, *** or ___ at the beginning of a paragraph, including em-dash variants
-    final isDivider = _dividerPattern.hasMatch(text);
+    final isDivider = fencedBlock == null && _dividerPattern.hasMatch(text);
 
     if (isDivider) {
       final selection = editorState.selection;
@@ -159,7 +168,29 @@ class _MarkdownBlockComponentWidgetState
       children: [richText],
     );
 
-    if (isQuote) {
+    final colors = editorState.editorStyle.colorScheme;
+    if (isCodeBlock) {
+      child = Container(
+        key: markdownCodeBlockKey,
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: colors.subtleBackground,
+          border: Border.all(color: colors.border),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: child,
+      );
+    } else if (isDisplayMathBlock) {
+      child = Container(
+        key: markdownDisplayMathBlockKey,
+        width: double.infinity,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: child,
+      );
+    } else if (isQuote) {
       child = Container(
         decoration: BoxDecoration(
           border: Border(

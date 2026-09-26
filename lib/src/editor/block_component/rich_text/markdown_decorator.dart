@@ -5,9 +5,10 @@ import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../appflowy_editor.dart';
+import 'markdown_block_syntax.dart';
 
 final RegExp _markdownPattern = RegExp(
-  r'(\*\*.*?(?:\*\*|$))|(\*.*?(?:\*|$))|(~~.*?(?:~~|$))|(`.*?(?:`|$))|^(#{1,6}\s+.*)$|((?:^[-*]\s+)?\[[ x]])|(#[\w\u4e00-\u9fa5]+)|^([-*]\s+)|^(\d+\.\s+)|^([-*_]{3,})$|((?<![\\$])\$\$.*?(?:(?<!\\)\$\$|$))|((?<![\\$])\$(?!\$)(?!\s).*?(?:(?<![\\\s])\$(?!\$)|$))',
+  r'(\*\*.*?(?:\*\*|$))|(\*.*?(?:\*|$))|(~~.*?(?:~~|$))|(`.*?(?:`|$))|^(#{1,6}\s+.*)$|((?:^[-*]\s+)?\[[ x]])|(#[\w\u4e00-\u9fa5]+)|^([-*]\s+)|^(\d+\.\s+)|^([-*_]{3,})$|((?<![\\$])\$\$[\s\S]*?(?:(?<!\\)\$\$|(?![\s\S])))|((?<![\\$])\$(?!\$)(?!\s).*?(?:(?<![\\\s])\$(?!\$)|$))',
   multiLine: true,
 );
 final RegExp _headingPrefixPattern = RegExp(r'^#+\s+');
@@ -200,6 +201,21 @@ TextSpan markdownTextSpanDecorator(
 
   final String content = text.text;
   TextStyle? baseStyle = before.style;
+
+  final fencedBlock = parseMarkdownFencedBlock(
+    node.delta?.toPlainText() ?? content,
+  );
+  if (fencedBlock?.kind == MarkdownFencedBlockKind.code) {
+    final selectionTouchesNode = selection != null &&
+        (sameNode(selection.start.path) || sameNode(selection.end.path));
+    return _decorateFencedCodeSegment(
+      block: fencedBlock!,
+      segment: content,
+      segmentOffset: index,
+      baseStyle: baseStyle,
+      showSource: selectionTouchesNode,
+    );
+  }
 
   final decorationLimit =
       editorState.editorStyle.maxMarkdownDecorationCharacters;
@@ -560,4 +576,55 @@ TextSpan markdownTextSpanDecorator(
   }
 
   return TextSpan(children: spans, style: baseStyle);
+}
+
+TextSpan _decorateFencedCodeSegment({
+  required MarkdownFencedBlock block,
+  required String segment,
+  required int segmentOffset,
+  required TextStyle? baseStyle,
+  required bool showSource,
+}) {
+  final codeStyle = (baseStyle ?? const TextStyle()).copyWith(
+    fontFamily: 'monospace',
+    height: 1.45,
+  );
+  if (showSource || !block.isClosed) {
+    return TextSpan(text: segment, style: codeStyle);
+  }
+
+  final hiddenStyle = codeStyle.copyWith(
+    fontSize: 0.1,
+    height: 0.1,
+    color: Colors.transparent,
+  );
+  final segmentEnd = segmentOffset + segment.length;
+  final boundaries = <int>{0, segment.length};
+
+  void addBoundary(int globalOffset) {
+    if (globalOffset > segmentOffset && globalOffset < segmentEnd) {
+      boundaries.add(globalOffset - segmentOffset);
+    }
+  }
+
+  addBoundary(block.openingEnd);
+  addBoundary(block.contentEnd);
+  final sorted = boundaries.toList()..sort();
+  final spans = <InlineSpan>[];
+  for (var i = 0; i < sorted.length - 1; i++) {
+    final start = sorted[i];
+    final end = sorted[i + 1];
+    if (start == end) continue;
+    final globalStart = segmentOffset + start;
+    final isSyntax =
+        globalStart < block.openingEnd || globalStart >= block.contentEnd;
+    spans.add(
+      TextSpan(
+        text: segment.substring(start, end),
+        style: isSyntax ? hiddenStyle : codeStyle,
+      ),
+    );
+  }
+
+  return TextSpan(children: spans, style: codeStyle);
 }

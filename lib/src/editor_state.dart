@@ -292,46 +292,63 @@ class EditorState {
     if (document.root.children.isEmpty) {
       return '';
     }
-    return _cachedText = document.root.children.map((e) {
-      if (e.type == DividerBlockKeys.type) {
-        return '---';
-      }
-      if (e.type == TableBlockKeys.type) {
-        final tableNode = TableNode(node: e);
-        final rowsLen = tableNode.rowsLen;
-        final colsLen = tableNode.colsLen;
-        if (rowsLen == 0 || colsLen == 0) return '';
-
-        final List<String> tableMarkdown = [];
-        final List<List<String>> rows = List.generate(
-          rowsLen,
-          (_) => List.generate(colsLen, (_) => ''),
-        );
-
-        for (var c = 0; c < colsLen; c++) {
-          for (var r = 0; r < rowsLen; r++) {
-            final cellNode = tableNode.getCell(c, r);
-            final cellText = cellNode.children.isNotEmpty
-                ? (cellNode.children.first.delta?.toPlainText() ?? '')
-                    .replaceAll('\n', ' ')
-                : '';
-            rows[r][c] = cellText;
-          }
-        }
-
-        tableMarkdown.add('| ${rows[0].join(' | ')} |');
-        tableMarkdown
-            .add('| ${List.generate(colsLen, (_) => '---').join(' | ')} |');
-
-        for (var r = 1; r < rowsLen; r++) {
-          tableMarkdown.add('| ${rows[r].join(' | ')} |');
-        }
-
-        return tableMarkdown.join('\n');
-      }
-      return e.delta?.toPlainText() ?? '';
-    }).join('\n');
+    return _cachedText = document.root.children.map(_textForBlock).join('\n');
   }
+
+  /// The serialized length, maintained by document transactions.
+  int get textLength => _totalTextLength ??= _calculateTextLength();
+
+  final Map<Node, String> _blockTextCache = {};
+  int? _totalTextLength;
+
+  int _calculateTextLength() {
+    final blocks = document.root.children;
+    var length = blocks.isEmpty ? 0 : blocks.length - 1;
+    for (final block in blocks) {
+      length += _textForBlock(block).length;
+    }
+    return length;
+  }
+
+  String _textForBlock(Node block) => _blockTextCache.putIfAbsent(block, () {
+        if (block.type == DividerBlockKeys.type) {
+          return '---';
+        }
+        if (block.type == TableBlockKeys.type) {
+          final tableNode = TableNode(node: block);
+          final rowsLen = tableNode.rowsLen;
+          final colsLen = tableNode.colsLen;
+          if (rowsLen == 0 || colsLen == 0) return '';
+
+          final List<String> tableMarkdown = [];
+          final List<List<String>> rows = List.generate(
+            rowsLen,
+            (_) => List.generate(colsLen, (_) => ''),
+          );
+
+          for (var c = 0; c < colsLen; c++) {
+            for (var r = 0; r < rowsLen; r++) {
+              final cellNode = tableNode.getCell(c, r);
+              final cellText = cellNode.children.isNotEmpty
+                  ? (cellNode.children.first.delta?.toPlainText() ?? '')
+                      .replaceAll('\n', ' ')
+                  : '';
+              rows[r][c] = cellText;
+            }
+          }
+
+          tableMarkdown.add('| ${rows[0].join(' | ')} |');
+          tableMarkdown
+              .add('| ${List.generate(colsLen, (_) => '---').join(' | ')} |');
+
+          for (var r = 1; r < rowsLen; r++) {
+            tableMarkdown.add('| ${rows[r].join(' | ')} |');
+          }
+
+          return tableMarkdown.join('\n');
+        }
+        return block.delta?.toPlainText() ?? '';
+      });
 
   String? _cachedText;
   int _textRevision = 0;
@@ -636,6 +653,8 @@ class EditorState {
     _debouncedSealHistoryItemTimer?.cancel();
     onDispose.value += 1;
     onDispose.dispose();
+    _blockTextCache.clear();
+    _cachedText = null;
     document.dispose();
     selectionNotifier.dispose();
     remoteSelections.dispose();
@@ -716,7 +735,7 @@ class EditorState {
 
       onInput?.call(this);
       if (characterCounter != null) {
-        characterCounter!.value = text.length;
+        characterCounter!.value = textLength;
       }
     }
 
@@ -968,21 +987,89 @@ class EditorState {
   void _applyTransactionInLocal(Transaction transaction) {
     _cachedText = null;
     for (final op in transaction.operations) {
-      AppFlowyEditorLog.editor.debug('apply op (local): ${op.toJson()}');
+      AppFlowyEditorLog.editor.debugLazy(
+        () => 'apply op (local): ${op.toJson()}',
+      );
+      _applyDocumentOperation(op);
+    }
+  }
 
-      if (op is InsertOperation) {
-        document.insert(op.path, op.nodes);
-      } else if (op is UpdateOperation) {
-        // ignore the update operation if the attributes are the same.
-        if (!mapEquals(op.attributes, op.oldAttributes)) {
-          document.update(op.path, op.attributes);
+  void _applyDocumentOperation(Operation op) {
+    final root = document.root;
+    final beforeCount = root.childCount;
+    final previousLength = textLength;
+
+    // Ordinary text edits change serialized length by exactly the delta's
+    // inserted/deleted UTF-16 units. Avoid reserializing a long paragraph on
+    // each keystroke. Tables have a custom Markdown serializer below.
+    if (op is UpdateTextOperation && op.path.length == 1) {
+      final block = root.childAtIndexOrNull(op.path.first);
+      if (block != null &&
+          block.hasDelta &&
+          block.type != TableBlockKeys.type &&
+          block.type != DividerBlockKeys.type) {
+        if (document.updateText(op.path, op.delta)) {
+          var lengthDelta = 0;
+          for (final edit in op.delta) {
+            if (edit is TextInsert) lengthDelta += edit.length;
+            if (edit is TextDelete) lengthDelta -= edit.length;
+          }
+          _totalTextLength = previousLength + lengthDelta;
+          _blockTextCache.remove(block);
         }
-      } else if (op is DeleteOperation) {
-        document.delete(op.path, op.nodes.length);
-      } else if (op is UpdateTextOperation) {
-        document.updateText(op.path, op.delta);
+        return;
       }
     }
+
+    final beforeBlocks = <Node>[];
+    if (op.path.isNotEmpty) {
+      if (op is DeleteOperation && op.path.length == 1) {
+        final children = root.children;
+        final start = op.path.first.clamp(0, children.length);
+        final end = (start + op.nodes.length).clamp(start, children.length);
+        beforeBlocks.addAll(children.getRange(start, end));
+      } else if (op is! InsertOperation || op.path.length != 1) {
+        final block = root.childAtIndexOrNull(op.path.first);
+        if (block != null) beforeBlocks.add(block);
+      }
+    }
+    var oldLength = 0;
+    for (final block in beforeBlocks) {
+      oldLength += _textForBlock(block).length;
+      _blockTextCache.remove(block);
+    }
+
+    if (op is InsertOperation) {
+      document.insert(op.path, op.nodes);
+    } else if (op is UpdateOperation) {
+      if (!mapEquals(op.attributes, op.oldAttributes)) {
+        document.update(op.path, op.attributes);
+      }
+    } else if (op is DeleteOperation) {
+      document.delete(op.path, op.nodes.length);
+    } else if (op is UpdateTextOperation) {
+      document.updateText(op.path, op.delta);
+    }
+
+    final afterBlocks = <Node>[];
+    if (op.path.isNotEmpty) {
+      if (op is InsertOperation && op.path.length == 1) {
+        afterBlocks.addAll(op.nodes.where((node) => node.parent == root));
+      } else if (op is! DeleteOperation || op.path.length != 1) {
+        final block = root.childAtIndexOrNull(op.path.first);
+        if (block != null) afterBlocks.add(block);
+      }
+    }
+    var newLength = 0;
+    for (final block in afterBlocks) {
+      newLength += _textForBlock(block).length;
+    }
+    final afterCount = root.childCount;
+    _totalTextLength = previousLength +
+        newLength -
+        oldLength +
+        (afterCount > 0 ? afterCount - 1 : 0) -
+        (beforeCount > 0 ? beforeCount - 1 : 0);
   }
 
   Selection? _applyTransactionFromRemote(Transaction transaction) {
@@ -990,10 +1077,12 @@ class EditorState {
     var selection = this.selection;
 
     for (final op in transaction.operations) {
-      AppFlowyEditorLog.editor.debug('apply op (remote): ${op.toJson()}');
+      AppFlowyEditorLog.editor.debugLazy(
+        () => 'apply op (remote): ${op.toJson()}',
+      );
 
+      _applyDocumentOperation(op);
       if (op is InsertOperation) {
-        document.insert(op.path, op.nodes);
         if (selection != null) {
           if (op.path <= selection.start.path) {
             selection = Selection(
@@ -1006,10 +1095,7 @@ class EditorState {
             );
           }
         }
-      } else if (op is UpdateOperation) {
-        document.update(op.path, op.attributes);
       } else if (op is DeleteOperation) {
-        document.delete(op.path, op.nodes.length);
         if (selection != null) {
           if (op.path <= selection.start.path) {
             selection = Selection(
@@ -1022,8 +1108,6 @@ class EditorState {
             );
           }
         }
-      } else if (op is UpdateTextOperation) {
-        document.updateText(op.path, op.delta);
       }
     }
 
