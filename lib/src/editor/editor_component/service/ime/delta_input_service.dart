@@ -70,8 +70,8 @@ class DeltaTextInputService extends TextInputService with DeltaTextInputClient {
       ..show();
     currentTextEditingValue = formattedValue;
 
-    AppFlowyEditorLog.input.debug(
-      'attach text editing value: $textEditingValue',
+    AppFlowyEditorLog.input.debugLazy(
+      () => 'attach text editing value: $textEditingValue',
     );
   }
 

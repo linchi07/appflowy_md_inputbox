@@ -250,8 +250,8 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
 
   void _attachTextInputService(Selection selection) {
     final textEditingValue = _getCurrentTextEditingValue(selection);
-    AppFlowyEditorLog.editor.debug(
-      'keyboard service - attach text input service: $textEditingValue',
+    AppFlowyEditorLog.editor.debugLazy(
+      () => 'keyboard service - attach text input service: $textEditingValue',
     );
     if (textEditingValue != null) {
       textInputService.attach(
@@ -277,11 +277,6 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
   // This function is used to get the current text editing value of the editor
   // based on the given selection.
   TextEditingValue? _getCurrentTextEditingValue(Selection selection) {
-    // Get all the editable nodes in the selection.
-    final editableNodes = editorState
-        .getNodesInSelection(selection)
-        .where((element) => element.delta != null);
-
     // Moving the caret or a selection handle finishes an active mobile IME
     // composition. Keeping the old composing range after the selection moves
     // can make the next Chinese/Japanese IME update replace text at the stale
@@ -298,18 +293,23 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
     // Get the composing text range.
     final composingTextRange =
         textInputService.composingTextRange ?? TextRange.empty;
-    if (editableNodes.isNotEmpty) {
-      // Get the text by concatenating all the editable nodes in the selection.
-      var text = editableNodes.fold<String>(
-        '',
-        (sum, editableNode) => '$sum${editableNode.delta!.toPlainText()}\n',
-      );
-
-      // Remove the last '\n'.
-      text = text.substring(0, text.length - 1);
-
+    // Build selected text once, since this range can span an entire document.
+    final text = StringBuffer();
+    var hasEditableNode = false;
+    for (final node in editorState.getNodesInSelection(selection)) {
+      final delta = node.delta;
+      if (delta == null) {
+        continue;
+      }
+      if (hasEditableNode) {
+        text.write('\n');
+      }
+      text.write(delta.toPlainText());
+      hasEditableNode = true;
+    }
+    if (hasEditableNode) {
       return TextEditingValue(
-        text: text,
+        text: text.toString(),
         selection: TextSelection(
           baseOffset: selection.startIndex,
           extentOffset: selection.endIndex,

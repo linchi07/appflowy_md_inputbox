@@ -97,8 +97,8 @@ class NonDeltaTextInputService extends TextInputService with TextInputClient {
 
     currentTextEditingValue = formattedValue;
 
-    AppFlowyEditorLog.input.debug(
-      'attach text editing value: $textEditingValue',
+    AppFlowyEditorLog.input.debugLazy(
+      () => 'attach text editing value: $textEditingValue',
     );
   }
 

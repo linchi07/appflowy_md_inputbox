@@ -9,7 +9,7 @@ Future<void> onReplace(
   EditorState editorState,
   List<CharacterShortcutEvent> characterShortcutEvents,
 ) async {
-  AppFlowyEditorLog.input.debug('onReplace: $replacement');
+  AppFlowyEditorLog.input.debugLazy(() => 'onReplace: $replacement');
 
   // delete the selection
   final selection = editorState.selection;

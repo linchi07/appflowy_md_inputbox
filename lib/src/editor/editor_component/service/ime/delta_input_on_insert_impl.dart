@@ -9,7 +9,7 @@ Future<void> onInsert(
   EditorState editorState,
   List<CharacterShortcutEvent> characterShortcutEvents,
 ) async {
-  AppFlowyEditorLog.input.debug('onInsert: $insertion');
+  AppFlowyEditorLog.input.debugLazy(() => 'onInsert: $insertion');
 
   final textInserted = insertion.textInserted;
 
