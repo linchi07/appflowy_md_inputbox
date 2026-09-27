@@ -6,6 +6,7 @@ const standardBlockComponentConfiguration = BlockComponentConfiguration();
 
 final Map<String, BlockComponentBuilder> standardBlockComponentBuilderMap = {
   PageBlockKeys.type: PageBlockComponentBuilder(),
+  CodeBlockKeys.type: CodeBlockComponentBuilder(),
   ParagraphBlockKeys.type: MarkdownBlockComponentBuilder(
     configuration: standardBlockComponentConfiguration.copyWith(
       placeholderText: (_) => PlatformExtension.isDesktopOrWeb
@@ -30,6 +31,7 @@ final Map<String, BlockComponentBuilder> standardBlockComponentBuilderMap = {
 };
 
 final List<CharacterShortcutEvent> standardCharacterShortcutEvents = [
+  codeCharacterShortcut,
   // '\n'
   insertNewLine,
 
@@ -54,6 +56,7 @@ final List<CommandShortcutEvent> standardCommandShortcutEvents = [
   redoCommand,
 
   // backspace
+  codeExitCommand,
   convertToParagraphCommand,
   ...tableCommands,
   // Keep table-cell Enter navigation ahead of Markdown line continuation.
@@ -85,6 +88,7 @@ final List<CommandShortcutEvent> standardCommandShortcutEvents = [
   openLinksCommand,
 
   //
+  tabToAutoCompleteCommand,
   indentCommand,
   outdentCommand,
 

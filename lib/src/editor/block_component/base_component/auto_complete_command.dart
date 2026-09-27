@@ -1,11 +1,13 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
+import 'package:node_code_editor/node_code_editor.dart';
 
 // Add your custom block keys if it supports auto complete
 final autoCompletableBlockTypes = {
   ParagraphBlockKeys.type,
   QuoteBlockKeys.type,
   HeadingBlockKeys.type,
+  CodeBlockKeys.type,
 };
 
 /// Auto complete the current block
@@ -27,13 +29,13 @@ CommandShortcutEventHandler _tabToAutoCompleteCommandHandler = (editorState) {
     return KeyEventResult.ignored;
   }
 
-  final context = editorState.document.root.context;
   final node = editorState.getNodeAtPath(selection.end.path);
+  final context = node?.context ?? editorState.document.root.context;
   final delta = node?.delta;
 
   // Now, this command only support auto complete the text if the cursor is at the end of the block
-  if (context == null ||
-      node == null ||
+  if (node == null ||
+      (context == null && node.type != CodeBlockKeys.type) ||
       !autoCompletableBlockTypes.contains(node.type) ||
       delta == null ||
       selection.endIndex != delta.length) {
@@ -41,11 +43,12 @@ CommandShortcutEventHandler _tabToAutoCompleteCommandHandler = (editorState) {
   }
 
   // Support async auto complete text provider in the future
-  final autoCompleteText = editorState.autoCompleteTextProvider?.call(
-    context,
-    node,
-    null,
-  );
+  final autoCompleteText = node.type == CodeBlockKeys.type
+      ? codeCompletionSuffix(
+          node.delta?.toPlainText() ?? '',
+          node.attributes[CodeBlockKeys.language] as String? ?? '',
+        )
+      : editorState.autoCompleteTextProvider?.call(context!, node, null);
   if (autoCompleteText == null || autoCompleteText.isEmpty) {
     return KeyEventResult.ignored;
   }
@@ -55,6 +58,12 @@ CommandShortcutEventHandler _tabToAutoCompleteCommandHandler = (editorState) {
       node,
       selection.endIndex,
       autoCompleteText,
+    )
+    ..afterSelection = Selection.collapsed(
+      Position(
+        path: node.path,
+        offset: selection.endIndex + autoCompleteText.length,
+      ),
     );
   editorState.apply(transaction);
 

@@ -126,10 +126,12 @@ Override the character limit when constructing `MDEditor`; passing `null`
 disables these safeguards and should only be done after profiling the target
 devices.
 
-The decorator checks the paragraph limit before parsing fenced code or display
-math. An oversized fenced block therefore keeps its raw source visible instead
-of applying inline code styling. The block component still recognizes its
-fence to choose the surrounding container.
+The decorator checks the paragraph limit before parsing display math. Code
+fences at or below 64 KiB become independent code nodes with a small lexer;
+larger input skips code fence recognition and remains ordinary editable text.
+The code lexer also stops highlighting a node beyond 64 KiB. Its rules live in
+`packages/node_code_editor` and add no `highlight` or `flutter_highlight`
+dependency.
 
 Selection-only rebuilds reuse a 256-entry lexical cache capped at 1 MiB of
 source. The cache is safe to share across editors because entries contain only

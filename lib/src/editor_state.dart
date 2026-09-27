@@ -311,6 +311,9 @@ class EditorState {
   }
 
   String _textForBlock(Node block) => _blockTextCache.putIfAbsent(block, () {
+        if (block.type == CodeBlockKeys.type) {
+          return codeBlockToMarkdown(block);
+        }
         if (block.type == DividerBlockKeys.type) {
           return '---';
         }
@@ -426,6 +429,28 @@ class EditorState {
   /// Pastes plain text (parsed as markdown) into the document.
   Future<void> pastePlainText(String plainText) async {
     if (isDisposed) return;
+    // Inside a code node the clipboard is code, including any literal fences.
+    final codeSelection = selection;
+    if (codeSelection != null &&
+        codeSelection.isSingle &&
+        getNodeAtPath(codeSelection.start.path)?.type == CodeBlockKeys.type) {
+      final collapsed = await deleteSelectionIfNeeded();
+      final codeNode =
+          collapsed == null ? null : getNodeAtPath(collapsed.start.path);
+      if (codeNode != null && codeNode.type == CodeBlockKeys.type) {
+        await apply(
+          transaction
+            ..insertText(codeNode, collapsed!.start.offset, plainText)
+            ..afterSelection = Selection.collapsed(
+              Position(
+                path: codeNode.path,
+                offset: collapsed.start.offset + plainText.length,
+              ),
+            ),
+        );
+      }
+      return;
+    }
     final documentRevision = _documentRevision;
     final originalSelection = selection;
     final selectionAttributes = getDeltaAttributesInSelectionStart();
@@ -463,7 +488,9 @@ class EditorState {
     // Keep the current selection intact while a large payload is parsed in an
     // isolate. The paste helpers begin changing the document only after this
     // revision and selection check.
-    if (nodes.length == 1) {
+    if (nodes.any((node) => node.type == CodeBlockKeys.type)) {
+      await pasteNodesContainingCode(nodes.toList());
+    } else if (nodes.length == 1) {
       await pasteSingleLineNode(nodes.first);
     } else {
       await pasteMultiLineNodes(nodes.toList());

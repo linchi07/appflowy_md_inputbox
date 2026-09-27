@@ -22,9 +22,14 @@ void main() {
       final nodes = parseMarkdownToNodes(source);
 
       expect(nodes, hasLength(1));
-      expect(nodes.single.type, ParagraphBlockKeys.type);
+      expect(nodes.single.type, CodeBlockKeys.type);
       expect(nodes.single.delta?.toList(), hasLength(1));
-      expect(nodes.single.delta?.toPlainText(), source);
+      expect(
+        nodes.single.delta?.toPlainText(),
+        '| not | a table |\nfinal url = "https://example.com";',
+      );
+      expect(nodes.single.attributes[CodeBlockKeys.language], 'dart');
+      expect(_serialize(nodes), source);
     });
 
     test('keeps an unfinished fence together through the end of input', () {
@@ -33,7 +38,9 @@ void main() {
       final nodes = parseMarkdownToNodes(source);
 
       expect(nodes, hasLength(1));
-      expect(nodes.single.delta?.toPlainText(), source);
+      expect(nodes.single.type, CodeBlockKeys.type);
+      expect(nodes.single.delta?.toPlainText(), 'first\nsecond');
+      expect(_serialize(nodes), source);
     });
   });
 
@@ -108,5 +115,10 @@ void main() {
   });
 }
 
-String _serialize(List<Node> nodes) =>
-    nodes.map((node) => node.delta?.toPlainText() ?? '').join('\n');
+String _serialize(List<Node> nodes) => nodes
+    .map(
+      (node) => node.type == CodeBlockKeys.type
+          ? codeBlockToMarkdown(node)
+          : node.delta?.toPlainText() ?? '',
+    )
+    .join('\n');

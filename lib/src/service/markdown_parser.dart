@@ -18,6 +18,9 @@ List<Node> parseMarkdownToNodes(
   String markdown, {
   Attributes? baseAttributes,
 }) {
+  // Skip structural fence recognition once the Markdown decoration budget is
+  // exceeded. Large input remains editable as ordinary text nodes.
+  final parseCodeFences = markdown.length <= 64 * 1024;
   final lines = markdown.split('\n');
   final nodes = <Node>[];
 
@@ -57,7 +60,7 @@ List<Node> parseMarkdownToNodes(
     final line = lines[i].replaceAll('\r', '');
     final trimmedLine = line.trim();
 
-    final isCodeFence = isFencedCodeOpeningLine(line);
+    final isCodeFence = parseCodeFences && isFencedCodeOpeningLine(line);
     final isMathFence = isDisplayMathFenceLine(line);
     if (isCodeFence || isMathFence) {
       flushTable();
@@ -70,15 +73,30 @@ List<Node> parseMarkdownToNodes(
             : isDisplayMathFenceLine(blockLine);
         if (isClosing) break;
       }
-      nodes.add(
-        paragraphNode(
-          delta: Delta()
-            ..insert(
-              blockLines.join('\n'),
-              attributes: baseAttributes,
+      final blockSource = blockLines.join('\n');
+      // Keep a lone opening fence as exact source while its language is typed.
+      final codeBlock = isCodeFence && blockSource.contains('\n')
+          ? parseMarkdownFencedBlock(blockSource)
+          : null;
+      if (codeBlock != null) {
+        nodes.add(
+          codeBlockNode(
+            code: blockSource.substring(
+              codeBlock.openingEnd,
+              codeBlock.contentEnd,
             ),
-        ),
-      );
+            language: codeBlock.language ?? '',
+            openingFence: line,
+            closed: codeBlock.isClosed,
+          ),
+        );
+      } else {
+        nodes.add(
+          paragraphNode(
+            delta: Delta()..insert(blockSource, attributes: baseAttributes),
+          ),
+        );
+      }
     } else if (trimmedLine.startsWith('|') && trimmedLine.endsWith('|')) {
       tableLines.add(line);
     } else {

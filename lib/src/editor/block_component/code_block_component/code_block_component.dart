@@ -1,0 +1,208 @@
+import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:flutter/material.dart';
+import 'package:node_code_editor/node_code_editor.dart';
+import 'package:provider/provider.dart';
+
+class CodeBlockKeys {
+  const CodeBlockKeys._();
+  static const type = 'code_block';
+  static const language = 'language';
+  static const openingFence = 'openingFence';
+  static const closed = 'closed';
+}
+
+/// The delta contains editable code only; fences remain structural metadata.
+Node codeBlockNode({
+  required String code,
+  String language = '',
+  String? openingFence,
+  bool closed = true,
+}) =>
+    Node(
+      type: CodeBlockKeys.type,
+      attributes: {
+        blockComponentDelta: (Delta()..insert(code)).toJson(),
+        CodeBlockKeys.language: language,
+        CodeBlockKeys.openingFence: openingFence ?? '```$language',
+        CodeBlockKeys.closed: closed,
+      },
+    );
+
+String codeBlockToMarkdown(Node node) {
+  final opening = node.attributes[CodeBlockKeys.openingFence] as String? ??
+      '```${node.attributes[CodeBlockKeys.language] ?? ''}';
+  final code = node.delta?.toPlainText() ?? '';
+  final closed = node.attributes[CodeBlockKeys.closed] == true;
+  return '$opening\n$code${closed ? '\n```' : ''}';
+}
+
+class CodeBlockComponentBuilder extends BlockComponentBuilder {
+  CodeBlockComponentBuilder({super.configuration});
+
+  @override
+  BlockComponentWidget build(BlockComponentContext context) =>
+      CodeBlockComponentWidget(
+        key: context.node.key,
+        node: context.node,
+        configuration: configuration,
+        showActions: showActions(context.node),
+        actionBuilder: (buildContext, state) => actionBuilder(context, state),
+        actionTrailingBuilder: (buildContext, state) =>
+            actionTrailingBuilder(context, state),
+      );
+
+  @override
+  BlockComponentValidate get validate => (node) => node.delta != null;
+}
+
+class CodeBlockComponentWidget extends BlockComponentStatefulWidget {
+  const CodeBlockComponentWidget({
+    super.key,
+    required super.node,
+    super.showActions,
+    super.actionBuilder,
+    super.actionTrailingBuilder,
+    super.configuration = const BlockComponentConfiguration(),
+  });
+
+  @override
+  State<CodeBlockComponentWidget> createState() =>
+      _CodeBlockComponentWidgetState();
+}
+
+class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
+    with SelectableMixin, DefaultSelectableMixin, BlockComponentConfigurable {
+  final _highlighter = CodeHighlighter();
+  @override
+  final forwardKey = GlobalKey(debugLabel: 'code_rich_text');
+  @override
+  GlobalKey<State<StatefulWidget>> get containerKey => widget.node.key;
+  @override
+  final blockComponentKey = GlobalKey(debugLabel: 'code_block');
+  @override
+  BlockComponentConfiguration get configuration => widget.configuration;
+  @override
+  Node get node => widget.node;
+  late final EditorState editorState = context.read<EditorState>();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = editorState.editorStyle.colorScheme;
+    final language = node.attributes[CodeBlockKeys.language] as String? ?? '';
+    final source = node.delta?.toPlainText() ?? '';
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final codeStyle = TextStyle(
+      fontFamily: 'monospace',
+      height: 1.45,
+    );
+    Widget child = Container(
+      key: markdownCodeBlockKey,
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: colors.subtleBackground,
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Material(
+              type: MaterialType.transparency,
+              child: PopupMenuButton<String>(
+                enabled: editorState.editable,
+                tooltip: 'Code language',
+                onSelected: (value) {
+                  final opening =
+                      node.attributes[CodeBlockKeys.openingFence] as String? ??
+                          '```$language';
+                  final indent = RegExp(r'^[ \t]*').stringMatch(opening) ?? '';
+                  editorState.apply(
+                    editorState.transaction
+                      ..updateNode(node, {
+                        CodeBlockKeys.language: value,
+                        CodeBlockKeys.openingFence: '$indent```$value',
+                      }),
+                  );
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: '', child: Text('Plain text')),
+                  PopupMenuItem(value: 'json', child: Text('JSON')),
+                  PopupMenuItem(value: 'yaml', child: Text('YAML')),
+                  PopupMenuItem(value: 'dart', child: Text('Dart')),
+                  PopupMenuItem(value: 'javascript', child: Text('JavaScript')),
+                  PopupMenuItem(value: 'typescript', child: Text('TypeScript')),
+                  PopupMenuItem(value: 'python', child: Text('Python')),
+                ],
+                child: Text(
+                  language.isEmpty ? 'Plain text' : language,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: colors.foreground.withValues(alpha: 0.6),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          AppFlowyRichText(
+            key: forwardKey,
+            delegate: this,
+            node: node,
+            editorState: editorState,
+            placeholderText: ' ',
+            textDirection: TextDirection.ltr,
+            autoCompleteTextProvider: (context, node, textSpan) {
+              final selection = editorState.selection;
+              if (selection == null ||
+                  !selection.isCollapsed ||
+                  !selection.start.path.equals(node.path) ||
+                  selection.start.offset != (node.delta?.length ?? 0)) {
+                return null;
+              }
+              return codeCompletionSuffix(source, language);
+            },
+            textSpanDecorator: (span) => span.updateTextStyle(codeStyle),
+            textSpanDecoratorForCustomAttributes:
+                (context, node, offset, insert, before, after) =>
+                    _highlighter.spanForSegment(
+              source: source,
+              language: language,
+              start: offset,
+              segment: insert.text,
+              style: (before.style ?? const TextStyle())
+                  .merge(codeStyle)
+                  .copyWith(color: colors.foreground),
+              dark: dark,
+            ),
+            cursorColor: editorState.editorStyle.cursorColor,
+            selectionColor: editorState.editorStyle.selectionColor,
+            cursorWidth: editorState.editorStyle.cursorWidth,
+          ),
+        ],
+      ),
+    );
+    child = Container(key: blockComponentKey, child: child);
+    child = BlockSelectionContainer(
+      node: node,
+      delegate: this,
+      listenable: editorState.selectionNotifier,
+      remoteSelection: editorState.remoteSelections,
+      blockColor: editorState.editorStyle.selectionColor,
+      supportTypes: const [BlockSelectionType.block],
+      child: child,
+    );
+    if (widget.showActions && widget.actionBuilder != null) {
+      child = BlockComponentActionWrapper(
+        node: node,
+        actionBuilder: widget.actionBuilder!,
+        actionTrailingBuilder: widget.actionTrailingBuilder,
+        child: child,
+      );
+    }
+    return child;
+  }
+}

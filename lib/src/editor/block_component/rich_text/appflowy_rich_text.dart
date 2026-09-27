@@ -123,7 +123,9 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
       widget.editorState.autoCompleteTextProvider;
 
   bool get enableAutoComplete =>
-      widget.editorState.enableAutoComplete && autoCompleteTextProvider != null;
+      (widget.editorState.enableAutoComplete ||
+          widget.autoCompleteTextProvider != null) &&
+      autoCompleteTextProvider != null;
 
   TextStyleConfiguration get textStyleConfiguration =>
       widget.editorState.editorStyle.textStyleConfiguration;
@@ -532,6 +534,9 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
           ],
         );
 
+        if (widget.textSpanDecorator != null) {
+          textSpan = widget.textSpanDecorator!(textSpan);
+        }
         return RichText(
           textAlign: widget.textAlign ?? TextAlign.start,
           textHeightBehavior: TextHeightBehavior(

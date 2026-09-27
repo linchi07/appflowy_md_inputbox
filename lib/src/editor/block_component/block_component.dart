@@ -20,6 +20,9 @@ export 'base_component/text_style_configuration.dart';
 export 'base_component/widget/full_screen_overlay_entry.dart';
 export 'base_component/widget/nested_list_widget.dart';
 export 'base_component_keys.dart';
+export 'code_block_component/code_block_component.dart';
+export 'code_block_component/code_character_shortcut.dart';
+export 'code_block_component/code_exit_command.dart';
 // bulleted list
 // divider
 export 'divider_block_component/divider_block_component.dart';

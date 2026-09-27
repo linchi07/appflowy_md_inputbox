@@ -12,6 +12,8 @@ description: A highly customizable rich-text editor for Flutter. The AppFlowy
   Editor project for AppFlowy and beyond.
 
 dependencies:
+  node_code_editor:
+    path: packages/node_code_editor
   collection: "^1.18.0"
   # 不知道为啥要这么高的版本……
   diff_match_patch: "^0.4.1"
