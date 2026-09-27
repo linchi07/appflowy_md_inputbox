@@ -21,7 +21,10 @@ class MDEditorController {
     editorState = EditorState.blank(
       maxHistoryItemSize: maxHistoryItemSize,
     );
-    editorState.nodeBehaviors = {CodeBlockKeys.type: codeNodeBehavior};
+    editorState.nodeBehaviors = {
+      ParagraphBlockKeys.type: codeFenceDraftParagraphBehavior,
+      CodeBlockKeys.type: codeNodeBehavior,
+    };
     editorState.documentRules = _markdownDocumentRules;
     if (initialText != null) {
       editorState.text = initialText;
@@ -223,7 +226,10 @@ class _MDEditorState extends State<MDEditor> {
         ),
       },
       editorStyle: editorStyle,
-      nodeBehaviors: {CodeBlockKeys.type: codeNodeBehavior},
+      nodeBehaviors: {
+        ParagraphBlockKeys.type: codeFenceDraftParagraphBehavior,
+        CodeBlockKeys.type: codeNodeBehavior,
+      },
       documentRules: _markdownDocumentRules,
       commandShortcutEvents: [
         if (widget.onSend != null) ...[

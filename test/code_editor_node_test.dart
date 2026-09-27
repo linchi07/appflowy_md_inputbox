@@ -92,19 +92,78 @@ void main() {
     state.dispose();
   });
 
-  test('Down exits a final code node from its end', () async {
+  test('only the dedicated code shortcut creates a following paragraph',
+      () async {
     final node = codeBlockNode(code: 'one\ntwo', language: 'dart');
     final state =
         EditorState(document: Document(root: pageNode(children: [node])))
           ..nodeBehaviors = {CodeBlockKeys.type: codeNodeBehavior}
           ..selection = Selection.collapsed(Position(path: [0], offset: 4));
-    expect(codeArrowDownExitCommand.execute(state), KeyEventResult.ignored);
-    state.selection = Selection.collapsed(Position(path: [0], offset: 7));
-    expect(codeArrowDownExitCommand.execute(state), KeyEventResult.handled);
+    expect(
+      codeNodeBehavior.commandShortcuts
+          .any((shortcut) => shortcut.command == 'arrow down'),
+      isFalse,
+    );
+    expect(codeExitCommand.execute(state), KeyEventResult.handled);
     await Future<void>.delayed(Duration.zero);
     expect(state.document.root.children.last.type, ParagraphBlockKeys.type);
     expect(state.selection?.start.path, [1]);
     state.dispose();
+  });
+
+  test('pasting on a first-line fence keeps every code line together',
+      () async {
+    final controller = MDEditorController();
+    await controller.setText('```dart');
+    final state = controller.editorState;
+    state.selection = Selection.collapsed(Position(path: [0], offset: 7));
+    final pasted = List.generate(1500, (index) => 'value$index;').join('\n');
+    await state.pastePlainText(pasted);
+    await Future<void>.delayed(Duration.zero);
+    expect(state.document.root.children, hasLength(1));
+    final node = state.document.root.children.single;
+    expect(node.type, CodeBlockKeys.type);
+    expect(node.delta?.toPlainText(), pasted);
+    expect(state.text, '```dart\n$pasted');
+    controller.dispose();
+  });
+
+  test('a large first-line paste stays literal past the 64 KiB limit',
+      () async {
+    final controller = MDEditorController();
+    await controller.setText('```dart');
+    final state = controller.editorState;
+    state.selection = Selection.collapsed(Position(path: [0], offset: 7));
+    final pasted = List.generate(12000, (index) => 'value$index;').join('\n');
+    await state.pastePlainText(pasted);
+    await Future<void>.delayed(Duration.zero);
+    final node = state.document.root.children.single;
+    expect(node.type, ParagraphBlockKeys.type);
+    expect(node.delta?.toPlainText(), '```dart\n$pasted');
+    controller.dispose();
+  });
+
+  test('promoting a pasted fence preserves text after its closing line',
+      () async {
+    final controller = MDEditorController();
+    await controller.setText('```dart');
+    final state = controller.editorState;
+    state.selection = Selection.collapsed(Position(path: [0], offset: 7));
+    await state.pastePlainText('first\nsecond\n```\nafter');
+    await Future<void>.delayed(Duration.zero);
+    expect(state.document.root.children.map((node) => node.type), [
+      CodeBlockKeys.type,
+      ParagraphBlockKeys.type,
+    ]);
+    expect(
+      state.document.root.children.first.delta?.toPlainText(),
+      'first\nsecond',
+    );
+    expect(state.document.root.children.last.delta?.toPlainText(), 'after');
+    expect(state.text, '```dart\nfirst\nsecond\n```\nafter');
+    expect(state.selection?.start.path, [1]);
+    expect(state.selection?.start.offset, 5);
+    controller.dispose();
   });
 
   test('common languages pair brackets and indent by language', () {
@@ -257,6 +316,18 @@ void main() {
     expect(find.byType(CodeBlockComponentWidget), findsNothing);
     expect(find.byKey(markdownCodeBlockKey), findsOneWidget);
     expect(find.byKey(const ValueKey('copy-code-block')), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
+
+  testWidgets('code exit hint stays visible when a paragraph follows',
+      (tester) async {
+    final controller = MDEditorController();
+    await controller.setText('```dart\nfirst\nsecond\n```\nafter');
+    await tester
+        .pumpWidget(MaterialApp(home: MDEditor(controller: controller)));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('continue-after-code')), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     controller.dispose();
   });

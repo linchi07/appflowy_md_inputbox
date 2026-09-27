@@ -48,6 +48,7 @@ class _IndexedDocumentScrollbarState extends State<IndexedDocumentScrollbar> {
   double _grabOffset = 0;
   int? _pendingIndex;
   double _pendingIntraItemOffset = 0;
+  double _pendingViewportExtent = 0;
   bool _jumpScheduled = false;
   int _jumpRevision = 0;
   bool _estimatesDirty = true;
@@ -242,12 +243,21 @@ class _IndexedDocumentScrollbarState extends State<IndexedDocumentScrollbar> {
     final targetOffset =
         fraction * (metrics.totalExtent - metrics.viewportExtent);
     final index = _extents.indexAtOffset(targetOffset);
-    _scheduleJump(index, targetOffset - _extents.offsetOf(index));
+    _scheduleJump(
+      index,
+      targetOffset - _extents.offsetOf(index),
+      metrics.viewportExtent,
+    );
   }
 
-  void _scheduleJump(int index, double intraItemOffset) {
+  void _scheduleJump(
+    int index,
+    double intraItemOffset,
+    double viewportExtent,
+  ) {
     _pendingIndex = index.clamp(0, math.max(0, widget.itemIds.length - 1));
     _pendingIntraItemOffset = intraItemOffset;
+    _pendingViewportExtent = viewportExtent;
     ++_jumpRevision;
     if (_jumpScheduled) return;
     _jumpScheduled = true;
@@ -255,15 +265,26 @@ class _IndexedDocumentScrollbarState extends State<IndexedDocumentScrollbar> {
       _jumpScheduled = false;
       final target = _pendingIndex;
       final intraItemOffset = _pendingIntraItemOffset;
+      final viewportExtent = _pendingViewportExtent;
       final revision = _jumpRevision;
       _pendingIndex = null;
       if (!mounted || target == null) return;
       if (widget.itemScrollController.isAttached) {
+        final visibleTarget = widget.itemPositionsListener.itemPositions.value
+            .where((position) => position.index == target)
+            .firstOrNull;
+        if (visibleTarget != null && widget.scrollOffsetController != null) {
+          widget.scrollOffsetController!.jumpBy(
+            offset: visibleTarget.itemLeadingEdge * viewportExtent +
+                intraItemOffset,
+          );
+          return;
+        }
         widget.itemScrollController.jumpTo(index: target);
         if (intraItemOffset > 0 && widget.scrollOffsetController != null) {
           SchedulerBinding.instance.addPostFrameCallback((_) {
             if (mounted && revision == _jumpRevision) {
-              widget.scrollOffsetController!.jumpTo(offset: intraItemOffset);
+              widget.scrollOffsetController!.jumpBy(offset: intraItemOffset);
             }
           });
         }

@@ -314,6 +314,18 @@ class ScrollOffsetController {
   void jumpTo({required double offset}) =>
       _scrollableListState!.primary.scrollController.jumpTo(offset);
 
+  /// Immediately scroll relative to the current viewport without changing
+  /// the list's item anchor.
+  void jumpBy({required double offset}) {
+    final controller = _scrollableListState!.primary.scrollController;
+    if (!controller.hasClients) return;
+    final position = controller.position;
+    controller.jumpTo(
+      (controller.offset + offset)
+          .clamp(position.minScrollExtent, position.maxScrollExtent),
+    );
+  }
+
   _ScrollablePositionedListState? _scrollableListState;
 
   void _attach(_ScrollablePositionedListState scrollableListState) {

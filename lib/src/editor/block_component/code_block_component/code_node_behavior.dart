@@ -150,7 +150,6 @@ final codeNodeBehavior = NodeBehavior(
   characterShortcuts: [codeCharacterShortcut],
   commandShortcuts: [
     codeExitCommand,
-    codeArrowDownExitCommand,
     tabToAutoCompleteCommand,
     codeIndentCommand,
     codeOutdentCommand,
@@ -224,11 +223,9 @@ double estimateCodeBlockExtent(
     bodyHeight = rows * painter.height;
   }
   painter.dispose();
-  final showContinue =
-      state.editable && state.getNodeAtPath(node.path.next) == null;
   // Margin, padding, border and header: 12 + 20 + 2 + 6 + 48.
   return state.editorStyle.padding.vertical +
       88 +
       bodyHeight +
-      (showContinue ? 40 : 0);
+      (state.editable ? 40 : 0);
 }

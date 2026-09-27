@@ -4,6 +4,14 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 /// these events only while the selection is inside a node of the matching type.
 typedef NodeCompletionProvider = String? Function(EditorState state, Node node);
 typedef NodeTextSerializer = String Function(Node node);
+
+/// Return replacement text to paste literally, or null to use Markdown paste.
+typedef NodeLiteralPaste = String? Function(
+  EditorState state,
+  Node node,
+  Selection selection,
+  String text,
+);
 typedef NodeExtentEstimator = double? Function(
   EditorState state,
   Node node,
@@ -17,6 +25,7 @@ class NodeBehavior {
     this.completion,
     this.serialize,
     this.pasteAsPlainText = false,
+    this.literalPaste,
     this.isolateOnPaste = false,
     this.slashMenuEnabled = true,
     this.estimateExtent,
@@ -29,6 +38,10 @@ class NodeBehavior {
 
   /// Treat pasted text as literal content while editing this node.
   final bool pasteAsPlainText;
+
+  /// Lets a node keep a paste in its current text transaction when its syntax
+  /// is incomplete. The rule may also add delimiters needed by that syntax.
+  final NodeLiteralPaste? literalPaste;
 
   /// Preserve this node as a separate block when Markdown is pasted into text.
   final bool isolateOnPaste;

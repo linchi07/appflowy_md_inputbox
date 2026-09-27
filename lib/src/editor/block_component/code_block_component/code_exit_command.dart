@@ -34,25 +34,3 @@ final codeExitCommand = CommandShortcutEvent(
         : KeyEventResult.ignored;
   },
 );
-
-/// At the end of the final code node, Down creates a normal paragraph.
-final codeArrowDownExitCommand = CommandShortcutEvent(
-  key: 'leave final code block with arrow down',
-  command: 'arrow down',
-  getDescription: () => 'Continue writing after code',
-  handler: (editorState) {
-    final selection = editorState.selection;
-    if (selection == null || !selection.isCollapsed) {
-      return KeyEventResult.ignored;
-    }
-    final node = editorState.getNodeAtPath(selection.start.path);
-    if (node == null ||
-        editorState.getNodeAtPath(node.path.next) != null ||
-        selection.start.offset < (node.delta?.length ?? 0)) {
-      return KeyEventResult.ignored;
-    }
-    return insertParagraphAfterCode(editorState, node)
-        ? KeyEventResult.handled
-        : KeyEventResult.ignored;
-  },
-);

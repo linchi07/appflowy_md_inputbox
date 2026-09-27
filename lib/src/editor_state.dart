@@ -433,18 +433,24 @@ class EditorState {
     final literalNode = literalSelection == null || !literalSelection.isSingle
         ? null
         : getNodeAtPath(literalSelection.start.path);
-    if (behaviorFor(literalNode)?.pasteAsPlainText == true) {
+    final pasteBehavior = behaviorFor(literalNode);
+    final literalText = literalNode != null && literalSelection != null
+        ? pasteBehavior?.literalPaste
+            ?.call(this, literalNode, literalSelection, plainText)
+        : null;
+    if (pasteBehavior?.pasteAsPlainText == true || literalText != null) {
       final collapsed = await deleteSelectionIfNeeded();
       final currentNode =
           collapsed == null ? null : getNodeAtPath(collapsed.start.path);
       if (currentNode != null && currentNode.type == literalNode?.type) {
+        final insertedText = literalText ?? plainText;
         await apply(
           transaction
-            ..insertText(currentNode, collapsed!.start.offset, plainText)
+            ..insertText(currentNode, collapsed!.start.offset, insertedText)
             ..afterSelection = Selection.collapsed(
               Position(
                 path: currentNode.path,
-                offset: collapsed.start.offset + plainText.length,
+                offset: collapsed.start.offset + insertedText.length,
               ),
             ),
         );

@@ -7,11 +7,15 @@ class TextNodePromotion {
     required this.nodes,
     required this.caretNodeIndex,
     required this.caretOffset,
+    this.caretNodeIndexForOffset,
   });
 
   final List<Node> nodes;
   final int caretNodeIndex;
   final int Function(int oldOffset) caretOffset;
+
+  /// Use when one source paragraph promotes into multiple output nodes.
+  final int Function(int oldOffset)? caretNodeIndexForOffset;
 }
 
 typedef TextNodePromoter = TextNodePromotion? Function(Node node);
@@ -75,6 +79,10 @@ class TextNodePromotionRule extends DocumentRule {
     if (match == null) return;
     final (node, promotion, selection) = match;
     final path = node.path;
+    final caretNodeIndex =
+        promotion.caretNodeIndexForOffset?.call(selection.start.offset) ??
+            promotion.caretNodeIndex;
+    if (caretNodeIndex < 0 || caretNodeIndex >= promotion.nodes.length) return;
     await editorState.apply(
       editorState.transaction
         ..insertNodes(path, promotion.nodes)
@@ -83,7 +91,7 @@ class TextNodePromotionRule extends DocumentRule {
           Position(
             path: [
               ...path.take(path.length - 1),
-              path.last + promotion.caretNodeIndex,
+              path.last + caretNodeIndex,
             ],
             offset: promotion.caretOffset(selection.start.offset),
           ),

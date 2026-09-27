@@ -204,8 +204,7 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
             selectionColor: editorState.editorStyle.selectionColor,
             cursorWidth: editorState.editorStyle.cursorWidth,
           ),
-          if (editorState.editable &&
-              editorState.getNodeAtPath(node.path.next) == null)
+          if (editorState.editable)
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
@@ -217,7 +216,7 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
                   minimumSize: const Size(0, 24),
                 ),
                 child: Text(
-                  '↓ Continue writing',
+                  'Ctrl/Cmd+Enter · Continue writing',
                   style: TextStyle(
                     fontSize: 11,
                     color: colors.foreground.withValues(alpha: 0.6),

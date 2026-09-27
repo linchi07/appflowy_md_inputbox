@@ -4,6 +4,16 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+class _RecordingItemScrollController extends ItemScrollController {
+  int jumpCount = 0;
+
+  @override
+  void jumpTo({required int index, double alignment = 0}) {
+    jumpCount++;
+    super.jumpTo(index: index, alignment: alignment);
+  }
+}
+
 void main() {
   test('block extent index refines offsets with measured heights', () {
     final index = BlockExtentIndex(['a', 'b', 'c', 'd']);
@@ -54,7 +64,7 @@ void main() {
   });
 
   testWidgets('thumb can seek inside one tall block', (tester) async {
-    final itemController = ItemScrollController();
+    final itemController = _RecordingItemScrollController();
     final offsetController = ScrollOffsetController();
     final positions = ItemPositionsListener.create();
     const heights = [28.0, 1200.0, 28.0];
@@ -92,6 +102,31 @@ void main() {
       (position) => position.index == 1,
     );
     expect(code.itemLeadingEdge, lessThan(-0.2));
+
+    final jumpsBeforeDrag = itemController.jumpCount;
+    final drag = await tester.startGesture(const Offset(392, 150));
+    await drag.moveTo(const Offset(392, 180));
+    await tester.pumpAndSettle();
+    final leadingAfterFirstMove = positions.itemPositions.value
+        .singleWhere((position) => position.index == 1)
+        .itemLeadingEdge;
+    await drag.moveTo(const Offset(392, 210));
+    await tester.pumpAndSettle();
+    final leadingAfterSecondMove = positions.itemPositions.value
+        .singleWhere((position) => position.index == 1)
+        .itemLeadingEdge;
+    await drag.moveTo(const Offset(392, 240));
+    await tester.pumpAndSettle();
+    await drag.up();
+    await tester.pumpAndSettle();
+    expect(itemController.jumpCount, jumpsBeforeDrag);
+    expect(leadingAfterSecondMove, lessThan(leadingAfterFirstMove));
+    expect(
+      positions.itemPositions.value
+          .singleWhere((position) => position.index == 1)
+          .itemLeadingEdge,
+      lessThan(leadingAfterSecondMove),
+    );
   });
 
   testWidgets('thumb drag seeks directly to a distant item', (tester) async {

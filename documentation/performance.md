@@ -86,7 +86,8 @@ one jump per frame. Node behaviors can estimate heights before layout; the code
 node uses its text metrics and width to estimate wrapped lines. Visible blocks
 replace estimates with actual measurements, and thumb seeks can land within a
 tall block. Set `useIndexedScrollbar` to `false` to compare against the platform
-scrollbar when profiling.
+scrollbar when profiling. Dragging within a visible tall block uses a relative
+pixel seek, so its item anchor is not reset on each thumb update.
 
 When replacing a large document after construction, await parsing explicitly:
 
