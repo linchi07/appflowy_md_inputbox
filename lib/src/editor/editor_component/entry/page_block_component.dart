@@ -106,6 +106,7 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
         ...items.map((item) => item.id),
         if (footer != null) _footerItemId,
       ];
+      final itemsById = {for (final item in items) item.id: item};
 
       final list = ScrollablePositionedList.builder(
         shrinkWrap: scrollController.shrinkWrap,
@@ -161,7 +162,17 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
       return IndexedDocumentScrollbar(
         itemIds: itemIds,
         itemScrollController: scrollController.itemScrollController,
+        scrollOffsetController: scrollController.scrollOffsetController,
         itemPositionsListener: scrollController.itemPositionsListener,
+        estimateItemExtent: (id, width) {
+          final item = itemsById[id];
+          if (item == null) return null;
+          return editorState.behaviorFor(item)?.estimateExtent?.call(
+                editorState,
+                item,
+                width,
+              );
+        },
         color: editorState.editorStyle.colorScheme.mutedForeground
             .withValues(alpha: 0.65),
         child: list,

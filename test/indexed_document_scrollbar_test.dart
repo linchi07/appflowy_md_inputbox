@@ -40,6 +40,60 @@ void main() {
     expect(index.totalExtent, 56);
   });
 
+  test('estimated tall blocks contribute their height before layout', () {
+    final index = BlockExtentIndex(['before', 'code', 'after']);
+    index.updateEstimates([null, 1200, null]);
+    expect(index.totalExtent, 1256);
+    expect(index.indexAtOffset(628), 1);
+    expect(index.offsetOf(2), 1228);
+
+    index.record(1, 25000);
+    expect(index.totalExtent, 25056);
+    index.updateEstimates([null, 1300, null]);
+    expect(index.totalExtent, 1356);
+  });
+
+  testWidgets('thumb can seek inside one tall block', (tester) async {
+    final itemController = ItemScrollController();
+    final offsetController = ScrollOffsetController();
+    final positions = ItemPositionsListener.create();
+    const heights = [28.0, 1200.0, 28.0];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 400,
+            height: 300,
+            child: IndexedDocumentScrollbar(
+              itemIds: const ['before', 'code', 'after'],
+              itemScrollController: itemController,
+              scrollOffsetController: offsetController,
+              itemPositionsListener: positions,
+              estimateItemExtent: (id, _) => id == 'code' ? 1200 : 28,
+              child: ScrollablePositionedList.builder(
+                itemCount: heights.length,
+                itemScrollController: itemController,
+                scrollOffsetController: offsetController,
+                itemPositionsListener: positions,
+                itemBuilder: (_, index) => SizedBox(height: heights[index]),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(392, 150));
+    await tester.pumpAndSettle();
+
+    final code = positions.itemPositions.value.singleWhere(
+      (position) => position.index == 1,
+    );
+    expect(code.itemLeadingEdge, lessThan(-0.2));
+  });
+
   testWidgets('thumb drag seeks directly to a distant item', (tester) async {
     final itemController = ItemScrollController();
     final positions = ItemPositionsListener.create();

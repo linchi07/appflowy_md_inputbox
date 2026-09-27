@@ -134,6 +134,11 @@ final CharacterShortcutEvent markdownSlashCommand = CharacterShortcutEvent(
       return false;
     }
 
+    final node = editorState.getNodeAtPath(selection.start.path);
+    if (editorState.behaviorFor(node)?.slashMenuEnabled == false) {
+      return false;
+    }
+
     // Insert the slash character first (SelectionMenu service will handle deleting it)
     await editorState.insertTextAtPosition('/', position: selection.start);
 

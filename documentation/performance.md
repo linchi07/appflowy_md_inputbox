@@ -75,14 +75,18 @@ one and two viewport heights: a larger value makes scrolling smoother at the
 cost of more live widgets.
 
 `useIndexedScrollbar` is enabled by default on `MDEditor`. Its thumb maps the
-document percentage to a block index and calls `ItemScrollController.jumpTo`,
-instead of assigning a distant raw pixel offset to a variable-height sliver.
+document percentage to estimated block heights, jumps to the selected block,
+then seeks within it when needed.
+
 Heights of visited blocks are keyed by stable block IDs in a prefix-sum index,
 so inserting or deleting earlier blocks does not attach a measurement to the
 wrong block. The virtual list keeps the first surviving visible block at its
 screen position after structural edits. Thumb updates are coalesced to at most
-one jump per frame. Set `useIndexedScrollbar` to `false` to compare against the
-platform scrollbar when profiling.
+one jump per frame. Node behaviors can estimate heights before layout; the code
+node uses its text metrics and width to estimate wrapped lines. Visible blocks
+replace estimates with actual measurements, and thumb seeks can land within a
+tall block. Set `useIndexedScrollbar` to `false` to compare against the platform
+scrollbar when profiling.
 
 When replacing a large document after construction, await parsing explicitly:
 

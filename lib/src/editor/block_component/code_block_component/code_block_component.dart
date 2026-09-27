@@ -204,6 +204,27 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
             selectionColor: editorState.editorStyle.selectionColor,
             cursorWidth: editorState.editorStyle.cursorWidth,
           ),
+          if (editorState.editable &&
+              editorState.getNodeAtPath(node.path.next) == null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                key: const ValueKey('continue-after-code'),
+                onPressed: () => insertParagraphAfterCode(editorState, node),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: const Size(0, 24),
+                ),
+                child: Text(
+                  '↓ Continue writing',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: colors.foreground.withValues(alpha: 0.6),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

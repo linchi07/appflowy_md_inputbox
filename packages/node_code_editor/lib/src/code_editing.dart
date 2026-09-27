@@ -19,33 +19,131 @@ final Map<String, Mode> _modes = {
 };
 final Map<String, List<String>> _keywordCache = {};
 
-/// A ghost suffix from the current language's keywords or existing document
-/// words. The host renders it and accepts it on Tab.
+/// A ghost suffix from language keywords, then recently used code identifiers.
+/// The host renders it and accepts it on Tab.
 String? codeCompletionSuffix(String source, String language) {
   if (source.length > 64 * 1024 ||
       _insideStringOrComment(source, source.length, language)) {
     return null;
   }
   final id = language.toLowerCase();
+  if (id.isEmpty || id == 'plaintext') return null;
   final mode = _modes[id];
-  if (mode == null) return null;
   final prefix = RegExp(r'[A-Za-z_][A-Za-z_0-9]*$').stringMatch(source);
   if (prefix == null || prefix.length < 2) return null;
-  final candidates = <String>{..._keywordsFor(id, mode)};
-  for (final match in RegExp('[A-Za-z_][A-Za-z_0-9]*').allMatches(source)) {
-    if (match.end < source.length && match.group(0)!.length > prefix.length) {
-      candidates.add(match.group(0)!);
-    }
-  }
-  final matching = candidates
+  final keywords = (mode == null ? const <String>[] : _keywordsFor(id, mode))
       .where((word) => word.length > prefix.length && word.startsWith(prefix))
       .toList()
     ..sort((a, b) {
       final byLength = a.length.compareTo(b.length);
       return byLength == 0 ? a.compareTo(b) : byLength;
     });
-  return matching.isEmpty ? null : matching.first.substring(prefix.length);
+  if (keywords.isNotEmpty) return keywords.first.substring(prefix.length);
+
+  final identifiers = _recentIdentifiers(
+    source,
+    source.length - prefix.length,
+    id,
+  )
+      .entries
+      .where((entry) =>
+          entry.key.length > prefix.length && entry.key.startsWith(prefix))
+      .toList()
+    ..sort((a, b) => b.value.compareTo(a.value));
+  return identifiers.isEmpty
+      ? null
+      : identifiers.first.key.substring(prefix.length);
 }
+
+Map<String, int> _recentIdentifiers(String source, int end, String language) {
+  final found = <String, int>{};
+  final hashComments = const {
+    'python',
+    'py',
+    'yaml',
+    'yml',
+    'bash',
+    'sh',
+    'ruby',
+    'rb',
+  }.contains(language);
+  String? quote;
+  var escaped = false;
+  var lineComment = false;
+  var blockComment = false;
+  for (var i = 0; i < end;) {
+    final char = source[i];
+    final next = i + 1 < end ? source[i + 1] : '';
+    if (char == '\n') {
+      lineComment = false;
+      escaped = false;
+      i++;
+      continue;
+    }
+    if (lineComment) {
+      i++;
+      continue;
+    }
+    if (blockComment) {
+      if (char == '*' && next == '/') {
+        blockComment = false;
+        i++;
+      }
+      i++;
+      continue;
+    }
+    if (quote != null) {
+      if (escaped) {
+        escaped = false;
+      } else if (char == '\\') {
+        escaped = true;
+      } else if (char == quote) {
+        quote = null;
+      }
+      i++;
+      continue;
+    }
+    if (char == '/' && next == '/') {
+      lineComment = true;
+      i += 2;
+      continue;
+    }
+    if (char == '/' && next == '*') {
+      blockComment = true;
+      i += 2;
+      continue;
+    }
+    if (hashComments && char == '#') {
+      lineComment = true;
+      i++;
+      continue;
+    }
+    if (char == '"' || char == "'" || char == '`') {
+      quote = char;
+      i++;
+      continue;
+    }
+    final unit = source.codeUnitAt(i);
+    if (_identifierStart(unit)) {
+      final start = i++;
+      while (i < end && _identifierPart(source.codeUnitAt(i))) {
+        i++;
+      }
+      found[source.substring(start, i)] = start;
+      continue;
+    }
+    i++;
+  }
+  return found;
+}
+
+bool _identifierStart(int unit) =>
+    unit == 0x5f ||
+    (unit >= 0x41 && unit <= 0x5a) ||
+    (unit >= 0x61 && unit <= 0x7a);
+
+bool _identifierPart(int unit) =>
+    _identifierStart(unit) || (unit >= 0x30 && unit <= 0x39);
 
 List<String> _keywordsFor(String id, Mode mode) =>
     _keywordCache.putIfAbsent(id, () {

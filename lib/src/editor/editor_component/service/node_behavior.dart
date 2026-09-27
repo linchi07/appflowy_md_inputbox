@@ -4,6 +4,11 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 /// these events only while the selection is inside a node of the matching type.
 typedef NodeCompletionProvider = String? Function(EditorState state, Node node);
 typedef NodeTextSerializer = String Function(Node node);
+typedef NodeExtentEstimator = double? Function(
+  EditorState state,
+  Node node,
+  double availableWidth,
+);
 
 class NodeBehavior {
   const NodeBehavior({
@@ -13,6 +18,8 @@ class NodeBehavior {
     this.serialize,
     this.pasteAsPlainText = false,
     this.isolateOnPaste = false,
+    this.slashMenuEnabled = true,
+    this.estimateExtent,
   });
 
   final List<CharacterShortcutEvent> characterShortcuts;
@@ -25,4 +32,10 @@ class NodeBehavior {
 
   /// Preserve this node as a separate block when Markdown is pasted into text.
   final bool isolateOnPaste;
+
+  /// Whether slash shortcuts may open a block-command menu in this node.
+  final bool slashMenuEnabled;
+
+  /// Estimated full block height until its real layout is measured.
+  final NodeExtentEstimator? estimateExtent;
 }

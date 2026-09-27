@@ -5,6 +5,8 @@ import 'package:appflowy_editor/src/flutter/scrollable_positioned_list/scrollabl
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+typedef ItemExtentEstimator = double? Function(Object itemId, double width);
+
 /// A scrollbar for variable-height virtual documents that seeks by item index.
 ///
 /// A regular [Scrollbar] writes a distant pixel offset into the underlying
@@ -18,12 +20,16 @@ class IndexedDocumentScrollbar extends StatefulWidget {
     required this.itemScrollController,
     required this.itemPositionsListener,
     required this.child,
+    this.scrollOffsetController,
+    this.estimateItemExtent,
     this.color = const Color(0x667A7D85),
   });
 
   final List<Object> itemIds;
   final ItemScrollController itemScrollController;
+  final ScrollOffsetController? scrollOffsetController;
   final ItemPositionsListener itemPositionsListener;
+  final ItemExtentEstimator? estimateItemExtent;
   final Widget child;
   final Color color;
 
@@ -41,7 +47,11 @@ class _IndexedDocumentScrollbarState extends State<IndexedDocumentScrollbar> {
   double? _dragFraction;
   double _grabOffset = 0;
   int? _pendingIndex;
+  double _pendingIntraItemOffset = 0;
   bool _jumpScheduled = false;
+  int _jumpRevision = 0;
+  bool _estimatesDirty = true;
+  double? _estimateWidth;
   Timer? _settleTimer;
 
   @override
@@ -61,6 +71,7 @@ class _IndexedDocumentScrollbarState extends State<IndexedDocumentScrollbar> {
           .addListener(_onPositionsChanged);
     }
     _extents.updateItems(widget.itemIds);
+    _estimatesDirty = true;
   }
 
   @override
@@ -80,6 +91,21 @@ class _IndexedDocumentScrollbarState extends State<IndexedDocumentScrollbar> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final viewportExtent = constraints.maxHeight;
+        final width = constraints.maxWidth;
+        if (width.isFinite &&
+            width > 0 &&
+            (_estimatesDirty || _estimateWidth != width)) {
+          _extents.updateEstimates(
+            [
+              for (final id in widget.itemIds)
+                widget.estimateItemExtent?.call(id, width),
+            ],
+            invalidateMeasurements:
+                _estimateWidth != null && _estimateWidth != width,
+          );
+          _estimateWidth = width;
+          _estimatesDirty = false;
+        }
         final positions = widget.itemPositionsListener.itemPositions.value
             .toList(growable: false);
         if (viewportExtent.isFinite && viewportExtent > 0) {
@@ -215,20 +241,32 @@ class _IndexedDocumentScrollbarState extends State<IndexedDocumentScrollbar> {
 
     final targetOffset =
         fraction * (metrics.totalExtent - metrics.viewportExtent);
-    _scheduleJump(_extents.indexAtOffset(targetOffset));
+    final index = _extents.indexAtOffset(targetOffset);
+    _scheduleJump(index, targetOffset - _extents.offsetOf(index));
   }
 
-  void _scheduleJump(int index) {
+  void _scheduleJump(int index, double intraItemOffset) {
     _pendingIndex = index.clamp(0, math.max(0, widget.itemIds.length - 1));
+    _pendingIntraItemOffset = intraItemOffset;
+    ++_jumpRevision;
     if (_jumpScheduled) return;
     _jumpScheduled = true;
     SchedulerBinding.instance.addPostFrameCallback((_) {
       _jumpScheduled = false;
       final target = _pendingIndex;
+      final intraItemOffset = _pendingIntraItemOffset;
+      final revision = _jumpRevision;
       _pendingIndex = null;
       if (!mounted || target == null) return;
       if (widget.itemScrollController.isAttached) {
         widget.itemScrollController.jumpTo(index: target);
+        if (intraItemOffset > 0 && widget.scrollOffsetController != null) {
+          SchedulerBinding.instance.addPostFrameCallback((_) {
+            if (mounted && revision == _jumpRevision) {
+              widget.scrollOffsetController!.jumpTo(offset: intraItemOffset);
+            }
+          });
+        }
       }
     });
   }
@@ -268,6 +306,7 @@ class BlockExtentIndex {
   List<Object> _itemIds = const [];
   List<double> _tree = const [];
   final Map<Object, double> _measured = {};
+  final Map<Object, double> _estimated = {};
 
   double get totalExtent => offsetOf(_itemIds.length);
 
@@ -286,9 +325,41 @@ class BlockExtentIndex {
     _itemIds = List<Object>.of(itemIds, growable: false);
     final liveIds = _itemIds.toSet();
     _measured.removeWhere((id, _) => !liveIds.contains(id));
+    _estimated.removeWhere((id, _) => !liveIds.contains(id));
+    _rebuildTree();
+  }
+
+  void updateEstimates(
+    List<double?> extents, {
+    bool invalidateMeasurements = false,
+  }) {
+    assert(extents.length == _itemIds.length);
+    if (invalidateMeasurements) _measured.clear();
+    var changed = invalidateMeasurements;
+    for (var i = 0; i < _itemIds.length; i++) {
+      final id = _itemIds[i];
+      final extent = extents[i];
+      final next = extent != null && extent.isFinite && extent > 0
+          ? extent
+          : _estimatedExtent;
+      if (_estimated[id] == next) continue;
+      _estimated[id] = next;
+      _measured.remove(id);
+      changed = true;
+    }
+    if (changed) _rebuildTree();
+  }
+
+  double extentAt(int index) {
+    if (index < 0 || index >= _itemIds.length) return 0;
+    final id = _itemIds[index];
+    return _measured[id] ?? _estimated[id] ?? _estimatedExtent;
+  }
+
+  void _rebuildTree() {
     _tree = List<double>.filled(_itemIds.length + 1, 0);
     for (var i = 1; i < _tree.length; i++) {
-      _tree[i] += _measured[_itemIds[i - 1]] ?? _estimatedExtent;
+      _tree[i] += extentAt(i - 1);
       final parent = i + (i & -i);
       if (parent < _tree.length) _tree[parent] += _tree[i];
     }
@@ -301,9 +372,9 @@ class BlockExtentIndex {
         extent <= 0) {
       return;
     }
-    final normalized = extent.clamp(1.0, 10000.0);
+    final normalized = extent;
     final id = _itemIds[index];
-    final oldExtent = _measured[id] ?? _estimatedExtent;
+    final oldExtent = extentAt(index);
     if ((oldExtent - normalized).abs() < 0.5) return;
     _measured[id] = normalized;
     _add(index, normalized - oldExtent);

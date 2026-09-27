@@ -27,8 +27,10 @@ void main() {
 
   test('curated grammars remain available with stable offsets', () {
     expect(CodeHighlighter.supportedLanguages.length, 47);
-    expect(CodeHighlighter.supportedLanguages,
-        containsAll(['dart', 'python', 'json', 'yaml', 'cpp']));
+    expect(
+      CodeHighlighter.supportedLanguages,
+      containsAll(['dart', 'python', 'json', 'yaml', 'cpp']),
+    );
     expect(CodeHighlighter.supportedLanguages, isNot(contains('solidity')));
     for (final (language, source) in [
       ('go', 'package main\nfunc main() {}'),
@@ -63,6 +65,46 @@ void main() {
     expect(codeCompletionSuffix('"cal', 'dart'), isNull);
     expect(codeEditForTab('', 0, 'dart').text, '    ');
     expect(codeEditForTab('    x', 5, 'dart', outdent: true).deleteLength, 4);
+    expect(codeCompletionSuffix('clampValue\ncla', 'dart'), 'ss');
+    expect(
+      codeCompletionSuffix(
+        '// customerName\n"customerAge"\ncustomerCount = 2\ncus',
+        'dart',
+      ),
+      'tomerCount',
+    );
+    expect(
+      codeCompletionSuffix('customerTotal = 1\ncus', 'unlisted_language'),
+      'tomerTotal',
+    );
+  });
+
+  test('code disables block slash menus without altering comment text',
+      () async {
+    final node = codeBlockNode(code: '// note', language: 'dart');
+    final state =
+        EditorState(document: Document(root: pageNode(children: [node])))
+          ..nodeBehaviors = {CodeBlockKeys.type: codeNodeBehavior}
+          ..selection = Selection.collapsed(Position(path: [0], offset: 2));
+    expect(await markdownSlashCommand.handler(state), isFalse);
+    expect(await slashCommand.handler(state), isFalse);
+    expect(node.delta?.toPlainText(), '// note');
+    state.dispose();
+  });
+
+  test('Down exits a final code node from its end', () async {
+    final node = codeBlockNode(code: 'one\ntwo', language: 'dart');
+    final state =
+        EditorState(document: Document(root: pageNode(children: [node])))
+          ..nodeBehaviors = {CodeBlockKeys.type: codeNodeBehavior}
+          ..selection = Selection.collapsed(Position(path: [0], offset: 4));
+    expect(codeArrowDownExitCommand.execute(state), KeyEventResult.ignored);
+    state.selection = Selection.collapsed(Position(path: [0], offset: 7));
+    expect(codeArrowDownExitCommand.execute(state), KeyEventResult.handled);
+    await Future<void>.delayed(Duration.zero);
+    expect(state.document.root.children.last.type, ParagraphBlockKeys.type);
+    expect(state.selection?.start.path, [1]);
+    state.dispose();
   });
 
   test('common languages pair brackets and indent by language', () {
@@ -383,6 +425,61 @@ void main() {
       isTrue,
     );
     expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
+
+  testWidgets('last code block offers a way back to Markdown', (tester) async {
+    final controller = MDEditorController();
+    await controller.setText('```dart\none\ntwo\n```');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MDEditor(controller: controller, maxHeight: 300),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('continue-after-code')), findsOneWidget);
+    final node = controller.editorState.document.root.children.single;
+    final estimate = estimateCodeBlockExtent(controller.editorState, node, 800);
+    final actual =
+        tester.getSize(find.byType(CodeBlockComponentWidget)).height +
+            controller.editorState.editorStyle.padding.vertical;
+    expect(estimate, closeTo(actual, 15));
+
+    await tester.tap(find.byKey(const ValueKey('continue-after-code')));
+    await tester.pumpAndSettle();
+    expect(
+      controller.editorState.document.root.children.last.type,
+      ParagraphBlockKeys.type,
+    );
+    expect(controller.editorState.selection?.start.path, [1]);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
+
+  testWidgets('code height estimate includes wrapped lines', (tester) async {
+    final controller = MDEditorController();
+    await controller.setText('```dart\n${'variableName' * 12}\nnext\n```');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 400,
+            height: 500,
+            child: MDEditor(controller: controller, maxHeight: 500),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final node = controller.editorState.document.root.children.single;
+    final estimate = estimateCodeBlockExtent(controller.editorState, node, 400);
+    final actual =
+        tester.getSize(find.byType(CodeBlockComponentWidget)).height +
+            controller.editorState.editorStyle.padding.vertical;
+    expect(estimate, closeTo(actual, 15));
     await tester.pumpWidget(const SizedBox.shrink());
     controller.dispose();
   });

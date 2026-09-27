@@ -68,6 +68,13 @@ Future<bool> _showSlashMenu(
     return false;
   }
 
+  final node = editorState.getNodeAtPath(selection.start.path);
+  if (node == null ||
+      editorState.behaviorFor(node)?.slashMenuEnabled == false ||
+      !_isSupportSlashMenuNode(node, supportSlashMenuNodeTypes)) {
+    return false;
+  }
+
   // delete the selection
   if (!selection.isCollapsed) {
     await editorState.deleteSelection(selection);
@@ -78,14 +85,6 @@ Future<bool> _showSlashMenu(
     assert(false, 'the selection should be collapsed');
 
     return true;
-  }
-
-  final node = editorState.getNodeAtPath(selection.start.path);
-
-  // only enable in white-list nodes
-  if (node == null ||
-      !_isSupportSlashMenuNode(node, supportSlashMenuNodeTypes)) {
-    return false;
   }
 
   // insert the slash character
