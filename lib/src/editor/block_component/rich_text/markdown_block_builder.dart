@@ -4,7 +4,6 @@ import 'markdown_block_syntax.dart';
 
 final RegExp _orderedListPattern = RegExp(r'^\d+\. ');
 
-const markdownCodeBlockKey = ValueKey('markdown-code-block');
 const markdownDisplayMathBlockKey = ValueKey('markdown-display-math-block');
 
 class MarkdownBlockComponentBuilder extends BlockComponentBuilder {
@@ -103,9 +102,9 @@ class _MarkdownBlockComponentWidgetState
   }) {
     final text = node.delta?.toPlainText() ?? '';
     final fencedBlock =
-        text.length <= 64 * 1024 ? parseMarkdownFencedBlock(text) : null;
-    final isCodeBlock = fencedBlock?.kind == MarkdownFencedBlockKind.code &&
-        text.contains('\n');
+        text.length <= 64 * 1024 && text.trimLeft().startsWith(r'$$')
+            ? parseMarkdownFencedBlock(text)
+            : null;
     final isDisplayMathBlock =
         fencedBlock?.kind == MarkdownFencedBlockKind.displayMath;
     bool isQuote = fencedBlock == null && text.startsWith('> ');
@@ -149,21 +148,7 @@ class _MarkdownBlockComponentWidgetState
       children: [richText],
     );
 
-    final colors = editorState.editorStyle.colorScheme;
-    if (isCodeBlock) {
-      child = Container(
-        key: markdownCodeBlockKey,
-        width: double.infinity,
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: colors.subtleBackground,
-          border: Border.all(color: colors.border),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: child,
-      );
-    } else if (isDisplayMathBlock) {
+    if (isDisplayMathBlock) {
       child = Container(
         key: markdownDisplayMathBlockKey,
         width: double.infinity,

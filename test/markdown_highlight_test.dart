@@ -119,7 +119,7 @@ void main() {
     expect(result.toPlainText(), '```\n');
   });
 
-  testWidgets('short fenced blocks still get code decoration', (tester) async {
+  testWidgets('fenced source is not treated as inline code', (tester) async {
     clearMarkdownFencedBlockCache();
     const source = '```\ncode\n```';
     final result = await _decorate(
@@ -128,9 +128,15 @@ void main() {
       decorationLimit: source.length,
     );
 
-    expect(markdownFencedBlockParseCount, 1);
-    expect(result.style?.fontFamily, 'monospace');
+    expect(markdownFencedBlockParseCount, 0);
+    expect(result.children, isNull);
     expect(result.toPlainText(), source);
+  });
+
+  testWidgets('single-backtick inline code remains decorated', (tester) async {
+    final result = await _decorate(tester, 'before `code` after');
+    expect(result.children, isNotNull);
+    expect(result.toPlainText(), 'before `code` after');
   });
 }
 

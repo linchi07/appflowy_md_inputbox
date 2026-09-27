@@ -78,7 +78,7 @@ List<Node> parseMarkdownToNodes(
       final codeBlock = isCodeFence && blockSource.contains('\n')
           ? parseMarkdownFencedBlock(blockSource)
           : null;
-      if (codeBlock != null && codeBlock.hasMultipleCodeLines) {
+      if (codeBlock != null) {
         nodes.add(
           codeBlockNode(
             code: blockSource.substring(

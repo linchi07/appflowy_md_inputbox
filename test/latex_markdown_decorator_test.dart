@@ -160,8 +160,9 @@ $$''';
     });
   });
 
-  group('Fenced code decoration', () {
-    testWidgets('keeps one source offset per character', (tester) async {
+  group('Fenced code paragraph fallback', () {
+    testWidgets('keeps source literal when no code node is registered',
+        (tester) async {
       const source = '```dart\nfinal answer = 42;\n```';
       final result = await decorate(
         tester,
@@ -171,13 +172,8 @@ $$''';
       );
 
       expect(widgetSpans(result), isEmpty);
-      expect(result.toPlainText(), hasLength(source.length));
-      expect(
-        result.children!
-            .whereType<TextSpan>()
-            .any((span) => span.style?.fontFamily == 'monospace'),
-        isTrue,
-      );
+      expect(result.children, isNull);
+      expect(result.toPlainText(), source);
     });
   });
 }

@@ -292,30 +292,31 @@ void main() {
     expect(nodes.single.delta?.toPlainText(), '```json');
   });
 
-  test('a fenced block with one content line stays Markdown', () async {
+  test('a fenced block with one content line becomes a code node', () async {
     const source = '```dart\nprint(1);\n```';
     final nodes = parseMarkdownToNodes(source);
-    expect(nodes.single.type, ParagraphBlockKeys.type);
-    expect(nodes.single.delta?.toPlainText(), source);
+    expect(nodes.single.type, CodeBlockKeys.type);
+    expect(nodes.single.delta?.toPlainText(), 'print(1);');
     final controller = MDEditorController();
     await controller.setText(source);
     expect(
       controller.editorState.document.root.children.single.type,
-      ParagraphBlockKeys.type,
+      CodeBlockKeys.type,
     );
+    expect(controller.text, source);
     controller.dispose();
   });
 
-  testWidgets('one-line fence keeps Markdown renderer and has no copy control',
+  testWidgets('one-line fence uses code editor and offers copy',
       (tester) async {
     final controller = MDEditorController();
     await controller.setText('```dart\nprint(1);\n```');
     await tester
         .pumpWidget(MaterialApp(home: MDEditor(controller: controller)));
     await tester.pump();
-    expect(find.byType(CodeBlockComponentWidget), findsNothing);
+    expect(find.byType(CodeBlockComponentWidget), findsOneWidget);
     expect(find.byKey(markdownCodeBlockKey), findsOneWidget);
-    expect(find.byKey(const ValueKey('copy-code-block')), findsNothing);
+    expect(find.byKey(const ValueKey('copy-code-block')), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     controller.dispose();
   });
@@ -332,22 +333,41 @@ void main() {
     controller.dispose();
   });
 
-  test('adding a second fenced content line promotes the paragraph', () async {
+  test('the opening fence promotes as soon as Enter adds a newline', () async {
     final controller = MDEditorController();
-    await controller.setText('```dart\nprint(1);');
+    await controller.setText('```dart');
     final state = controller.editorState;
     final paragraph = state.document.root.children.single;
     expect(paragraph.type, ParagraphBlockKeys.type);
     final offset = paragraph.delta!.length;
     await state.apply(
       state.transaction
-        ..insertText(paragraph, offset, '\nprint(2);')
+        ..insertText(paragraph, offset, '\n')
         ..afterSelection = Selection.collapsed(
-          Position(path: [0], offset: offset + 10),
+          Position(path: [0], offset: offset + 1),
         ),
     );
     await Future<void>.delayed(Duration.zero);
     expect(state.document.root.children.single.type, CodeBlockKeys.type);
+    expect(state.document.root.children.single.delta?.toPlainText(), '');
+    expect(state.selection?.start.offset, 0);
+    controller.dispose();
+  });
+
+  test('pasting one code line after an opening fence creates a code node',
+      () async {
+    final controller = MDEditorController();
+    await controller.setText('```dart');
+    final state = controller.editorState;
+    state.selection = Selection.collapsed(Position(path: [0], offset: 7));
+    await state.pastePlainText('print(1);');
+    await Future<void>.delayed(Duration.zero);
+    expect(state.document.root.children.single.type, CodeBlockKeys.type);
+    expect(
+      state.document.root.children.single.delta?.toPlainText(),
+      'print(1);',
+    );
+    expect(state.text, '```dart\nprint(1);');
     controller.dispose();
   });
 
@@ -574,6 +594,21 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('copy-code-block')));
     await tester.pump();
     expect(copied, 'const a = 1;\nconst b = 2;');
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('copy-code-block')),
+        matching: find.byIcon(Icons.check),
+      ),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(milliseconds: 2100));
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('copy-code-block')),
+        matching: find.byIcon(Icons.copy),
+      ),
+      findsOneWidget,
+    );
     await tester.pumpWidget(const SizedBox.shrink());
     tester.binding.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, null);

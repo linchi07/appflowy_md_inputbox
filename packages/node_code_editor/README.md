@@ -29,9 +29,11 @@ to turn the complete fenced paragraph into a code node after the text
 transaction, preserving any text after its closing fence.
 `MDEditor` supplies the builder, behavior, and rule; other hosts can choose
 their own integration while reusing this package's editing and highlighting
-logic. A fenced block with only one content line remains a Markdown paragraph;
-two or more content lines become a code node. The code header has a searchable
-language picker and a small icon for copying the code without its fences. The
+logic. A fenced opening line becomes a code node as soon as it gains a newline,
+including when its body is empty or has only one line. A lone opening line
+stays editable as plain text while the language is typed. The code header has
+a searchable language picker and a small icon for copying the code without its
+fences; the icon briefly changes to a check after copying. The
 host disables block slash commands inside code. Ctrl/Cmd+Enter creates a normal
 paragraph after the code node; a persistent button does the same. The code
 node provides an offscreen height estimate to the host's

@@ -24,7 +24,7 @@ final codeFencePromotionRule = TextNodePromotionRule(
     final source = node.delta?.toPlainText() ?? '';
     if (source.length > 64 * 1024 || !source.contains('\n')) return null;
     final fence = parseMarkdownFencedBlock(source);
-    if (fence?.hasMultipleCodeLines != true) return null;
+    if (fence?.kind != MarkdownFencedBlockKind.code) return null;
     final body = source.substring(fence!.openingEnd, fence.contentEnd);
     final closingLineEnd = fence.closingStart == null
         ? -1

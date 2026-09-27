@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +13,10 @@ class CodeBlockKeys {
   static const openingFence = 'openingFence';
   static const closed = 'closed';
 }
+
+const codeBlockContainerKey = ValueKey('markdown-code-block');
+// Keep the previous public key name for existing consumers.
+const markdownCodeBlockKey = codeBlockContainerKey;
 
 /// The delta contains editable code only; fences remain structural metadata.
 Node codeBlockNode({
@@ -74,6 +80,8 @@ class CodeBlockComponentWidget extends BlockComponentStatefulWidget {
 class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
     with SelectableMixin, DefaultSelectableMixin, BlockComponentConfigurable {
   final _highlighter = CodeHighlighter();
+  Timer? _copyFeedbackTimer;
+  String? _copiedSource;
   @override
   final forwardKey = GlobalKey(debugLabel: 'code_rich_text');
   @override
@@ -85,6 +93,22 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
   @override
   Node get node => widget.node;
   late final EditorState editorState = context.read<EditorState>();
+
+  @override
+  void dispose() {
+    _copyFeedbackTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _copyCode(String source) async {
+    await Clipboard.setData(ClipboardData(text: source));
+    if (!mounted) return;
+    _copyFeedbackTimer?.cancel();
+    setState(() => _copiedSource = source);
+    _copyFeedbackTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _copiedSource = null);
+    });
+  }
 
   Future<void> _chooseLanguage() async {
     final language = await showSearch<String>(
@@ -113,13 +137,14 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
     final colors = editorState.editorStyle.colorScheme;
     final language = node.attributes[CodeBlockKeys.language] as String? ?? '';
     final source = node.delta?.toPlainText() ?? '';
+    final copied = _copiedSource == source;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final codeStyle = TextStyle(
       fontFamily: 'monospace',
       height: 1.45,
     );
     Widget child = Container(
-      key: markdownCodeBlockKey,
+      key: codeBlockContainerKey,
       width: double.infinity,
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -159,15 +184,14 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
                 ),
                 IconButton(
                   key: const ValueKey('copy-code-block'),
-                  tooltip: 'Copy code',
-                  icon: const Icon(Icons.copy, size: 15),
+                  tooltip: copied ? 'Copied' : 'Copy code',
+                  icon: Icon(copied ? Icons.check : Icons.copy, size: 15),
                   iconSize: 15,
                   constraints:
                       const BoxConstraints.tightFor(width: 28, height: 28),
                   padding: EdgeInsets.zero,
                   visualDensity: VisualDensity.compact,
-                  onPressed: () =>
-                      Clipboard.setData(ClipboardData(text: source)),
+                  onPressed: () => _copyCode(source),
                 ),
               ],
             ),
