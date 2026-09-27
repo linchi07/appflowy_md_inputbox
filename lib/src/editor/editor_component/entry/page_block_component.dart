@@ -38,6 +38,7 @@ class PageBlockComponentBuilder extends BlockComponentBuilder {
 class PageBlockComponent extends BlockComponentStatelessWidget {
   static final Object _headerItemId = Object();
   static final Object _footerItemId = Object();
+  static const _caretScrollPadding = EdgeInsets.only(bottom: 32);
 
   const PageBlockComponent({
     super.key,
@@ -63,6 +64,7 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
 
     if (scrollController == null || scrollController.shrinkWrap) {
       return SingleChildScrollView(
+        padding: _caretScrollPadding,
         child: Builder(
           builder: (context) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -110,6 +112,7 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
       final itemsById = {for (final item in items) item.id: item};
 
       final list = ScrollablePositionedList.builder(
+        padding: _caretScrollPadding,
         shrinkWrap: scrollController.shrinkWrap,
         scrollDirection: Axis.vertical,
         itemCount: items.length + extentCount,

@@ -90,15 +90,20 @@ class _ScrollServiceWidgetState extends State<ScrollServiceWidget>
   void _onSelectionChanged() {
     // should auto scroll after the cursor or selection updated.
     final selection = editorState.selection;
-    if (selection == null ||
+    if (editorState.disableAutoScroll ||
+        selection == null ||
         [SelectionUpdateReason.selectAll]
             .contains(editorState.selectionUpdateReason)) {
       return;
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || editorState.selection != selection) {
+        return;
+      }
       final selectionRects = editorState.selectionRects();
       if (selectionRects.isEmpty) {
+        _revealUnlaidSelection(selection);
         return;
       }
 
@@ -151,6 +156,7 @@ class _ScrollServiceWidgetState extends State<ScrollServiceWidget>
       }
 
       lastSelection = selection;
+      final revealFirstRect = targetRect == selectionRects.first;
 
       final endTouchPoint = targetRect.centerRight;
 
@@ -179,6 +185,15 @@ class _ScrollServiceWidgetState extends State<ScrollServiceWidget>
           if (_forwardKey.currentContext == null) {
             return;
           }
+          if (!isDragOperation) {
+            // Keyboard appearance can change the viewport after the first
+            // frame, so measure the caret again at the time of the scroll.
+            final rects = editorState.selectionRects();
+            if (rects.isNotEmpty) {
+              _revealRect(revealFirstRect ? rects.first : rects.last);
+            }
+            return;
+          }
           // Mobile needs to continuously update scroll position/direction during drag
           // Don't skip even if already scrolling, because direction may have changed
           startAutoScroll(
@@ -195,12 +210,81 @@ class _ScrollServiceWidgetState extends State<ScrollServiceWidget>
         }
 
         final bool isDragOperation = dragMode != null;
+        if (!isDragOperation) {
+          _revealRect(targetRect);
+          return;
+        }
         startAutoScroll(
           endTouchPoint,
           edgeOffset: isDragOperation ? editorState.autoScrollEdgeOffset : 24.0,
           direction: direction,
           duration: Duration.zero,
         );
+      }
+    });
+  }
+
+  void _revealRect(Rect caretRect) {
+    final scrollable = editorState.scrollableState;
+    final renderObject = scrollable?.context.findRenderObject();
+    if (scrollable == null ||
+        renderObject is! RenderBox ||
+        !renderObject.hasSize ||
+        !scrollable.position.hasContentDimensions) {
+      return;
+    }
+
+    final viewport =
+        renderObject.localToGlobal(Offset.zero) & renderObject.size;
+    final margin = ((viewport.height - caretRect.height) / 2).clamp(0.0, 24.0);
+    final top = viewport.top + margin;
+    final bottom = viewport.bottom - margin;
+    final delta = caretRect.top < top
+        ? caretRect.top - top
+        : caretRect.bottom > bottom
+            ? caretRect.bottom - bottom
+            : 0.0;
+    if (delta == 0) {
+      return;
+    }
+
+    final position = scrollable.position;
+    final target = (position.pixels + delta).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    if (target != position.pixels) {
+      position.jumpTo(target);
+    }
+  }
+
+  void _revealUnlaidSelection(Selection selection, {int retries = 2}) {
+    if (retries == 0 || !mounted || editorState.selection != selection) {
+      return;
+    }
+
+    final path = selection.end.path;
+    if (path.isNotEmpty && !widget.editorScrollController.shrinkWrap) {
+      final (first, last) =
+          widget.editorScrollController.visibleRangeNotifier.value;
+      final index = path.first;
+      if ((index < first || index > last) &&
+          widget.editorScrollController.itemScrollController.isAttached) {
+        widget.editorScrollController.itemScrollController.jumpTo(
+          index: index + (editorState.showHeader ? 1 : 0),
+        );
+      }
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || editorState.selection != selection) {
+        return;
+      }
+      final rects = editorState.selectionRects();
+      if (rects.isEmpty) {
+        _revealUnlaidSelection(selection, retries: retries - 1);
+      } else {
+        _revealRect(rects.last);
       }
     });
   }
