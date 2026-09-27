@@ -8,7 +8,7 @@ final codeFencePromotionRule = TextNodePromotionRule(
     final source = node.delta?.toPlainText() ?? '';
     if (source.length > 64 * 1024 || !source.contains('\n')) return null;
     final fence = parseMarkdownFencedBlock(source);
-    if (fence?.kind != MarkdownFencedBlockKind.code) return null;
+    if (fence?.hasMultipleCodeLines != true) return null;
     final body = source.substring(fence!.openingEnd, fence.contentEnd);
     return TextNodePromotion(
       nodes: [

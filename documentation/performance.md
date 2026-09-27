@@ -127,11 +127,11 @@ disables these safeguards and should only be done after profiling the target
 devices.
 
 The decorator checks the paragraph limit before parsing display math. Code
-fences at or below 64 KiB become independent code nodes with a small lexer;
-larger input skips code fence recognition and remains ordinary editable text.
-The code lexer also stops highlighting a node beyond 64 KiB. Its rules live in
-`packages/node_code_editor` and add no `highlight` or `flutter_highlight`
-dependency.
+fences with at least two content lines at or below 64 KiB become independent
+code nodes; one-line fenced blocks remain Markdown paragraphs. Larger input
+skips code fence recognition and remains ordinary editable text. The code
+highlighter stops parsing a node beyond 64 KiB. Its rules use the Dart
+`highlight` package's language grammars without `flutter_highlight` widgets.
 
 Selection-only rebuilds reuse a 256-entry lexical cache capped at 1 MiB of
 source. The cache is safe to share across editors because entries contain only
@@ -149,8 +149,9 @@ for the recommended dependency-free path and the `Node` removal assessment.
 
 ### Fenced code and display math
 
-Fenced code at or below 64 KiB becomes an independent editable node. Display
-math remains in a text node. Fence detection is linear, uses an LRU capped at
+Fenced code with at least two content lines at or below 64 KiB becomes an
+independent editable node. Display math remains in a text node. Fence detection
+is linear, uses an LRU capped at
 128 entries and 1 MiB of source, and ordinary paragraphs take a constant-time
 prefix fast path. Code nodes bypass the general Markdown regexp scanner.
 

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:highlight/highlight.dart' as hl;
+import 'package:highlight/languages/all.dart' as languages;
 
 enum CodeTokenKind { keyword, string, number, comment, key }
 
@@ -9,9 +11,14 @@ class CodeToken {
   final CodeTokenKind kind;
 }
 
-/// A compact lexer for common fenced languages. It preserves every source
-/// character and needs no highlight/fl_highlight language registry.
+/// Every grammar shipped by `highlight`, without the flutter_highlight widget.
+/// Unknown language IDs fall back to a small, language-neutral lexer.
 class CodeHighlighter {
+  static final List<String> supportedLanguages = languages.allLanguages.keys
+      .where((id) => id != 'plaintext')
+      .toList()
+    ..sort();
+
   static final RegExp _lexicalPattern = RegExp(
     r'"(?:\\.|[^"\\])*"|\x27(?:\\.|[^\x27\\])*\x27|//[^\n]*|#[^\n]*|\b(?:[0-9]+(?:\.[0-9]+)?)\b|\b[A-Za-z_][A-Za-z_0-9]*\b',
   );
@@ -26,6 +33,50 @@ class CodeHighlighter {
     // Keep the same per-node budget as Markdown decoration.
     if (source.length > 64 * 1024) return _tokens = const [];
     final id = language.toLowerCase();
+    if (id.isEmpty || id == 'plaintext') return _tokens = const [];
+    if (id.isNotEmpty) {
+      try {
+        final nodes = hl.highlight.parse(source, language: id).nodes;
+        if (nodes != null) {
+          final tokens = <CodeToken>[];
+          final reconstructed = StringBuffer();
+          var offset = 0;
+
+          void visit(hl.Node node, String? inheritedClass) {
+            final className = node.className ?? inheritedClass;
+            final value = node.value;
+            if (value != null) {
+              final start = offset;
+              reconstructed.write(value);
+              offset += value.length;
+              final kind = _kindForClass(className);
+              if (kind != null && value.isNotEmpty) {
+                tokens.add(CodeToken(start, offset, kind));
+              }
+            } else {
+              for (final child in node.children ?? const <hl.Node>[]) {
+                visit(child, className);
+              }
+            }
+          }
+
+          for (final node in nodes) {
+            visit(node, null);
+          }
+          // Some grammars can stop at illegal input. Never return offsets
+          // that do not reconstruct the original editable source exactly.
+          if (reconstructed.toString() == source) {
+            return _tokens = tokens;
+          }
+        }
+      } catch (_) {
+        // Malformed language definitions or incomplete code stay editable.
+      }
+    }
+    return _tokens = _tokenizeFallback(source, id);
+  }
+
+  List<CodeToken> _tokenizeFallback(String source, String id) {
     final json = id == 'json' || id == 'jsonc';
     final yaml = id == 'yaml' || id == 'yml';
     final hashComments =
@@ -57,7 +108,7 @@ class CodeHighlighter {
       }
       if (kind != null) tokens.add(CodeToken(match.start, match.end, kind));
     }
-    return _tokens = tokens;
+    return tokens;
   }
 
   TextSpan spanForSegment({
@@ -92,6 +143,27 @@ class CodeHighlighter {
     }
     return TextSpan(style: style, children: children);
   }
+}
+
+CodeTokenKind? _kindForClass(String? name) {
+  if (name == null) return null;
+  final kind = name.split(' ').first;
+  if (kind.contains('comment') || kind == 'doctag') {
+    return CodeTokenKind.comment;
+  }
+  if (kind.contains('string') || kind == 'regexp') {
+    return CodeTokenKind.string;
+  }
+  if (kind == 'number') return CodeTokenKind.number;
+  if (kind == 'attr' || kind == 'attribute') return CodeTokenKind.key;
+  if (kind == 'keyword' ||
+      kind == 'literal' ||
+      kind == 'built_in' ||
+      kind == 'type' ||
+      kind == 'meta') {
+    return CodeTokenKind.keyword;
+  }
+  return null;
 }
 
 bool _followedByColon(String source, int offset) {

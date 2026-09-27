@@ -37,7 +37,7 @@ CommandShortcutEventHandler _tabToAutoCompleteCommandHandler = (editorState) {
       (context == null && completion == null) ||
       (!autoCompletableBlockTypes.contains(node.type) && completion == null) ||
       delta == null ||
-      selection.endIndex != delta.length) {
+      (completion == null && selection.endIndex != delta.length)) {
     return KeyEventResult.ignored;
   }
 

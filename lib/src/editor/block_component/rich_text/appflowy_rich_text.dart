@@ -124,8 +124,7 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
     }
     final completion = widget.editorState.behaviorFor(widget.node)?.completion;
     if (completion != null) {
-      return (context, node, textSpan) =>
-          completion(widget.editorState, node);
+      return (context, node, textSpan) => completion(widget.editorState, node);
     }
     return widget.editorState.autoCompleteTextProvider;
   }
@@ -512,6 +511,7 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
       textSpan = widget.textSpanDecorator!(textSpan);
     }
     textSpan = adjustTextSpan(textSpan);
+    final baseTextSpan = textSpan;
 
     return ValueListenableBuilder(
       valueListenable: widget.editorState.selectionNotifier,
@@ -519,32 +519,49 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
         final autoCompleteText = autoCompleteTextProvider?.call(
           context,
           widget.node,
-          textSpan,
+          baseTextSpan,
         );
         if (autoCompleteText == null || autoCompleteText.isEmpty) {
           return const SizedBox.shrink();
         }
-        textSpan = getTextSpan(
-          textInserts: [
-            ...textInserts.map(
-              (e) => TextInsert(
-                e.text,
-                attributes: {
-                  AppFlowyRichTextKeys.transparent: true,
-                },
-              ),
-            ),
-            TextInsert(
-              autoCompleteText,
-              attributes: {
-                AppFlowyRichTextKeys.autoComplete: true,
-              },
-            ),
-          ],
+        final selection = widget.editorState.selection;
+        final caretOffset =
+            widget.editorState.behaviorFor(widget.node)?.completion != null &&
+                    selection != null &&
+                    selection.isCollapsed &&
+                    selection.start.path.equals(widget.node.path)
+                ? selection.start.offset
+                : widget.node.delta!.length;
+        final overlayInserts = <TextInsert>[];
+        var sourceOffset = 0;
+        var ghostInserted = false;
+        TextInsert transparent(String value) => TextInsert(
+              value,
+              attributes: {AppFlowyRichTextKeys.transparent: true},
+            );
+        final ghost = TextInsert(
+          autoCompleteText,
+          attributes: {AppFlowyRichTextKeys.autoComplete: true},
         );
+        for (final insert in textInserts) {
+          final split = (caretOffset - sourceOffset).clamp(0, insert.length);
+          if (split > 0) {
+            overlayInserts.add(transparent(insert.text.substring(0, split)));
+          }
+          if (!ghostInserted && caretOffset <= sourceOffset + insert.length) {
+            overlayInserts.add(ghost);
+            ghostInserted = true;
+          }
+          if (split < insert.length) {
+            overlayInserts.add(transparent(insert.text.substring(split)));
+          }
+          sourceOffset += insert.length;
+        }
+        if (!ghostInserted) overlayInserts.add(ghost);
+        var ghostSpan = getTextSpan(textInserts: overlayInserts);
 
         if (widget.textSpanDecorator != null) {
-          textSpan = widget.textSpanDecorator!(textSpan);
+          ghostSpan = widget.textSpanDecorator!(ghostSpan);
         }
         return RichText(
           textAlign: widget.textAlign ?? TextAlign.start,
@@ -555,7 +572,7 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
                 textStyleConfiguration.applyHeightToLastDescent,
             leadingDistribution: textStyleConfiguration.leadingDistribution,
           ),
-          text: textSpan,
+          text: ghostSpan,
           textDirection: textDirection(),
           textScaler:
               TextScaler.linear(widget.editorState.editorStyle.textScaleFactor),

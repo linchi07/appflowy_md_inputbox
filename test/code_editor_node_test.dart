@@ -8,7 +8,7 @@ import 'package:node_code_editor/node_code_editor.dart';
 
 void main() {
   test('code editing rules pair JSON brackets and indent YAML', () {
-    expect(codeEditForInsertion('{', 1, '\n', 'json')?.text, '\n');
+    expect(codeEditForInsertion('{', 1, '\n', 'json')?.text, '\n  ');
     expect(codeEditForInsertion('{}', 1, '\n', 'json')?.text, '\n  \n');
     expect(codeEditForInsertion('', 0, '{', 'json')?.text, '{}');
     expect(codeEditForInsertion('}', 0, '}', 'json')?.caretOffset, 1);
@@ -25,6 +25,52 @@ void main() {
     expect(tokens.any((token) => token.kind == CodeTokenKind.number), isTrue);
   });
 
+  test('all highlight grammars remain available with stable offsets', () {
+    expect(CodeHighlighter.supportedLanguages.length, greaterThan(150));
+    for (final (language, source) in [
+      ('go', 'package main\nfunc main() {}'),
+      ('rust', 'fn main() { let x = 1; }'),
+      ('sql', 'SELECT name FROM users;'),
+      ('swift', 'let answer = 42'),
+    ]) {
+      final tokens = CodeHighlighter().tokenize(source, language);
+      expect(tokens, isNotEmpty, reason: language);
+      expect(
+        tokens.every(
+          (token) => token.start >= 0 && token.end <= source.length,
+        ),
+        isTrue,
+        reason: language,
+      );
+    }
+  });
+
+  test('grammar words and document identifiers produce Tab suggestions', () {
+    expect(codeCompletionSuffix('cla', 'dart'), 'ss');
+    expect(codeCompletionSuffix('{"a": key', 'json'), isNull);
+    expect(codeCompletionSuffix('calculateTotal\ncal', 'dart'), 'culateTotal');
+    expect(codeCompletionSuffix('"cal', 'dart'), isNull);
+    expect(codeEditForTab('', 0, 'dart').text, '    ');
+    expect(codeEditForTab('    x', 5, 'dart', outdent: true).deleteLength, 4);
+  });
+
+  test('common languages pair brackets and indent by language', () {
+    expect(codeEditForInsertion('', 0, '(', 'rust')?.text, '()');
+    expect(codeEditForInsertion('{}', 1, '\n', 'rust')?.text, '\n    \n');
+    expect(
+      codeEditForInsertion('if (x) {', 8, '\n', 'javascript')?.text,
+      '\n  ',
+    );
+    expect(
+      codeEditForInsertion('if ready:', 9, '\n', 'python')?.text,
+      '\n    ',
+    );
+    final outdent = codeEditForInsertion('    ', 4, '}', 'dart');
+    expect(outdent?.deleteLength, 4);
+    expect(outdent?.text, '}');
+    expect(codeEditForInsertion('"text', 5, '(', 'dart'), isNull);
+  });
+
   test('AppFlowy shortcuts edit code and accept ghost completion', () async {
     final node = codeBlockNode(code: '{"ok": tr', language: 'json');
     final state =
@@ -35,13 +81,14 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(node.delta?.toPlainText(), '{"ok": true');
 
-    state.selection = Selection.collapsed(Position(path: [0], offset: 0));
+    final end = node.delta!.length;
+    state.selection = Selection.collapsed(Position(path: [0], offset: end));
     expect(
       await codeCharacterShortcut.executeWithCharacter(state, '{'),
       isTrue,
     );
-    expect(node.delta?.toPlainText().startsWith('{}'), isTrue);
-    expect(state.selection?.start.offset, 1);
+    expect(node.delta?.toPlainText().endsWith('{}'), isTrue);
+    expect(state.selection?.start.offset, end + 1);
 
     expect(codeExitCommand.execute(state), KeyEventResult.handled);
     await Future<void>.delayed(Duration.zero);
@@ -60,6 +107,35 @@ void main() {
     );
     expect(node.delta?.toPlainText(), 'key:\n  ');
     expect(state.selection?.start.offset, 7);
+    state.dispose();
+  });
+
+  test('selected code is surrounded and empty pairs delete together', () async {
+    final node = codeBlockNode(code: 'word', language: 'dart');
+    final state = EditorState(
+      document: Document(root: pageNode(children: [node])),
+    )..selection = Selection(
+        start: Position(path: [0], offset: 0),
+        end: Position(path: [0], offset: 4),
+      );
+    expect(
+      await codeCharacterShortcut.executeWithCharacter(state, '('),
+      isTrue,
+    );
+    expect(node.delta?.toPlainText(), '(word)');
+    expect(state.selection?.start.offset, 1);
+    expect(state.selection?.end.offset, 5);
+
+    await state.apply(
+      state.transaction
+        ..deleteText(node, 1, 4)
+        ..afterSelection = Selection.collapsed(
+          Position(path: [0], offset: 1),
+        ),
+    );
+    expect(codePairBackspaceCommand.execute(state), KeyEventResult.handled);
+    await Future<void>.delayed(Duration.zero);
+    expect(node.delta?.toPlainText(), '');
     state.dispose();
   });
 
@@ -104,13 +180,60 @@ void main() {
     expect(nodes.single.delta?.toPlainText(), '```json');
   });
 
+  test('a fenced block with one content line stays Markdown', () async {
+    const source = '```dart\nprint(1);\n```';
+    final nodes = parseMarkdownToNodes(source);
+    expect(nodes.single.type, ParagraphBlockKeys.type);
+    expect(nodes.single.delta?.toPlainText(), source);
+    final controller = MDEditorController();
+    await controller.setText(source);
+    expect(
+      controller.editorState.document.root.children.single.type,
+      ParagraphBlockKeys.type,
+    );
+    controller.dispose();
+  });
+
+  testWidgets('one-line fence keeps Markdown renderer and has no copy control',
+      (tester) async {
+    final controller = MDEditorController();
+    await controller.setText('```dart\nprint(1);\n```');
+    await tester
+        .pumpWidget(MaterialApp(home: MDEditor(controller: controller)));
+    await tester.pump();
+    expect(find.byType(CodeBlockComponentWidget), findsNothing);
+    expect(find.byKey(markdownCodeBlockKey), findsOneWidget);
+    expect(find.byKey(const ValueKey('copy-code-block')), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
+
+  test('adding a second fenced content line promotes the paragraph', () async {
+    final controller = MDEditorController();
+    await controller.setText('```dart\nprint(1);');
+    final state = controller.editorState;
+    final paragraph = state.document.root.children.single;
+    expect(paragraph.type, ParagraphBlockKeys.type);
+    final offset = paragraph.delta!.length;
+    await state.apply(
+      state.transaction
+        ..insertText(paragraph, offset, '\nprint(2);')
+        ..afterSelection = Selection.collapsed(
+          Position(path: [0], offset: offset + 10),
+        ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(state.document.root.children.single.type, CodeBlockKeys.type);
+    controller.dispose();
+  });
+
   test('code node language metadata round-trips through Markdown', () async {
     final state = EditorState.blank()
       ..nodeBehaviors = {CodeBlockKeys.type: codeNodeBehavior};
-    await state.setText('```yaml\nkey: value\n```');
+    await state.setText('```yaml\nkey: value\nnext: true\n```');
     final node = state.document.root.children.single;
     expect(node.type, CodeBlockKeys.type);
-    expect(state.text, '```yaml\nkey: value\n```');
+    expect(state.text, '```yaml\nkey: value\nnext: true\n```');
     await state.apply(
       state.transaction
         ..updateNode(node, {
@@ -118,7 +241,7 @@ void main() {
           CodeBlockKeys.openingFence: '```json',
         }),
     );
-    expect(state.text, '```json\nkey: value\n```');
+    expect(state.text, '```json\nkey: value\nnext: true\n```');
     state.dispose();
   });
 
@@ -127,15 +250,15 @@ void main() {
       ..nodeBehaviors = {CodeBlockKeys.type: codeNodeBehavior};
     await state.setText('before after');
     state.selection = Selection.collapsed(Position(path: [0], offset: 7));
-    await state.pastePlainText('```json\n{"ok": true}\n```');
+    await state.pastePlainText('```json\n{"ok": true}\n{"n": 2}\n```');
     final nodes = state.document.root.children;
     expect(nodes.map((node) => node.type), [
       ParagraphBlockKeys.type,
       CodeBlockKeys.type,
       ParagraphBlockKeys.type,
     ]);
-    expect(nodes[1].delta?.toPlainText(), '{"ok": true}');
-    expect(state.text, 'before \n```json\n{"ok": true}\n```\nafter');
+    expect(nodes[1].delta?.toPlainText(), '{"ok": true}\n{"n": 2}');
+    expect(state.text, 'before \n```json\n{"ok": true}\n{"n": 2}\n```\nafter');
     state.dispose();
   });
 
@@ -203,7 +326,7 @@ void main() {
   testWidgets('code block uses native rich text and syntax colors',
       (tester) async {
     final controller = MDEditorController();
-    await controller.setText('```json\n{"ok": true}\n```');
+    await controller.setText('```json\n{"ok": true}\n{"n": 2}\n```');
     await tester.pumpWidget(
       MaterialApp(
         home: MDEditor(
@@ -219,6 +342,7 @@ void main() {
     );
     expect(find.byType(AppFlowyRichText), findsOneWidget);
     expect(find.byKey(markdownCodeBlockKey), findsOneWidget);
+    expect(find.byKey(const ValueKey('copy-code-block')), findsOneWidget);
     final richText = tester
         .widgetList<RichText>(
           find.descendant(
@@ -226,7 +350,9 @@ void main() {
             matching: find.byType(RichText),
           ),
         )
-        .firstWhere((widget) => widget.text.toPlainText() == '{"ok": true}');
+        .firstWhere(
+          (widget) => widget.text.toPlainText() == '{"ok": true}\n{"n": 2}',
+        );
     final spans = <TextSpan>[];
     void collect(InlineSpan span) {
       if (span is TextSpan) {
@@ -250,11 +376,57 @@ void main() {
     controller.dispose();
   });
 
+  testWidgets('copy icon copies code content without fences', (tester) async {
+    String? copied;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String?;
+        }
+        return null;
+      },
+    );
+    final controller = MDEditorController();
+    await controller.setText('```dart\nconst a = 1;\nconst b = 2;\n```');
+    await tester.pumpWidget(
+      MaterialApp(home: MDEditor(controller: controller, editable: false)),
+    );
+    await tester.tap(find.byKey(const ValueKey('copy-code-block')));
+    await tester.pump();
+    expect(copied, 'const a = 1;\nconst b = 2;');
+    await tester.pumpWidget(const SizedBox.shrink());
+    tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, null);
+    controller.dispose();
+  });
+
+  testWidgets('language picker searches the full grammar list', (tester) async {
+    final controller = MDEditorController();
+    await controller.setText('```dart\nconst a = 1;\nconst b = 2;\n```');
+    await tester
+        .pumpWidget(MaterialApp(home: MDEditor(controller: controller)));
+    await tester.tap(find.byKey(const ValueKey('code-language-picker')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'rust');
+    await tester.pumpAndSettle();
+    expect(find.byType(ListTile), findsOneWidget);
+    await tester.tap(find.byType(ListTile));
+    await tester.pumpAndSettle();
+    expect(
+      controller.editorState.document.root.children.single
+          .attributes[CodeBlockKeys.language],
+      'rust',
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
+
   testWidgets('code completion uses AppFlowy ghost text', (tester) async {
     final controller = MDEditorController();
-    await controller.setText('```json\ntr\n```');
+    await controller.setText('```json\n{"ok": false}\ntr\n```');
     controller.editorState.selection =
-        Selection.collapsed(Position(path: [0], offset: 2));
+        Selection.collapsed(Position(path: [0], offset: 16));
     await tester.pumpWidget(
       MaterialApp(
         home: MDEditor(controller: controller),
@@ -267,7 +439,43 @@ void main() {
         matching: find.byType(RichText),
       ),
     );
-    expect(texts.any((widget) => widget.text.toPlainText() == 'true'), isTrue);
+    expect(
+      texts.any(
+        (widget) => widget.text.toPlainText() == '{"ok": false}\ntrue',
+      ),
+      isTrue,
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
+
+  testWidgets('Tab accepts a keyword suggestion before the next code line',
+      (tester) async {
+    final controller = MDEditorController();
+    await controller.setText('```dart\ncla\nfinal x = 1;\n```');
+    controller.editorState.selection =
+        Selection.collapsed(Position(path: [0], offset: 3));
+    await tester.pumpWidget(
+      MaterialApp(home: MDEditor(controller: controller, autoFocus: true)),
+    );
+    await tester.pumpAndSettle();
+    final ghostText = tester.widgetList<RichText>(
+      find.descendant(
+        of: find.byType(AppFlowyRichText),
+        matching: find.byType(RichText),
+      ),
+    );
+    expect(
+      ghostText
+          .any((widget) => widget.text.toPlainText() == 'class\nfinal x = 1;'),
+      isTrue,
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(
+      controller.editorState.document.root.children.single.delta?.toPlainText(),
+      'class\nfinal x = 1;',
+    );
     await tester.pumpWidget(const SizedBox.shrink());
     controller.dispose();
   });
@@ -275,19 +483,19 @@ void main() {
   testWidgets('command shortcuts dispatch to the selected code node',
       (tester) async {
     final controller = MDEditorController();
-    await controller.setText('```yaml\nkey:\n```');
+    await controller.setText('```yaml\nfirst: value\nkey:\n```');
     await tester.pumpWidget(
       MaterialApp(home: MDEditor(controller: controller, autoFocus: true)),
     );
     await tester.pumpAndSettle();
     controller.editorState.selection =
-        Selection.collapsed(Position(path: [0], offset: 4));
+        Selection.collapsed(Position(path: [0], offset: 17));
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
     expect(controller.editorState.document.root.children, hasLength(1));
     expect(
       controller.editorState.document.root.children.single.delta?.toPlainText(),
-      'key:\n  ',
+      'first: value\nkey:\n  ',
     );
     await tester.pumpWidget(const SizedBox.shrink());
     controller.dispose();
@@ -304,7 +512,7 @@ void main() {
       ),
     );
     final paragraph = controller.editorState.document.root.children.first;
-    const source = '```json\n{"a": 1}';
+    const source = '```json\n{"a": 1}\n{"b": 2}';
     await controller.editorState.apply(
       controller.editorState.transaction
         ..insertText(paragraph, 0, source)
@@ -320,7 +528,7 @@ void main() {
       controller.editorState.document.root.children.single.type,
       CodeBlockKeys.type,
     );
-    expect(controller.text, '```json\n{"a": 1}');
+    expect(controller.text, source);
     await tester.pumpWidget(const SizedBox.shrink());
     controller.dispose();
   });

@@ -1,5 +1,6 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:node_code_editor/node_code_editor.dart';
 import 'package:provider/provider.dart';
 
@@ -85,6 +86,28 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
   Node get node => widget.node;
   late final EditorState editorState = context.read<EditorState>();
 
+  Future<void> _chooseLanguage() async {
+    final language = await showSearch<String>(
+      context: context,
+      delegate: _CodeLanguageSearch(),
+    );
+    if (!mounted ||
+        language == null ||
+        editorState.getNodeAtPath(node.path) != node) {
+      return;
+    }
+    final opening = node.attributes[CodeBlockKeys.openingFence] as String? ??
+        '```${node.attributes[CodeBlockKeys.language] ?? ''}';
+    final indent = RegExp(r'^[ \t]*').stringMatch(opening) ?? '';
+    editorState.apply(
+      editorState.transaction
+        ..updateNode(node, {
+          CodeBlockKeys.language: language,
+          CodeBlockKeys.openingFence: '$indent```$language',
+        }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = editorState.editorStyle.colorScheme;
@@ -111,41 +134,42 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
         children: [
           Padding(
             padding: const EdgeInsets.only(bottom: 6),
-            child: Material(
-              type: MaterialType.transparency,
-              child: PopupMenuButton<String>(
-                enabled: editorState.editable,
-                tooltip: 'Code language',
-                onSelected: (value) {
-                  final opening =
-                      node.attributes[CodeBlockKeys.openingFence] as String? ??
-                          '```$language';
-                  final indent = RegExp(r'^[ \t]*').stringMatch(opening) ?? '';
-                  editorState.apply(
-                    editorState.transaction
-                      ..updateNode(node, {
-                        CodeBlockKeys.language: value,
-                        CodeBlockKeys.openingFence: '$indent```$value',
-                      }),
-                  );
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: '', child: Text('Plain text')),
-                  PopupMenuItem(value: 'json', child: Text('JSON')),
-                  PopupMenuItem(value: 'yaml', child: Text('YAML')),
-                  PopupMenuItem(value: 'dart', child: Text('Dart')),
-                  PopupMenuItem(value: 'javascript', child: Text('JavaScript')),
-                  PopupMenuItem(value: 'typescript', child: Text('TypeScript')),
-                  PopupMenuItem(value: 'python', child: Text('Python')),
-                ],
-                child: Text(
-                  language.isEmpty ? 'Plain text' : language,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: colors.foreground.withValues(alpha: 0.6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      key: const ValueKey('code-language-picker'),
+                      onPressed: editorState.editable ? _chooseLanguage : null,
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(28, 24),
+                        alignment: Alignment.centerLeft,
+                      ),
+                      child: Text(
+                        language.isEmpty ? 'Plain text' : language,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: colors.foreground.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
+                IconButton(
+                  key: const ValueKey('copy-code-block'),
+                  tooltip: 'Copy code',
+                  icon: const Icon(Icons.copy, size: 15),
+                  iconSize: 15,
+                  constraints:
+                      const BoxConstraints.tightFor(width: 28, height: 28),
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () =>
+                      Clipboard.setData(ClipboardData(text: source)),
+                ),
+              ],
             ),
           ),
           AppFlowyRichText(
@@ -202,5 +226,50 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
       );
     }
     return child;
+  }
+}
+
+class _CodeLanguageSearch extends SearchDelegate<String> {
+  @override
+  String get searchFieldLabel => 'Code language';
+
+  @override
+  List<Widget> buildActions(BuildContext context) => [
+        IconButton(
+          icon: const Icon(Icons.clear),
+          onPressed: () => query = '',
+        ),
+      ];
+
+  @override
+  Widget buildLeading(BuildContext context) => IconButton(
+        icon: const Icon(Icons.arrow_back),
+        onPressed: () => Navigator.of(context).pop(),
+      );
+
+  @override
+  Widget buildResults(BuildContext context) => buildSuggestions(context);
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    final filtered = CodeHighlighter.supportedLanguages
+        .where((name) => name.contains(query.toLowerCase().trim()))
+        .toList();
+    return ListView.builder(
+      itemCount: filtered.length + (query.isEmpty ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (query.isEmpty && index == 0) {
+          return ListTile(
+            title: const Text('Plain text'),
+            onTap: () => close(context, ''),
+          );
+        }
+        final name = filtered[index - (query.isEmpty ? 1 : 0)];
+        return ListTile(
+          title: Text(name),
+          onTap: () => close(context, name),
+        );
+      },
+    );
   }
 }

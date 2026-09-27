@@ -30,6 +30,13 @@ class MarkdownFencedBlock {
 
   bool get isClosed => closingStart != null;
 
+  /// A one-line fenced body stays in the Markdown paragraph component.
+  bool get hasMultipleCodeLines {
+    if (kind != MarkdownFencedBlockKind.code) return false;
+    final nextLine = source.indexOf('\n', openingEnd);
+    return nextLine >= 0 && nextLine < contentEnd;
+  }
+
   /// The newline immediately before the closing delimiter is presentation
   /// syntax too, so hide it together with the delimiter in preview mode.
   int get contentEnd {

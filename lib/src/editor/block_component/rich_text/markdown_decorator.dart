@@ -210,10 +210,10 @@ TextSpan markdownTextSpanDecorator(
     return TextSpan(text: content, style: baseStyle);
   }
 
-  final fencedBlock = parseMarkdownFencedBlock(
-    delta?.toPlainText() ?? content,
-  );
-  if (fencedBlock?.kind == MarkdownFencedBlockKind.code) {
+  final blockSource = delta?.toPlainText() ?? content;
+  final fencedBlock = parseMarkdownFencedBlock(blockSource);
+  if (blockSource.contains('\n') &&
+      fencedBlock?.kind == MarkdownFencedBlockKind.code) {
     final selectionTouchesNode = selection != null &&
         (sameNode(selection.start.path) || sameNode(selection.end.path));
     return _decorateFencedCodeSegment(
