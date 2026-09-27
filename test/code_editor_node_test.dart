@@ -25,8 +25,11 @@ void main() {
     expect(tokens.any((token) => token.kind == CodeTokenKind.number), isTrue);
   });
 
-  test('all highlight grammars remain available with stable offsets', () {
-    expect(CodeHighlighter.supportedLanguages.length, greaterThan(150));
+  test('curated grammars remain available with stable offsets', () {
+    expect(CodeHighlighter.supportedLanguages.length, 47);
+    expect(CodeHighlighter.supportedLanguages,
+        containsAll(['dart', 'python', 'json', 'yaml', 'cpp']));
+    expect(CodeHighlighter.supportedLanguages, isNot(contains('solidity')));
     for (final (language, source) in [
       ('go', 'package main\nfunc main() {}'),
       ('rust', 'fn main() { let x = 1; }'),
@@ -43,6 +46,14 @@ void main() {
         reason: language,
       );
     }
+  });
+
+  test('unlisted languages use the generic lexer', () {
+    const source = 'function greet() { return 42; }';
+    final tokens = CodeHighlighter().tokenize(source, 'solidity');
+    expect(tokens, isNotEmpty);
+    expect(tokens.first.kind, CodeTokenKind.keyword);
+    expect(source.substring(tokens.first.start, tokens.first.end), 'function');
   });
 
   test('grammar words and document identifiers produce Tab suggestions', () {

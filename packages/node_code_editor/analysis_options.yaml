@@ -1,0 +1,5 @@
+analyzer:
+  exclude:
+    # These are generated upstream grammar sources and their parser core.
+    - lib/src/syntax_highlight/languages/**
+    - lib/src/syntax_highlight/src/**

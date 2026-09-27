@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:highlight/highlight.dart' as hl;
-import 'package:highlight/languages/all.dart' as languages;
+import 'syntax_highlight/registry.dart' as syntax;
+import 'syntax_highlight/src/node.dart' as hl;
 
 enum CodeTokenKind { keyword, string, number, comment, key }
 
@@ -11,13 +11,11 @@ class CodeToken {
   final CodeTokenKind kind;
 }
 
-/// Every grammar shipped by `highlight`, without the flutter_highlight widget.
+/// The curated, vendored syntax grammars, without a full highlight dependency.
 /// Unknown language IDs fall back to a small, language-neutral lexer.
 class CodeHighlighter {
-  static final List<String> supportedLanguages = languages.allLanguages.keys
-      .where((id) => id != 'plaintext')
-      .toList()
-    ..sort();
+  static final List<String> supportedLanguages =
+      syntax.codeLanguageModes.keys.toList()..sort();
 
   static final RegExp _lexicalPattern = RegExp(
     r'"(?:\\.|[^"\\])*"|\x27(?:\\.|[^\x27\\])*\x27|//[^\n]*|#[^\n]*|\b(?:[0-9]+(?:\.[0-9]+)?)\b|\b[A-Za-z_][A-Za-z_0-9]*\b',
@@ -34,9 +32,9 @@ class CodeHighlighter {
     if (source.length > 64 * 1024) return _tokens = const [];
     final id = language.toLowerCase();
     if (id.isEmpty || id == 'plaintext') return _tokens = const [];
-    if (id.isNotEmpty) {
+    if (syntax.codeLanguageIds.contains(id)) {
       try {
-        final nodes = hl.highlight.parse(source, language: id).nodes;
+        final nodes = syntax.codeHighlight.parse(source, language: id).nodes;
         if (nodes != null) {
           final tokens = <CodeToken>[];
           final reconstructed = StringBuffer();

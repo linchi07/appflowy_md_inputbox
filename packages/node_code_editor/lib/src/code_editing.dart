@@ -1,5 +1,5 @@
-import 'package:highlight/languages/all.dart' as languages;
-import 'package:highlight/highlight_core.dart' show Mode;
+import 'syntax_highlight/registry.dart' as syntax;
+import 'syntax_highlight/src/mode.dart' show Mode;
 
 /// One atomic edit in the host document. Offsets use UTF-16.
 class CodeEdit {
@@ -11,7 +11,7 @@ class CodeEdit {
 }
 
 final Map<String, Mode> _modes = {
-  for (final entry in languages.allLanguages.entries) ...{
+  for (final entry in syntax.codeLanguageModes.entries) ...{
     entry.key: entry.value,
     for (final alias in entry.value.aliases ?? const <String>[])
       alias: entry.value,

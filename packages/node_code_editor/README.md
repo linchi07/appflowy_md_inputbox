@@ -1,8 +1,10 @@
 # node_code_editor
 
-A Flutter package with 191 `highlight` language grammars, bracket pairing,
-indentation and keyword completion. It uses `highlight` for parsing but does
-not depend on `flutter_code_editor` or `flutter_highlight`.
+A Flutter package with 47 curated language grammars, bracket pairing,
+indentation and keyword completion. The syntax parser and grammars are vendored
+from `highlight` 0.7.0 with the upstream license notices; see
+[`lib/src/syntax_highlight/`](lib/src/syntax_highlight/README.md). The package
+does not depend on `highlight`, `flutter_code_editor` or `flutter_highlight`.
 
 The host editor owns the text model, IME, selection and undo. Call
 `codeEditForInsertion` from the host's character and Enter shortcuts, use
