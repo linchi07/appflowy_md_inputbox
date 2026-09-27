@@ -8,7 +8,7 @@ import '../../../../appflowy_editor.dart';
 import 'markdown_block_syntax.dart';
 
 final RegExp _markdownPattern = RegExp(
-  r'(\*\*.*?(?:\*\*|$))|(\*.*?(?:\*|$))|(~~.*?(?:~~|$))|(`.*?(?:`|$))|^(#{1,6}\s+.*)$|((?:^[-*]\s+)?\[[ x]])|(#[\w\u4e00-\u9fa5]+)|^([-*]\s+)|^(\d+\.\s+)|^([-*_]{3,})$|((?<![\\$])\$\$[\s\S]*?(?:(?<!\\)\$\$|(?![\s\S])))|((?<![\\$])\$(?!\$)(?!\s).*?(?:(?<![\\\s])\$(?!\$)|$))',
+  r'(\*\*.*?(?:\*\*|$))|(\*.*?(?:\*|$))|(~~.*?(?:~~|$))|(`.*?(?:`|$))|^(#{1,6}\s+.*)$|((?:^[-*]\s+)?\[[ x]])|(#[\w\u4e00-\u9fa5]+)|^([-*]\s+)|^(\d+\.\s+)|^([-*_]{3,})$|((?<![\\$])\$\$[\s\S]*?(?:(?<!\\)\$\$|(?![\s\S])))|((?<![\\$])\$(?!\$)(?!\s).*?(?:(?<![\\\s])\$(?!\$)|$))|(===[^\n]+?===)',
   multiLine: true,
 );
 final RegExp _headingPrefixPattern = RegExp(r'^#+\s+');
@@ -19,6 +19,7 @@ final RegExp _checkboxPattern = RegExp(r'\[[ x]]');
 // of inline decorations. Building and laying out that many InlineSpan and
 // WidgetSpan objects is substantially more expensive than lexical scanning.
 const int _maxDecoratedMatchesPerParagraph = 512;
+const int _maxDecoratedSpansPerParagraph = 2048;
 
 class _MarkdownMatchCache {
   static const _capacity = 256;
@@ -201,9 +202,16 @@ TextSpan markdownTextSpanDecorator(
 
   final String content = text.text;
   TextStyle? baseStyle = before.style;
+  final delta = node.delta;
+  final decorationLimit =
+      editorState.editorStyle.maxMarkdownDecorationCharacters;
+  final paragraphLength = delta?.length ?? content.length;
+  if (decorationLimit != null && paragraphLength > decorationLimit) {
+    return TextSpan(text: content, style: baseStyle);
+  }
 
   final fencedBlock = parseMarkdownFencedBlock(
-    node.delta?.toPlainText() ?? content,
+    delta?.toPlainText() ?? content,
   );
   if (fencedBlock?.kind == MarkdownFencedBlockKind.code) {
     final selectionTouchesNode = selection != null &&
@@ -217,13 +225,6 @@ TextSpan markdownTextSpanDecorator(
     );
   }
 
-  final decorationLimit =
-      editorState.editorStyle.maxMarkdownDecorationCharacters;
-  final paragraphLength = node.delta?.length ?? content.length;
-  if (decorationLimit != null && paragraphLength > decorationLimit) {
-    return TextSpan(text: content, style: baseStyle);
-  }
-
   final hiddenStyle = baseStyle?.copyWith(
         fontSize: 0.1,
         height: 0.1,
@@ -234,7 +235,7 @@ TextSpan markdownTextSpanDecorator(
   // 1: Bold, 2: Italic, 3: Strike, 4: Code, 5: Full Header Line,
   // 6: Checkbox (with optional list prefix), 7: Tag, 8: ListPrefix (Bullet),
   // 9: ListPrefix (Ordered), 10: DividerLine, 11: Display Math,
-  // 12: Inline Math.
+  // 12: Inline Math, 13: Highlight.
   final matches = _MarkdownMatchCache.matches(content);
   if (matches.isEmpty) {
     return TextSpan(text: content, style: baseStyle);
@@ -333,6 +334,31 @@ TextSpan markdownTextSpanDecorator(
         }
       }
     }
+    // 13: Highlight. Parse only paired bold markers inside this match.
+    else if (match.group(13) != null) {
+      final highlightStyle = (baseStyle ?? const TextStyle()).copyWith(
+        backgroundColor: colors.highlightBackground,
+      );
+      if (isCaretIn) {
+        spans.add(TextSpan(text: fullMatchStr, style: highlightStyle));
+      } else {
+        spans.add(TextSpan(text: '===', style: hiddenStyle));
+        final inner = fullMatchStr.substring(3, fullMatchStr.length - 3);
+        if (!_appendNestedInlineSpans(
+          spans: spans,
+          source: inner,
+          marker: '**',
+          baseStyle: highlightStyle,
+          nestedFontWeight: FontWeight.bold,
+          hiddenStyle: hiddenStyle,
+          spanLimit:
+              decorationLimit == null ? null : _maxDecoratedSpansPerParagraph,
+        )) {
+          return TextSpan(text: content, style: baseStyle);
+        }
+        spans.add(TextSpan(text: '===', style: hiddenStyle));
+      }
+    }
     // 1-4: Inline formats
     else if (match.group(1) != null ||
         match.group(2) != null ||
@@ -372,15 +398,27 @@ TextSpan markdownTextSpanDecorator(
       } else {
         // 已闭合且光标不在区间内：隐藏前后 marker
         spans.add(TextSpan(text: marker, style: hiddenStyle));
-        spans.add(
-          TextSpan(
-            text: fullMatchStr.substring(
-              marker.length,
-              fullMatchStr.length - marker.length,
-            ),
-            style: styledMatch ?? baseStyle,
-          ),
+        final inner = fullMatchStr.substring(
+          marker.length,
+          fullMatchStr.length - marker.length,
         );
+        if (match.group(1) != null) {
+          final boldStyle = styledMatch ?? baseStyle ?? const TextStyle();
+          if (!_appendNestedInlineSpans(
+            spans: spans,
+            source: inner,
+            marker: '===',
+            baseStyle: boldStyle,
+            nestedBackgroundColor: colors.highlightBackground,
+            hiddenStyle: hiddenStyle,
+            spanLimit:
+                decorationLimit == null ? null : _maxDecoratedSpansPerParagraph,
+          )) {
+            return TextSpan(text: content, style: baseStyle);
+          }
+        } else {
+          spans.add(TextSpan(text: inner, style: styledMatch ?? baseStyle));
+        }
         spans.add(TextSpan(text: marker, style: hiddenStyle));
       }
     }
@@ -566,6 +604,10 @@ TextSpan markdownTextSpanDecorator(
       spans.add(TextSpan(text: fullMatchStr, style: baseStyle));
     }
 
+    if (decorationLimit != null &&
+        spans.length > _maxDecoratedSpansPerParagraph) {
+      return TextSpan(text: content, style: baseStyle);
+    }
     lastMatchEnd = match.end;
   }
 
@@ -576,6 +618,51 @@ TextSpan markdownTextSpanDecorator(
   }
 
   return TextSpan(children: spans, style: baseStyle);
+}
+
+/// Splits a formatted range around one kind of nested marker in linear time.
+/// The total span budget also covers many nested pairs inside one regex match.
+bool _appendNestedInlineSpans({
+  required List<InlineSpan> spans,
+  required String source,
+  required String marker,
+  required TextStyle baseStyle,
+  Color? nestedBackgroundColor,
+  FontWeight? nestedFontWeight,
+  required TextStyle hiddenStyle,
+  required int? spanLimit,
+}) {
+  var offset = 0;
+  TextStyle? nestedStyle;
+  while (offset < source.length) {
+    final opening = source.indexOf(marker, offset);
+    if (opening < 0) break;
+    final closing = source.indexOf(marker, opening + marker.length);
+    if (closing <= opening + marker.length) break;
+    if (spanLimit != null && spans.length + 4 > spanLimit) return false;
+
+    if (opening > offset) {
+      spans.add(
+        TextSpan(text: source.substring(offset, opening), style: baseStyle),
+      );
+    }
+    spans.add(TextSpan(text: marker, style: hiddenStyle));
+    spans.add(
+      TextSpan(
+        text: source.substring(opening + marker.length, closing),
+        style: nestedStyle ??= baseStyle.copyWith(
+          backgroundColor: nestedBackgroundColor,
+          fontWeight: nestedFontWeight,
+        ),
+      ),
+    );
+    spans.add(TextSpan(text: marker, style: hiddenStyle));
+    offset = closing + marker.length;
+  }
+  if (offset < source.length) {
+    spans.add(TextSpan(text: source.substring(offset), style: baseStyle));
+  }
+  return spanLimit == null || spans.length <= spanLimit;
 }
 
 TextSpan _decorateFencedCodeSegment({

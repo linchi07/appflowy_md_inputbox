@@ -118,12 +118,18 @@ Obsidian replacement. Important remaining limits are:
 - very long individual paragraphs are not virtualized internally.
 
 Live Markdown decoration is bounded independently of document block
-virtualization. By default a paragraph longer than 64 KiB, or one containing
-more than 512 recognized Markdown constructs, remains editable as exact plain
-source. This prevents dense generated text from creating thousands of inline
-widgets in one frame. Override the character limit when constructing
-`MDEditor`; passing `null` disables both safeguards and should only be done
-after profiling the target devices.
+virtualization. By default a paragraph longer than 64 KiB, one containing
+more than 512 recognized Markdown constructs, or one requiring over 2,048
+decorated spans remains editable as exact plain source. This prevents dense
+generated text from creating thousands of inline widgets in one frame.
+Override the character limit when constructing `MDEditor`; passing `null`
+disables these safeguards and should only be done after profiling the target
+devices.
+
+The decorator checks the paragraph limit before parsing fenced code or display
+math. An oversized fenced block therefore keeps its raw source visible instead
+of applying inline code styling. The block component still recognizes its
+fence to choose the surrounding container.
 
 Selection-only rebuilds reuse a 256-entry lexical cache capped at 1 MiB of
 source. The cache is safe to share across editors because entries contain only

@@ -9,6 +9,16 @@ void main() {
     await _pumpCase(tester, 'warm-up', _source(1024));
 
     await _pumpCase(tester, '10 KiB density-guarded', _source(10 * 1024));
+    await _pumpCase(
+      tester,
+      '200 bold spans without highlight',
+      _boldSource(200),
+    );
+    await _pumpCase(
+      tester,
+      '200 bold spans with highlight',
+      _boldSource(200, withHighlight: true),
+    );
     await _pumpCase(tester, '64 KiB density-guarded', _source(64 * 1024));
     await _pumpCase(tester, '100 KiB guarded', _source(100 * 1024));
     await _pumpCase(tester, '64 KiB fenced code', _codeSource(64 * 1024));
@@ -95,6 +105,12 @@ String _source(int length) {
     buffer.write(chunk);
   }
   return buffer.toString().substring(0, length);
+}
+
+String _boldSource(int count, {bool withHighlight = false}) {
+  final body = List.filled(withHighlight ? 42 : 48, 'x').join();
+  final item = withHighlight ? '**===$body===**' : '**$body**';
+  return List.filled(count, item).join(' ');
 }
 
 String _codeSource(int minimumLength) {

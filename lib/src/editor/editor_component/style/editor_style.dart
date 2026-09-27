@@ -18,6 +18,7 @@ class MDEditorColorScheme {
     required this.subtleBackground,
     required this.tagBackground,
     required this.tagBorder,
+    this.highlightBackground = const Color(0x80FFEB3B),
   });
 
   const MDEditorColorScheme.light({
@@ -30,6 +31,7 @@ class MDEditorColorScheme {
     this.subtleBackground = const Color(0xFFF1F2F5),
     this.tagBackground = const Color(0x145B5BD6),
     this.tagBorder = const Color(0x335B5BD6),
+    this.highlightBackground = const Color(0x80FFEB3B),
   });
 
   const MDEditorColorScheme.dark({
@@ -42,6 +44,7 @@ class MDEditorColorScheme {
     this.subtleBackground = const Color(0xFF2A2B30),
     this.tagBackground = const Color(0x20A8A7FF),
     this.tagBorder = const Color(0x55A8A7FF),
+    this.highlightBackground = const Color(0x99FFD54F),
   });
 
   final Color foreground;
@@ -53,6 +56,7 @@ class MDEditorColorScheme {
   final Color subtleBackground;
   final Color tagBackground;
   final Color tagBorder;
+  final Color highlightBackground;
 }
 
 /// The style of the editor.

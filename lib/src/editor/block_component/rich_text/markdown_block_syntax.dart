@@ -1,5 +1,7 @@
 import 'dart:collection';
 
+import 'package:flutter/foundation.dart';
+
 enum MarkdownFencedBlockKind {
   code,
   displayMath,
@@ -75,6 +77,7 @@ class _FencedBlockCache {
   static final LinkedHashMap<String, MarkdownFencedBlock?> _entries =
       LinkedHashMap();
   static int _sourceCharacters = 0;
+  static int parseCount = 0;
 
   static MarkdownFencedBlock? parse(String source) {
     if (_entries.containsKey(source)) {
@@ -83,6 +86,7 @@ class _FencedBlockCache {
       return cached;
     }
 
+    parseCount++;
     final parsed = _parseMarkdownFencedBlock(source);
     _entries[source] = parsed;
     _sourceCharacters += source.length;
@@ -94,7 +98,19 @@ class _FencedBlockCache {
     }
     return parsed;
   }
+
+  static void clear() {
+    _entries.clear();
+    _sourceCharacters = 0;
+    parseCount = 0;
+  }
 }
+
+@visibleForTesting
+int get markdownFencedBlockParseCount => _FencedBlockCache.parseCount;
+
+@visibleForTesting
+void clearMarkdownFencedBlockCache() => _FencedBlockCache.clear();
 
 MarkdownFencedBlock? _parseMarkdownFencedBlock(String source) {
   final firstLineEnd = source.indexOf('\n');
