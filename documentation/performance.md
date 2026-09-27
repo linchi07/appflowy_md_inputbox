@@ -82,10 +82,15 @@ Heights of visited blocks are keyed by stable block IDs in a prefix-sum index,
 so inserting or deleting earlier blocks does not attach a measurement to the
 wrong block. The virtual list keeps the first surviving visible block at its
 screen position after structural edits. Thumb updates are coalesced to at most
-one jump per frame. Node behaviors can estimate heights before layout; the code
-node uses its text metrics and width to estimate wrapped lines. Visible blocks
-replace estimates with actual measurements, and thumb seeks can land within a
-tall block. Set `useIndexedScrollbar` to `false` to compare against the platform
+one jump per frame. The shared height oracle estimates ordinary text from the
+resolved font metrics, available width, explicit line breaks, and wrapping.
+Widget nodes can override it through `NodeBehavior.estimateExtent`; the code
+node supplies its own text and chrome estimate. Visible measurements replace
+estimates and calibrate at most eight samples of the same node type. Estimates
+are cached by node content revision and style, then refreshed on edits or
+width changes. Completely unknown widgets still begin with an approximate
+height until measured. Thumb seeks can land within a tall block. Set
+`useIndexedScrollbar` to `false` to compare against the platform
 scrollbar when profiling. Dragging within a visible tall block uses a relative
 pixel seek, so its item anchor is not reset on each thumb update.
 

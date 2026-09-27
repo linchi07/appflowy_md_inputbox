@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 typedef ItemExtentEstimator = double? Function(Object itemId, double width);
+typedef ItemExtentGroup = Object? Function(Object itemId);
+typedef ItemExtentRevision = int? Function(Object itemId);
 
 /// A scrollbar for variable-height virtual documents that seeks by item index.
 ///
@@ -22,6 +24,9 @@ class IndexedDocumentScrollbar extends StatefulWidget {
     required this.child,
     this.scrollOffsetController,
     this.estimateItemExtent,
+    this.itemExtentGroup,
+    this.itemExtentRevision,
+    this.extentStyleSignature,
     this.color = const Color(0x667A7D85),
   });
 
@@ -30,6 +35,13 @@ class IndexedDocumentScrollbar extends StatefulWidget {
   final ScrollOffsetController? scrollOffsetController;
   final ItemPositionsListener itemPositionsListener;
   final ItemExtentEstimator? estimateItemExtent;
+
+  /// Groups similarly rendered nodes for measured-height calibration.
+  final ItemExtentGroup? itemExtentGroup;
+
+  /// Skips recalculating unchanged offscreen estimates across rebuilds.
+  final ItemExtentRevision? itemExtentRevision;
+  final Object? extentStyleSignature;
   final Widget child;
   final Color color;
 
@@ -53,6 +65,7 @@ class _IndexedDocumentScrollbarState extends State<IndexedDocumentScrollbar> {
   int _jumpRevision = 0;
   bool _estimatesDirty = true;
   double? _estimateWidth;
+  final Map<Object, (int, double?)> _estimateCache = {};
   Timer? _settleTimer;
 
   @override
@@ -72,7 +85,22 @@ class _IndexedDocumentScrollbarState extends State<IndexedDocumentScrollbar> {
           .addListener(_onPositionsChanged);
     }
     _extents.updateItems(widget.itemIds);
+    final liveIds = widget.itemIds.toSet();
+    _estimateCache.removeWhere((id, _) => !liveIds.contains(id));
+    if (oldWidget.extentStyleSignature != widget.extentStyleSignature) {
+      _estimateCache.clear();
+    }
     _estimatesDirty = true;
+  }
+
+  double? _estimateFor(Object id, double width) {
+    final revision = widget.itemExtentRevision?.call(id);
+    if (revision == null) return widget.estimateItemExtent?.call(id, width);
+    final cached = _estimateCache[id];
+    if (cached != null && cached.$1 == revision) return cached.$2;
+    final estimate = widget.estimateItemExtent?.call(id, width);
+    _estimateCache[id] = (revision, estimate);
+    return estimate;
   }
 
   @override
@@ -96,10 +124,13 @@ class _IndexedDocumentScrollbarState extends State<IndexedDocumentScrollbar> {
         if (width.isFinite &&
             width > 0 &&
             (_estimatesDirty || _estimateWidth != width)) {
+          if (_estimateWidth != width) _estimateCache.clear();
           _extents.updateEstimates(
             [
-              for (final id in widget.itemIds)
-                widget.estimateItemExtent?.call(id, width),
+              for (final id in widget.itemIds) _estimateFor(id, width),
+            ],
+            groups: [
+              for (final id in widget.itemIds) widget.itemExtentGroup?.call(id),
             ],
             invalidateMeasurements:
                 _estimateWidth != null && _estimateWidth != width,
@@ -314,20 +345,24 @@ class _ScrollbarMetrics {
   final double totalExtent;
 }
 
-/// Prefix-sum index for measured block heights. Measurements belong to stable
-/// block IDs, so inserting or removing an earlier block cannot move a height
-/// onto a different block. Reordering rebuilds the prefix sums in O(n); height
-/// updates and offset lookups take O(log n).
+/// Prefix-sum height map for estimated and measured blocks. It learns a small
+/// per-type correction from visible blocks, while stable IDs keep measurements
+/// attached to the right node across insertions and reorders.
 class BlockExtentIndex {
   BlockExtentIndex(List<Object> itemIds) {
     updateItems(itemIds);
   }
 
-  static const double _estimatedExtent = 28;
+  static const double _initialExtent = 28;
+  static const Object _untypedGroup = Object();
+  static const int _maxSamplesPerGroup = 8;
   List<Object> _itemIds = const [];
   List<double> _tree = const [];
   final Map<Object, double> _measured = {};
-  final Map<Object, double> _estimated = {};
+  final Map<Object, double> _baseEstimates = {};
+  final Map<Object, Object> _groups = {};
+  final Map<Object, double> _sampleRatios = {};
+  final Map<Object, double> _groupScales = {};
 
   double get totalExtent => offsetOf(_itemIds.length);
 
@@ -346,35 +381,51 @@ class BlockExtentIndex {
     _itemIds = List<Object>.of(itemIds, growable: false);
     final liveIds = _itemIds.toSet();
     _measured.removeWhere((id, _) => !liveIds.contains(id));
-    _estimated.removeWhere((id, _) => !liveIds.contains(id));
+    _baseEstimates.removeWhere((id, _) => !liveIds.contains(id));
+    _groups.removeWhere((id, _) => !liveIds.contains(id));
+    _sampleRatios.removeWhere((id, _) => !liveIds.contains(id));
+    _recomputeAllScales();
     _rebuildTree();
   }
 
   void updateEstimates(
     List<double?> extents, {
+    List<Object?>? groups,
     bool invalidateMeasurements = false,
   }) {
     assert(extents.length == _itemIds.length);
-    if (invalidateMeasurements) _measured.clear();
+    assert(groups == null || groups.length == _itemIds.length);
+    if (invalidateMeasurements) {
+      _measured.clear();
+      _sampleRatios.clear();
+    }
     var changed = invalidateMeasurements;
     for (var i = 0; i < _itemIds.length; i++) {
       final id = _itemIds[i];
       final extent = extents[i];
       final next = extent != null && extent.isFinite && extent > 0
           ? extent
-          : _estimatedExtent;
-      if (_estimated[id] == next) continue;
-      _estimated[id] = next;
+          : _initialExtent;
+      final group = groups?[i] ?? _untypedGroup;
+      if (_baseEstimates[id] == next && _groups[id] == group) continue;
+      _baseEstimates[id] = next;
+      _groups[id] = group;
       _measured.remove(id);
+      _sampleRatios.remove(id);
       changed = true;
     }
-    if (changed) _rebuildTree();
+    if (changed) {
+      _recomputeAllScales();
+      _rebuildTree();
+    }
   }
 
   double extentAt(int index) {
     if (index < 0 || index >= _itemIds.length) return 0;
     final id = _itemIds[index];
-    return _measured[id] ?? _estimated[id] ?? _estimatedExtent;
+    return _measured[id] ??
+        (_baseEstimates[id] ?? _initialExtent) *
+            (_groupScales[_groups[id] ?? _untypedGroup] ?? 1);
   }
 
   void _rebuildTree() {
@@ -396,9 +447,52 @@ class BlockExtentIndex {
     final normalized = extent;
     final id = _itemIds[index];
     final oldExtent = extentAt(index);
-    if ((oldExtent - normalized).abs() < 0.5) return;
+    if (_measured.containsKey(id) && (oldExtent - normalized).abs() < 0.5) {
+      return;
+    }
     _measured[id] = normalized;
+    final group = _groups[id] ?? _untypedGroup;
+    final sampleCount = _sampleRatios.keys
+        .where((sampleId) => (_groups[sampleId] ?? _untypedGroup) == group)
+        .length;
+    if (_sampleRatios.containsKey(id) || sampleCount < _maxSamplesPerGroup) {
+      _sampleRatios[id] = (normalized / (_baseEstimates[id] ?? _initialExtent))
+          .clamp(0.25, 64.0);
+      if (_recomputeScale(group)) {
+        _rebuildTree();
+        return;
+      }
+    }
     _add(index, normalized - oldExtent);
+  }
+
+  void _recomputeAllScales() {
+    _groupScales.clear();
+    final groups = {
+      for (final id in _sampleRatios.keys) _groups[id] ?? _untypedGroup,
+    };
+    for (final group in groups) {
+      _recomputeScale(group);
+    }
+  }
+
+  bool _recomputeScale(Object group) {
+    final values = [
+      for (final entry in _sampleRatios.entries)
+        if ((_groups[entry.key] ?? _untypedGroup) == group) entry.value,
+    ]..sort();
+    final oldScale = _groupScales[group] ?? 1.0;
+    if (values.isEmpty) {
+      _groupScales.remove(group);
+      return oldScale != 1.0;
+    }
+    final middle = values.length ~/ 2;
+    final scale = values.length.isOdd
+        ? values[middle]
+        : (values[middle - 1] + values[middle]) / 2;
+    if ((scale - oldScale).abs() < oldScale * 0.01) return false;
+    _groupScales[group] = scale;
+    return true;
   }
 
   double offsetOf(int index) {

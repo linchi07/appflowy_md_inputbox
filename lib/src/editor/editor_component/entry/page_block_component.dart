@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'indexed_document_scrollbar.dart';
+import 'block_height_oracle.dart';
 
 class PageBlockKeys {
   static const String type = 'page';
@@ -159,19 +160,60 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
       );
       if (!scrollController.useIndexedScrollbar) return list;
 
+      BlockHeightOracle? heightOracle;
+      double? oracleWidth;
+      final style = editorState.editorStyle;
+      final resolvedTextStyle = Theme.of(context)
+          .textTheme
+          .bodyMedium
+          ?.merge(style.textStyleConfiguration.text);
+
       return IndexedDocumentScrollbar(
         itemIds: itemIds,
         itemScrollController: scrollController.itemScrollController,
         scrollOffsetController: scrollController.scrollOffsetController,
         itemPositionsListener: scrollController.itemPositionsListener,
+        itemExtentGroup: (id) {
+          final item = itemsById[id];
+          if (item == null) return null;
+          // A node-supplied estimate is specific to that widget. Only the
+          // shared fallback is calibrated from sibling measurements.
+          return editorState.behaviorFor(item)?.estimateExtent == null
+              ? item.type
+              : (item.type, item.id);
+        },
+        itemExtentRevision: (id) => itemsById[id]?.contentRevision,
+        extentStyleSignature: Object.hash(
+          style.padding,
+          style.maxWidth,
+          style.textStyleConfiguration.text,
+          resolvedTextStyle,
+          style.textStyleConfiguration.lineHeight,
+          style.textScaleFactor,
+          style.textSpanDecorator,
+          style.maxMarkdownDecorationCharacters,
+          editorState.editable,
+        ),
         estimateItemExtent: (id, width) {
           final item = itemsById[id];
           if (item == null) return null;
-          return editorState.behaviorFor(item)?.estimateExtent?.call(
+          final supplied = editorState.behaviorFor(item)?.estimateExtent?.call(
                 editorState,
                 item,
                 width,
               );
+          if (supplied != null && supplied.isFinite && supplied > 0) {
+            return supplied;
+          }
+          if (heightOracle == null || oracleWidth != width) {
+            heightOracle = BlockHeightOracle(
+              style,
+              width,
+              resolvedTextStyle: resolvedTextStyle,
+            );
+            oracleWidth = width;
+          }
+          return heightOracle!.estimate(item);
         },
         color: editorState.editorStyle.colorScheme.mutedForeground
             .withValues(alpha: 0.65),

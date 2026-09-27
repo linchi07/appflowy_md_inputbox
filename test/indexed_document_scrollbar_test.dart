@@ -1,4 +1,5 @@
 import 'package:appflowy_editor/src/editor/editor_component/entry/indexed_document_scrollbar.dart';
+import 'package:appflowy_editor/src/editor/editor_component/entry/block_height_oracle.dart';
 import 'package:appflowy_editor/src/flutter/scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
@@ -17,6 +18,10 @@ class _RecordingItemScrollController extends ItemScrollController {
 void main() {
   test('block extent index refines offsets with measured heights', () {
     final index = BlockExtentIndex(['a', 'b', 'c', 'd']);
+    index.updateEstimates(
+      [null, null, null, null],
+      groups: ['a', 'b', 'c', 'd'],
+    );
 
     expect(index.totalExtent, 112);
     expect(index.indexAtOffset(27), 0);
@@ -36,7 +41,9 @@ void main() {
 
   test('block extent index keeps heights with IDs after insert and reorder',
       () {
-    final index = BlockExtentIndex(['a', 'b'])..record(0, 50);
+    final index = BlockExtentIndex(['a', 'b'])
+      ..updateEstimates([null, null], groups: ['a', 'b'])
+      ..record(0, 50);
 
     index.updateItems(['new', 'b', 'a', 'last']);
     expect(index.offsetOf(2), 56);
@@ -52,15 +59,115 @@ void main() {
 
   test('estimated tall blocks contribute their height before layout', () {
     final index = BlockExtentIndex(['before', 'code', 'after']);
-    index.updateEstimates([null, 1200, null]);
+    index.updateEstimates(
+      [null, 1200, null],
+      groups: ['before', 'code', 'after'],
+    );
     expect(index.totalExtent, 1256);
     expect(index.indexAtOffset(628), 1);
     expect(index.offsetOf(2), 1228);
 
     index.record(1, 25000);
     expect(index.totalExtent, 25056);
-    index.updateEstimates([null, 1300, null]);
+    index.updateEstimates(
+      [null, 1300, null],
+      groups: ['before', 'code', 'after'],
+    );
     expect(index.totalExtent, 1356);
+  });
+
+  test('visible blocks calibrate unmeasured siblings of the same type', () {
+    final index = BlockExtentIndex(['widget 1', 'widget 2', 'text'])
+      ..updateEstimates(
+        [40, 40, 40],
+        groups: ['widget', 'widget', 'text'],
+      );
+    index.record(0, 120);
+    expect(index.extentAt(1), 120);
+    expect(index.extentAt(2), 40);
+    expect(index.totalExtent, 280);
+
+    index.updateEstimates(
+      [50, 50, 50],
+      groups: ['widget', 'widget', 'text'],
+      invalidateMeasurements: true,
+    );
+    expect(index.totalExtent, 150);
+  });
+
+  test('text oracle estimates wrapping and explicit lines from font metrics',
+      () {
+    final style = EditorStyle.desktop(padding: EdgeInsets.zero);
+    final wide = BlockHeightOracle(style, 400);
+    final narrow = BlockHeightOracle(style, 80);
+    final single = paragraphNode(text: 'short');
+    final multiline = paragraphNode(text: 'short\nline\nline');
+    final long = paragraphNode(text: 'many words ' * 30);
+    expect(wide.estimate(multiline), greaterThan(wide.estimate(single) * 2));
+    expect(narrow.estimate(long), greaterThan(wide.estimate(long)));
+  });
+
+  test('content revisions propagate through nested widget nodes', () {
+    final text = paragraphNode(text: 'first');
+    final widget = Node(type: 'widget', children: [text]);
+    final before = widget.contentRevision;
+    text.updateAttributes({
+      blockComponentDelta: (Delta()..insert('second')).toJson(),
+    });
+    expect(widget.contentRevision, greaterThan(before));
+  });
+
+  testWidgets('unchanged offscreen estimates are reused across rebuilds',
+      (tester) async {
+    final itemController = ItemScrollController();
+    final positions = ItemPositionsListener.create();
+    var revision = 0;
+    var width = 400.0;
+    var estimateCalls = 0;
+    late StateSetter refresh;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            refresh = setState;
+            return Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: width,
+                height: 300,
+                child: IndexedDocumentScrollbar(
+                  itemIds: const ['item'],
+                  itemScrollController: itemController,
+                  itemPositionsListener: positions,
+                  itemExtentRevision: (_) => revision,
+                  estimateItemExtent: (id, width) {
+                    estimateCalls++;
+                    return 600;
+                  },
+                  child: ScrollablePositionedList.builder(
+                    itemCount: 1,
+                    itemScrollController: itemController,
+                    itemPositionsListener: positions,
+                    itemBuilder: (_, index) => const SizedBox(height: 600),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final initialCalls = estimateCalls;
+    refresh(() {});
+    await tester.pumpAndSettle();
+    expect(estimateCalls, initialCalls);
+    refresh(() => revision++);
+    await tester.pumpAndSettle();
+    expect(estimateCalls, initialCalls + 1);
+    refresh(() => width = 350);
+    await tester.pumpAndSettle();
+    expect(estimateCalls, initialCalls + 2);
   });
 
   testWidgets('thumb can seek inside one tall block', (tester) async {

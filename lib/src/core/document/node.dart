@@ -106,6 +106,17 @@ final class Node extends ChangeNotifier with LinkedListEntry<Node> {
   /// The attributes of the node.
   Attributes _attributes;
 
+  /// Changes when this node or one of its descendants changes content or
+  /// structure. Layout estimates can cache against this revision.
+  int get contentRevision => _contentRevision;
+  int _contentRevision = 0;
+
+  void _bumpContentRevision() {
+    for (Node? current = this; current != null; current = current.parent) {
+      current._contentRevision++;
+    }
+  }
+
   Attributes get attributes => {..._attributes};
 
   /// The path of the node.
@@ -122,6 +133,7 @@ final class Node extends ChangeNotifier with LinkedListEntry<Node> {
   final layerLink = LayerLink();
 
   void notify() {
+    _bumpContentRevision();
     notifyListeners();
   }
 
@@ -130,6 +142,7 @@ final class Node extends ChangeNotifier with LinkedListEntry<Node> {
   void updateAttributes(Attributes attributes) {
     _attributes = composeAttributes(this.attributes, attributes) ?? {};
 
+    _bumpContentRevision();
     notifyListeners();
   }
 
@@ -252,6 +265,7 @@ final class Node extends ChangeNotifier with LinkedListEntry<Node> {
   }
 
   void _notifyMutation() {
+    _bumpContentRevision();
     if (_mutationBatchDepth > 0) {
       _notificationPending = true;
     } else {
