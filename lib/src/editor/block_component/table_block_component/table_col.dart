@@ -27,7 +27,16 @@ class TableCol extends StatefulWidget {
 }
 
 class _TableColState extends State<TableCol> {
-  Map<String, void Function()> listeners = {};
+  final Map<Node, (int, VoidCallback)> _listeners = {};
+
+  @override
+  void dispose() {
+    for (final entry in _listeners.entries) {
+      entry.key.removeListener(entry.value.$2);
+    }
+    _listeners.clear();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,6 +77,7 @@ class _TableColState extends State<TableCol> {
   List<Widget> _buildCells(BuildContext context) {
     final rowsLen = widget.tableNode.rowsLen;
     final List<Widget> cells = [];
+    final activeNodes = <Node>{};
     final Widget cellBorder = Container(
       height: widget.tableNode.config.borderWidth,
       color: widget.tableStyle.borderColor,
@@ -78,6 +88,7 @@ class _TableColState extends State<TableCol> {
       updateRowHeightCallback(i);
       addListener(node, i);
       addListener(node.children.first, i);
+      activeNodes.addAll([node, node.children.first]);
 
       cells.addAll([
         widget.editorState.renderer.build(
@@ -88,6 +99,12 @@ class _TableColState extends State<TableCol> {
       ]);
     }
 
+    for (final staleNode in _listeners.keys
+        .where((node) => !activeNodes.contains(node))
+        .toList()) {
+      staleNode.removeListener(_listeners.remove(staleNode)!.$2);
+    }
+
     return [
       cellBorder,
       ...cells,
@@ -95,17 +112,22 @@ class _TableColState extends State<TableCol> {
   }
 
   void addListener(Node node, int row) {
-    if (listeners.containsKey(node.id)) {
+    final existing = _listeners[node];
+    if (existing?.$1 == row) {
       return;
     }
+    if (existing != null) {
+      node.removeListener(existing.$2);
+    }
 
-    listeners[node.id] = () => updateRowHeightCallback(row);
-    node.addListener(listeners[node.id]!);
+    void listener() => updateRowHeightCallback(row);
+    _listeners[node] = (row, listener);
+    node.addListener(listener);
   }
 
   void updateRowHeightCallback(int row) =>
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (row >= widget.tableNode.rowsLen) {
+        if (!mounted || row >= widget.tableNode.rowsLen) {
           return;
         }
 

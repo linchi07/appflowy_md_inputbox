@@ -104,24 +104,34 @@ class _TableCeBlockWidgetState extends State<TableCelBlockWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final cellHeight = context.select((Node n) => n.cellHeight);
+    final explicitColor = context.select(
+      (Node n) =>
+          widget.colorBuilder?.call(context, n) ??
+          (n.attributes[TableCellBlockKeys.colBackgroundColor] as String?)
+              ?.tryToColor() ??
+          (n.attributes[TableCellBlockKeys.rowBackgroundColor] as String?)
+              ?.tryToColor(),
+    );
+    final tableNode = widget.node.parent!;
     return Stack(
       children: [
         MouseRegion(
           onEnter: (_) => setState(() => _rowActionVisibility = true),
           onExit: (_) => setState(() => _rowActionVisibility = false),
-          child: Container(
-            constraints: BoxConstraints(
-              minHeight: context.select((Node n) => n.cellHeight),
-            ),
-            color: context.select(
-              (Node n) =>
-                  widget.colorBuilder?.call(context, n) ??
-                  (n.attributes[TableCellBlockKeys.colBackgroundColor]
-                          as String?)
-                      ?.tryToColor() ??
-                  (n.attributes[TableCellBlockKeys.rowBackgroundColor]
-                          as String?)
-                      ?.tryToColor(),
+          child: AnimatedBuilder(
+            animation: tableNode,
+            builder: (context, child) => Container(
+              constraints: BoxConstraints(
+                minHeight: cellHeight,
+              ),
+              color: explicitColor ??
+                  tableStyleCellColor(
+                    tableNode,
+                    widget.node,
+                    Theme.of(context).colorScheme,
+                  ),
+              child: child,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -162,4 +172,27 @@ class _TableCeBlockWidgetState extends State<TableCelBlockWidget> {
       ],
     );
   }
+}
+
+Color? tableStyleCellColor(Node table, Node cell, ColorScheme colorScheme) {
+  final row = cell.attributes[TableCellBlockKeys.rowPosition];
+  final col = cell.attributes[TableCellBlockKeys.colPosition];
+  final isHeader = (row == 0 &&
+          table.attributes[TableBlockKeys.shadeFirstRow] == true) ||
+      (col == 0 && table.attributes[TableBlockKeys.shadeFirstColumn] == true);
+  if (isHeader) {
+    return Color.alphaBlend(
+      Colors.grey.withValues(alpha: 0.18),
+      colorScheme.surface,
+    );
+  }
+  if (row is int &&
+      row.isOdd &&
+      table.attributes[TableBlockKeys.stripeRows] == true) {
+    return Color.alphaBlend(
+      Colors.grey.withValues(alpha: 0.07),
+      colorScheme.surface,
+    );
+  }
+  return null;
 }

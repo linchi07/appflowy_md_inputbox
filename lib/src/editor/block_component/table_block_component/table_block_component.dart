@@ -22,6 +22,12 @@ class TableBlockKeys {
   static const String rowsLen = 'rowsLen';
 
   static const String colsHeight = 'colsHeight';
+
+  static const String shadeFirstRow = 'shadeFirstRow';
+
+  static const String shadeFirstColumn = 'shadeFirstColumn';
+
+  static const String stripeRows = 'stripeRows';
 }
 
 class TableStyle {
@@ -249,80 +255,117 @@ class _TableBlockComponentWidgetState extends State<TableBlockComponentWidget>
         clipBehavior: Clip.none,
         children: [
           child,
-          Positioned(
-            top: -8,
-            left: 10,
-            child: Material(
-              elevation: 2,
-              borderRadius: BorderRadius.circular(4),
-              color: Colors.white,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.add_circle_outline, size: 16, color: Colors.black54),
-                    tooltip: '增加行',
-                    padding: const EdgeInsets.all(4),
-                    constraints: const BoxConstraints(),
-                    onPressed: () {
-                      TableActions.add(
-                        widget.tableNode.node,
-                        widget.tableNode.rowsLen,
-                        editorState,
-                        TableDirection.row,
-                      );
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add_circle, size: 16, color: Colors.black54),
-                    tooltip: '增加列',
-                    padding: const EdgeInsets.all(4),
-                    constraints: const BoxConstraints(),
-                    onPressed: () {
-                      TableActions.add(
-                        widget.tableNode.node,
-                        widget.tableNode.colsLen,
-                        editorState,
-                        TableDirection.col,
-                      );
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.remove_circle_outline, size: 16, color: Colors.black54),
-                    tooltip: '删除末尾行',
-                    padding: const EdgeInsets.all(4),
-                    constraints: const BoxConstraints(),
-                    onPressed: () {
-                      if (widget.tableNode.rowsLen > 1) {
-                        TableActions.delete(
+          if (editorState.editable)
+            Positioned(
+              top: -8,
+              left: 10,
+              child: Material(
+                elevation: 2,
+                borderRadius: BorderRadius.circular(4),
+                color: Theme.of(context).colorScheme.surface,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(
+                        Icons.add_circle_outline,
+                        size: 16,
+                      ),
+                      tooltip: '增加行',
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        TableActions.add(
                           widget.tableNode.node,
-                          widget.tableNode.rowsLen - 1,
+                          widget.tableNode.rowsLen,
                           editorState,
                           TableDirection.row,
                         );
-                      }
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.remove_circle, size: 16, color: Colors.black54),
-                    tooltip: '删除末尾列',
-                    padding: const EdgeInsets.all(4),
-                    constraints: const BoxConstraints(),
-                    onPressed: () {
-                      if (widget.tableNode.colsLen > 1) {
-                        TableActions.delete(
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.add_circle,
+                        size: 16,
+                      ),
+                      tooltip: '增加列',
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        TableActions.add(
                           widget.tableNode.node,
-                          widget.tableNode.colsLen - 1,
+                          widget.tableNode.colsLen,
                           editorState,
                           TableDirection.col,
                         );
-                      }
-                    },
-                  ),
-                ],
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.remove_circle_outline,
+                        size: 16,
+                      ),
+                      tooltip: '删除末尾行',
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        if (widget.tableNode.rowsLen > 1) {
+                          TableActions.delete(
+                            widget.tableNode.node,
+                            widget.tableNode.rowsLen - 1,
+                            editorState,
+                            TableDirection.row,
+                          );
+                        }
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.remove_circle,
+                        size: 16,
+                      ),
+                      tooltip: '删除末尾列',
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        if (widget.tableNode.colsLen > 1) {
+                          TableActions.delete(
+                            widget.tableNode.node,
+                            widget.tableNode.colsLen - 1,
+                            editorState,
+                            TableDirection.col,
+                          );
+                        }
+                      },
+                    ),
+                    PopupMenuButton<String>(
+                      key: const ValueKey('table-style-button'),
+                      tooltip: '表格样式',
+                      icon: const Icon(Icons.palette_outlined, size: 18),
+                      padding: const EdgeInsets.all(4),
+                      onSelected: (key) => TableActions.toggleStyle(
+                        widget.tableNode.node,
+                        editorState,
+                        key,
+                      ),
+                      itemBuilder: (context) => [
+                        for (final (key, label) in [
+                          (TableBlockKeys.shadeFirstRow, '首行灰色'),
+                          (TableBlockKeys.shadeFirstColumn, '首列灰色'),
+                          (TableBlockKeys.stripeRows, '交替行底色'),
+                        ])
+                          CheckedPopupMenuItem<String>(
+                            value: key,
+                            checked:
+                                widget.tableNode.node.attributes[key] == true,
+                            child: Text(label),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
