@@ -15,6 +15,7 @@ class AppFlowyEditor extends StatefulWidget {
     Map<String, BlockComponentBuilder>? blockComponentBuilders,
     List<CharacterShortcutEvent>? characterShortcutEvents,
     List<CommandShortcutEvent>? commandShortcutEvents,
+    this.nodeBehaviors,
     this.contextMenuBuilder,
     this.contentInsertionConfiguration,
     this.editable = true,
@@ -37,7 +38,7 @@ class AppFlowyEditor extends StatefulWidget {
     this.disableScrollService = false,
     this.disableAutoScroll = false,
     this.autoScrollEdgeOffset = appFlowyEditorAutoScrollEdgeOffset,
-    this.documentRules = const [],
+    this.documentRules,
     this.blockWrapper,
     this.onPaste,
   })  : editorStyle = editorStyle ?? EditorStyle.desktop(),
@@ -113,6 +114,9 @@ class AppFlowyEditor extends StatefulWidget {
   /// );
   /// ```
   final List<CommandShortcutEvent> commandShortcutEvents;
+
+  /// Input and completion handlers dispatched by the selected node type.
+  final Map<String, NodeBehavior>? nodeBehaviors;
 
   /// The context menu builder.
   ///
@@ -224,7 +228,7 @@ class AppFlowyEditor extends StatefulWidget {
 
   /// The rules to apply to the document.
   ///
-  final List<DocumentRule> documentRules;
+  final List<DocumentRule>? documentRules;
 
   /// Block wrapper
   ///
@@ -391,9 +395,14 @@ class _AppFlowyEditorState extends State<AppFlowyEditor> {
     editorState.showFooter = widget.footer != null;
     editorState.enableAutoComplete = widget.enableAutoComplete;
     editorState.autoCompleteTextProvider = widget.autoCompleteTextProvider;
+    if (widget.nodeBehaviors case final nodeBehaviors?) {
+      editorState.nodeBehaviors = nodeBehaviors;
+    }
     editorState.disableAutoScroll = widget.disableAutoScroll;
     editorState.autoScrollEdgeOffset = widget.autoScrollEdgeOffset;
-    editorState.documentRules = widget.documentRules;
+    if (widget.documentRules case final documentRules?) {
+      editorState.documentRules = documentRules;
+    }
     editorState.onPaste = widget.onPaste;
   }
 

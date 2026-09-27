@@ -5,6 +5,11 @@ import 'package:flutter/material.dart';
 import '../appflowy_editor.dart';
 import 'editor/util/platform_extension.dart';
 
+final _markdownDocumentRules = <DocumentRule>[
+  codeFencePromotionRule,
+  dividerPromotionRule,
+];
+
 class MDEditorController {
   MDEditorController({
     String? initialText,
@@ -16,6 +21,8 @@ class MDEditorController {
     editorState = EditorState.blank(
       maxHistoryItemSize: maxHistoryItemSize,
     );
+    editorState.nodeBehaviors = {CodeBlockKeys.type: codeNodeBehavior};
+    editorState.documentRules = _markdownDocumentRules;
     if (initialText != null) {
       editorState.text = initialText;
       characterCounter?.value = initialText.length;
@@ -207,6 +214,7 @@ class _MDEditorState extends State<MDEditor> {
       onPaste: widget.onPaste,
       blockComponentBuilders: {
         ...standardBlockComponentBuilderMap,
+        CodeBlockKeys.type: CodeBlockComponentBuilder(),
         ParagraphBlockKeys.type: MarkdownBlockComponentBuilder(
           configuration: BlockComponentConfiguration(
             placeholderText: (node) =>
@@ -215,6 +223,8 @@ class _MDEditorState extends State<MDEditor> {
         ),
       },
       editorStyle: editorStyle,
+      nodeBehaviors: {CodeBlockKeys.type: codeNodeBehavior},
+      documentRules: _markdownDocumentRules,
       commandShortcutEvents: [
         if (widget.onSend != null) ...[
           sendShortcutEvent(onSend: onSend),

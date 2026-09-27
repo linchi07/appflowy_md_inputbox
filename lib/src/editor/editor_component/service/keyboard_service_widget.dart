@@ -182,7 +182,17 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
       return KeyEventResult.ignored;
     }
 
-    for (final shortcutEvent in widget.commandShortcutEvents) {
+    final selection = editorState.selection;
+    final selectedNode = selection == null || !selection.isSingle
+        ? null
+        : editorState.getNodeAtPath(selection.start.path);
+    final nodeEvents =
+        editorState.behaviorFor(selectedNode)?.commandShortcuts ??
+            const <CommandShortcutEvent>[];
+    for (final shortcutEvent in [
+      ...nodeEvents,
+      ...widget.commandShortcutEvents,
+    ]) {
       // check if the shortcut event can respond to the raw key event
       if (shortcutEvent.canRespondToRawKeyEvent(event)) {
         final result = shortcutEvent.handler(editorState);

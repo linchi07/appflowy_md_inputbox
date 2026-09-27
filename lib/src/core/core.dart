@@ -6,6 +6,7 @@ export 'document/node_iterator.dart';
 export 'document/path.dart';
 export 'document/rules/at_least_one_editable_node_rule.dart';
 export 'document/rules/document_rule.dart';
+export 'document/rules/text_node_promotion_rule.dart';
 export 'document/text_delta.dart';
 export 'legacy/built_in_attribute_keys.dart';
 export 'location/position.dart';

@@ -23,9 +23,12 @@ export 'base_component_keys.dart';
 export 'code_block_component/code_block_component.dart';
 export 'code_block_component/code_character_shortcut.dart';
 export 'code_block_component/code_exit_command.dart';
+export 'code_block_component/code_node_behavior.dart';
+export 'code_block_component/code_fence_promotion_rule.dart';
 // bulleted list
 // divider
 export 'divider_block_component/divider_block_component.dart';
+export 'divider_block_component/divider_promotion_rule.dart';
 export 'divider_block_component/divider_character_shortcut.dart';
 export 'divider_block_component/divider_menu_item.dart';
 // heading

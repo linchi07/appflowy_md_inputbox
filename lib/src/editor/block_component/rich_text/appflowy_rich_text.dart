@@ -118,13 +118,22 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
       widget.textSpanDecoratorForCustomAttributes ??
       widget.editorState.editorStyle.textSpanDecorator;
 
-  AppFlowyAutoCompleteTextProvider? get autoCompleteTextProvider =>
-      widget.autoCompleteTextProvider ??
-      widget.editorState.autoCompleteTextProvider;
+  AppFlowyAutoCompleteTextProvider? get autoCompleteTextProvider {
+    if (widget.autoCompleteTextProvider case final provider?) {
+      return provider;
+    }
+    final completion = widget.editorState.behaviorFor(widget.node)?.completion;
+    if (completion != null) {
+      return (context, node, textSpan) =>
+          completion(widget.editorState, node);
+    }
+    return widget.editorState.autoCompleteTextProvider;
+  }
 
   bool get enableAutoComplete =>
       (widget.editorState.enableAutoComplete ||
-          widget.autoCompleteTextProvider != null) &&
+          widget.autoCompleteTextProvider != null ||
+          widget.editorState.behaviorFor(widget.node)?.completion != null) &&
       autoCompleteTextProvider != null;
 
   TextStyleConfiguration get textStyleConfiguration =>

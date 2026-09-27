@@ -3,8 +3,8 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 final _listTypes = <String>[];
 
 extension EditorCopyPaste on EditorState {
-  /// Keep code boundaries structural when pasting into the middle of text.
-  Future<void> pasteNodesContainingCode(List<Node> nodes) async {
+  /// Keep registered widget-node boundaries when pasting into text.
+  Future<void> pasteNodesPreservingBoundaries(List<Node> nodes) async {
     final selection = await deleteSelectionIfNeeded();
     if (selection == null) return;
     final original = getNodeAtPath(selection.start.path);
@@ -14,7 +14,8 @@ extension EditorCopyPaste on EditorState {
     final prefix = delta.slice(0, selection.startIndex);
     final suffix = delta.slice(selection.endIndex);
     if (prefix.isNotEmpty) {
-      if (nodes.first.type == CodeBlockKeys.type || nodes.first.delta == null) {
+      if (behaviorFor(nodes.first)?.isolateOnPaste == true ||
+          nodes.first.delta == null) {
         nodes.insert(0, paragraphNode(delta: prefix));
       } else {
         nodes.first.insertDelta(prefix, insertAfter: false);
@@ -23,13 +24,15 @@ extension EditorCopyPaste on EditorState {
     final pastedLastIndex = nodes.length - 1;
     var caretOffset = nodes.last.delta?.length ?? 0;
     if (suffix.isNotEmpty) {
-      if (nodes.last.type == CodeBlockKeys.type || nodes.last.delta == null) {
+      if (behaviorFor(nodes.last)?.isolateOnPaste == true ||
+          nodes.last.delta == null) {
         nodes.add(paragraphNode(delta: suffix));
       } else {
         nodes.last.insertDelta(suffix);
       }
     }
-    if (original.children.isNotEmpty && nodes.last.type == CodeBlockKeys.type) {
+    if (original.children.isNotEmpty &&
+        behaviorFor(nodes.last)?.isolateOnPaste == true) {
       nodes.add(paragraphNode());
     }
     for (final child in original.children) {

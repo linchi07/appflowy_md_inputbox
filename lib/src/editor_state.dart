@@ -311,9 +311,8 @@ class EditorState {
   }
 
   String _textForBlock(Node block) => _blockTextCache.putIfAbsent(block, () {
-        if (block.type == CodeBlockKeys.type) {
-          return codeBlockToMarkdown(block);
-        }
+        final serialize = behaviorFor(block)?.serialize;
+        if (serialize != null) return serialize(block);
         if (block.type == DividerBlockKeys.type) {
           return '---';
         }
@@ -429,21 +428,22 @@ class EditorState {
   /// Pastes plain text (parsed as markdown) into the document.
   Future<void> pastePlainText(String plainText) async {
     if (isDisposed) return;
-    // Inside a code node the clipboard is code, including any literal fences.
-    final codeSelection = selection;
-    if (codeSelection != null &&
-        codeSelection.isSingle &&
-        getNodeAtPath(codeSelection.start.path)?.type == CodeBlockKeys.type) {
+    // Optional nodes may own the literal paste behavior for their contents.
+    final literalSelection = selection;
+    final literalNode = literalSelection == null || !literalSelection.isSingle
+        ? null
+        : getNodeAtPath(literalSelection.start.path);
+    if (behaviorFor(literalNode)?.pasteAsPlainText == true) {
       final collapsed = await deleteSelectionIfNeeded();
-      final codeNode =
+      final currentNode =
           collapsed == null ? null : getNodeAtPath(collapsed.start.path);
-      if (codeNode != null && codeNode.type == CodeBlockKeys.type) {
+      if (currentNode != null && currentNode.type == literalNode?.type) {
         await apply(
           transaction
-            ..insertText(codeNode, collapsed!.start.offset, plainText)
+            ..insertText(currentNode, collapsed!.start.offset, plainText)
             ..afterSelection = Selection.collapsed(
               Position(
-                path: codeNode.path,
+                path: currentNode.path,
                 offset: collapsed.start.offset + plainText.length,
               ),
             ),
@@ -488,8 +488,8 @@ class EditorState {
     // Keep the current selection intact while a large payload is parsed in an
     // isolate. The paste helpers begin changing the document only after this
     // revision and selection check.
-    if (nodes.any((node) => node.type == CodeBlockKeys.type)) {
-      await pasteNodesContainingCode(nodes.toList());
+    if (nodes.any((node) => behaviorFor(node)?.isolateOnPaste == true)) {
+      await pasteNodesPreservingBoundaries(nodes.toList());
     } else if (nodes.length == 1) {
       await pasteSingleLineNode(nodes.first);
     } else {
@@ -579,6 +579,21 @@ class EditorState {
   bool enableAutoComplete = false;
   AppFlowyAutoCompleteTextProvider? autoCompleteTextProvider;
 
+  /// Optional node-local input behavior, keyed by [Node.type].
+  Map<String, NodeBehavior> get nodeBehaviors => _nodeBehaviors;
+  Map<String, NodeBehavior> _nodeBehaviors = const {};
+
+  set nodeBehaviors(Map<String, NodeBehavior> value) {
+    if (mapEquals(_nodeBehaviors, value)) return;
+    _nodeBehaviors = value;
+    _blockTextCache.clear();
+    _cachedText = null;
+    _totalTextLength = null;
+  }
+
+  NodeBehavior? behaviorFor(Node? node) =>
+      node == null ? null : _nodeBehaviors[node.type];
+
   // only used for testing
   bool disableSealTimer = false;
 
@@ -587,6 +602,7 @@ class EditorState {
   List<DocumentRule> _documentRules = [];
 
   set documentRules(List<DocumentRule> value) {
+    if (listEquals(_documentRules, value)) return;
     _documentRules = value;
 
     _subscription?.cancel();

@@ -155,29 +155,27 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
             editorState: editorState,
             placeholderText: ' ',
             textDirection: TextDirection.ltr,
-            autoCompleteTextProvider: (context, node, textSpan) {
-              final selection = editorState.selection;
-              if (selection == null ||
-                  !selection.isCollapsed ||
-                  !selection.start.path.equals(node.path) ||
-                  selection.start.offset != (node.delta?.length ?? 0)) {
-                return null;
-              }
-              return codeCompletionSuffix(source, language);
-            },
             textSpanDecorator: (span) => span.updateTextStyle(codeStyle),
             textSpanDecoratorForCustomAttributes:
-                (context, node, offset, insert, before, after) =>
-                    _highlighter.spanForSegment(
-              source: source,
-              language: language,
-              start: offset,
-              segment: insert.text,
-              style: (before.style ?? const TextStyle())
-                  .merge(codeStyle)
-                  .copyWith(color: colors.foreground),
-              dark: dark,
-            ),
+                (context, node, offset, insert, before, after) {
+              // Completion inserts are display-only and extend past the
+              // document text. Keep their ghost/transparent styling intact.
+              if (insert.attributes?.autoComplete == true ||
+                  insert.attributes?.transparent == true ||
+                  offset + insert.text.length > source.length) {
+                return before;
+              }
+              return _highlighter.spanForSegment(
+                source: source,
+                language: language,
+                start: offset,
+                segment: insert.text,
+                style: (before.style ?? const TextStyle())
+                    .merge(codeStyle)
+                    .copyWith(color: colors.foreground),
+                dark: dark,
+              );
+            },
             cursorColor: editorState.editorStyle.cursorColor,
             selectionColor: editorState.editorStyle.selectionColor,
             cursorWidth: editorState.editorStyle.cursorWidth,

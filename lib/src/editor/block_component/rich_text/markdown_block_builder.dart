@@ -3,7 +3,6 @@ import '../../../../appflowy_editor.dart';
 import 'markdown_block_syntax.dart';
 
 final RegExp _orderedListPattern = RegExp(r'^\d+\. ');
-final RegExp _dividerPattern = RegExp(r'^([-*_])\1{2,}$|^—-$|^——-$');
 
 const markdownCodeBlockKey = ValueKey('markdown-code-block');
 const markdownDisplayMathBlockKey = ValueKey('markdown-display-math-block');
@@ -74,7 +73,6 @@ class _MarkdownBlockComponentWidgetState
   Node get node => widget.node;
 
   bool _showPlaceholder = false;
-  bool _conversionScheduled = false;
 
   @override
   void initState() {
@@ -108,47 +106,6 @@ class _MarkdownBlockComponentWidgetState
         text.length <= 64 * 1024 ? parseMarkdownFencedBlock(text) : null;
     final isCodeBlock = fencedBlock?.kind == MarkdownFencedBlockKind.code &&
         text.contains('\n');
-    if (fencedBlock != null && isCodeBlock && !_conversionScheduled) {
-      final codeFence = fencedBlock;
-      _conversionScheduled = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted ||
-            editorState.getNodeAtPath(node.path) != node ||
-            node.delta?.toPlainText() != text) {
-          _conversionScheduled = false;
-          return;
-        }
-        final body = text.substring(codeFence.openingEnd, codeFence.contentEnd);
-        final replacement = codeBlockNode(
-          code: body,
-          language: codeFence.language ?? '',
-          openingFence: text.substring(0, text.indexOf('\n')),
-          closed: codeFence.isClosed,
-        );
-        final selection = editorState.selection;
-        final caret = selection != null &&
-                selection.isSingle &&
-                selection.start.path.equals(node.path)
-            ? (selection.start.offset - codeFence.openingEnd)
-                .clamp(0, body.length)
-            : body.length;
-        final transaction = editorState.transaction
-          ..insertNode(node.path, replacement)
-          ..deleteNode(node);
-        if (selection != null &&
-            selection.isSingle &&
-            selection.start.path.equals(node.path)) {
-          transaction.afterSelection = Selection.collapsed(
-            Position(
-              path: node.path,
-              offset: caret,
-            ),
-          );
-        }
-        await editorState.apply(transaction);
-        _conversionScheduled = false;
-      });
-    }
     final isDisplayMathBlock =
         fencedBlock?.kind == MarkdownFencedBlockKind.displayMath;
     bool isQuote = fencedBlock == null && text.startsWith('> ');
@@ -158,26 +115,6 @@ class _MarkdownBlockComponentWidgetState
         (text.startsWith('- ') ||
             text.startsWith('* ') ||
             _orderedListPattern.hasMatch(text));
-
-    // Divider check: exactly ---, *** or ___ at the beginning of a paragraph, including em-dash variants
-    final isDivider = fencedBlock == null && _dividerPattern.hasMatch(text);
-
-    if (isDivider) {
-      final selection = editorState.selection;
-      if (selection != null &&
-          selection.isCollapsed &&
-          selection.start.path.equals(node.path)) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          final transaction = editorState.transaction
-            ..insertNode(node.path, dividerNode())
-            ..deleteNode(node)
-            ..insertNode(node.path.next, paragraphNode())
-            ..afterSelection =
-                Selection.collapsed(Position(path: node.path.next));
-          editorState.apply(transaction);
-        });
-      }
-    }
 
     final textDirection = calculateTextDirection(
       layoutDirection: Directionality.maybeOf(context),

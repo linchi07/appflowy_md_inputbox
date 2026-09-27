@@ -10,5 +10,11 @@ The host editor owns the text model, IME, selection and undo. Call
 `codeCompletionSuffix` to the host's ghost text and Tab completion hooks.
 
 The AppFlowy integration is in
-`lib/src/editor/block_component/code_block_component/`. A host can register a
-different block builder or reuse this package in another node editor.
+`lib/src/editor/block_component/code_block_component/`. Its `codeNodeBehavior`
+registers node-local character and command shortcuts, completion, Markdown
+serialization, and paste boundaries through the editor's `NodeBehavior`
+contract. `codeFencePromotionRule` uses the generic `TextNodePromotionRule` to
+turn a typed fenced paragraph into a code node after the text transaction.
+`MDEditor` supplies the builder, behavior, and rule; other hosts can choose
+their own integration while reusing this package's editing and highlighting
+logic.

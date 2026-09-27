@@ -14,7 +14,13 @@ Future<bool> executeCharacterShortcutEvent(
     return false;
   }
 
-  for (final shortcutEvent in characterShortcutEvents) {
+  final selection = editorState.selection;
+  final node = selection == null || !selection.isSingle
+      ? null
+      : editorState.getNodeAtPath(selection.start.path);
+  final nodeEvents = editorState.behaviorFor(node)?.characterShortcuts ??
+      const <CharacterShortcutEvent>[];
+  for (final shortcutEvent in [...nodeEvents, ...characterShortcutEvents]) {
     bool hasMatchRegExp = false;
     final regExp = shortcutEvent.regExp;
     if (regExp != null && character != null) {

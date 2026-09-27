@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../appflowy_editor.dart';
 import 'markdown_block_syntax.dart';
-import 'package:node_code_editor/node_code_editor.dart';
 
 bool _insertLiteralNewlineInFencedBlock(
   EditorState editorState,
@@ -55,26 +54,6 @@ bool insertMarkdownNewLine(
 
   final text = delta.toPlainText();
   final offset = selection.start.offset;
-  if (node.type == CodeBlockKeys.type) {
-    final edit = codeEditForInsertion(
-      text,
-      offset,
-      '\n',
-      node.attributes[CodeBlockKeys.language] as String? ?? '',
-    );
-    if (edit == null) return false;
-    editorState.apply(
-      editorState.transaction
-        ..insertText(node, edit.offset, edit.text)
-        ..afterSelection = Selection.collapsed(
-          Position(
-            path: node.path,
-            offset: edit.caretOffset,
-          ),
-        ),
-    );
-    return true;
-  }
   if (_insertLiteralNewlineInFencedBlock(editorState, node, offset)) {
     return true;
   }

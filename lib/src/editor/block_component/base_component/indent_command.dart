@@ -56,21 +56,6 @@ CommandShortcutEventHandler _indentCommandHandler = (editorState) {
     return KeyEventResult.ignored;
   }
 
-  final codeNode = editorState.getNodeAtPath(selection.start.path);
-  if (selection.isCollapsed && codeNode?.type == CodeBlockKeys.type) {
-    editorState.apply(
-      editorState.transaction
-        ..insertText(codeNode!, selection.start.offset, '  ')
-        ..afterSelection = Selection.collapsed(
-          Position(
-            path: codeNode.path,
-            offset: selection.start.offset + 2,
-          ),
-        ),
-    );
-    return KeyEventResult.handled;
-  }
-
   if (!isIndentable(editorState)) {
     // ignore the system default tab behavior
     return KeyEventResult.handled;

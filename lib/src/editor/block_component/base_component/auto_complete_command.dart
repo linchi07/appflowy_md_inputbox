@@ -1,13 +1,11 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
-import 'package:node_code_editor/node_code_editor.dart';
 
-// Add your custom block keys if it supports auto complete
+// Built-in text blocks; optional nodes supply a NodeBehavior.completion.
 final autoCompletableBlockTypes = {
   ParagraphBlockKeys.type,
   QuoteBlockKeys.type,
   HeadingBlockKeys.type,
-  CodeBlockKeys.type,
 };
 
 /// Auto complete the current block
@@ -32,23 +30,23 @@ CommandShortcutEventHandler _tabToAutoCompleteCommandHandler = (editorState) {
   final node = editorState.getNodeAtPath(selection.end.path);
   final context = node?.context ?? editorState.document.root.context;
   final delta = node?.delta;
+  final completion = editorState.behaviorFor(node)?.completion;
 
   // Now, this command only support auto complete the text if the cursor is at the end of the block
   if (node == null ||
-      (context == null && node.type != CodeBlockKeys.type) ||
-      !autoCompletableBlockTypes.contains(node.type) ||
+      (context == null && completion == null) ||
+      (!autoCompletableBlockTypes.contains(node.type) && completion == null) ||
       delta == null ||
       selection.endIndex != delta.length) {
     return KeyEventResult.ignored;
   }
 
   // Support async auto complete text provider in the future
-  final autoCompleteText = node.type == CodeBlockKeys.type
-      ? codeCompletionSuffix(
-          node.delta?.toPlainText() ?? '',
-          node.attributes[CodeBlockKeys.language] as String? ?? '',
-        )
-      : editorState.autoCompleteTextProvider?.call(context!, node, null);
+  final autoCompleteText = completion != null
+      ? completion(editorState, node)
+      : context == null
+          ? null
+          : editorState.autoCompleteTextProvider?.call(context, node, null);
   if (autoCompleteText == null || autoCompleteText.isEmpty) {
     return KeyEventResult.ignored;
   }

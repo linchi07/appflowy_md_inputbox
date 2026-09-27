@@ -12,9 +12,9 @@ final codeCharacterShortcut = CharacterShortcutEvent(
     final selection = editorState.selection;
     if (selection == null || !selection.isCollapsed) return false;
     final node = editorState.getNodeAtPath(selection.start.path);
-    if (node?.type != CodeBlockKeys.type) return false;
+    if (node == null) return false;
     final edit = codeEditForInsertion(
-      node!.delta?.toPlainText() ?? '',
+      node.delta?.toPlainText() ?? '',
       selection.start.offset,
       character,
       node.attributes[CodeBlockKeys.language] as String? ?? '',

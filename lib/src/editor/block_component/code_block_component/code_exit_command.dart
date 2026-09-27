@@ -12,8 +12,8 @@ final codeExitCommand = CommandShortcutEvent(
       return KeyEventResult.ignored;
     }
     final node = editorState.getNodeAtPath(selection.start.path);
-    if (node?.type != CodeBlockKeys.type) return KeyEventResult.ignored;
-    final nextPath = node!.path.next;
+    if (node == null) return KeyEventResult.ignored;
+    final nextPath = node.path.next;
     editorState.apply(
       editorState.transaction
         ..insertNode(nextPath, paragraphNode())

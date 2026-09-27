@@ -22,6 +22,7 @@ export 'service/scroll_service_widget.dart';
 export 'service/selection_service.dart';
 export 'service/selection_service_widget.dart';
 export 'service/shortcuts/command/copy_paste_extension.dart';
+export 'service/node_behavior.dart';
 // shortcuts
 export 'service/shortcut_events.dart';
 export 'style/default_text_span_decorator_for_attribute.dart';
