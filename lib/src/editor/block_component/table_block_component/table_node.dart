@@ -129,6 +129,66 @@ class TableNode {
 
   Node getCell(int col, int row) => _cells[col][row];
 
+  /// Copy a cell rectangle in visual row order, preserving empty cells and
+  /// trailing whitespace inside cell text.
+  String toTsv({int minCol = 0, int minRow = 0, int? maxCol, int? maxRow}) {
+    final lastCol = maxCol ?? colsLen - 1;
+    final lastRow = maxRow ?? rowsLen - 1;
+    return [
+      for (var row = minRow; row <= lastRow; row++)
+        [
+          for (var col = minCol; col <= lastCol; col++)
+            getCell(col, row).children.firstOrNull?.delta?.toPlainText() ?? '',
+        ].join('\t'),
+    ].join('\n');
+  }
+
+  /// Serialize a cell rectangle as a standard Markdown table so Obsidian,
+  /// GitHub, and other Markdown tools immediately recognize it as a table.
+  String toMarkdown({
+    int minCol = 0,
+    int minRow = 0,
+    int? maxCol,
+    int? maxRow,
+  }) {
+    final lastCol = maxCol ?? colsLen - 1;
+    final lastRow = maxRow ?? rowsLen - 1;
+    if (colsLen == 0 || rowsLen == 0 || minCol > lastCol || minRow > lastRow) {
+      return '';
+    }
+
+    String escapeCell(String text) {
+      return text
+          .replaceAll('\r\n', '<br>')
+          .replaceAll('\n', '<br>')
+          .replaceAll('|', r'\|');
+    }
+
+    final buffer = StringBuffer();
+    final headerCells = <String>[];
+    for (var col = minCol; col <= lastCol; col++) {
+      final text =
+          getCell(col, minRow).children.firstOrNull?.delta?.toPlainText() ?? '';
+      headerCells.add(escapeCell(text));
+    }
+    buffer.writeln('| ${headerCells.join(' | ')} |');
+
+    final delimiters = List.filled(lastCol - minCol + 1, '---');
+    buffer.writeln('| ${delimiters.join(' | ')} |');
+
+    for (var row = minRow + 1; row <= lastRow; row++) {
+      final rowCells = <String>[];
+      for (var col = minCol; col <= lastCol; col++) {
+        final text =
+            getCell(col, row).children.firstOrNull?.delta?.toPlainText() ?? '';
+        rowCells.add(escapeCell(text));
+      }
+      buffer.writeln('| ${rowCells.join(' | ')} |');
+    }
+
+    return buffer.toString().trimRight();
+  }
+
   TableConfig get config => _config;
 
   int get colsLen => _cells.length;

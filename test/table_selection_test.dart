@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor/src/editor/block_component/table_block_component/table_view.dart';
+import 'package:appflowy_editor/src/editor/block_component/base_component/selection/selection_area_painter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +11,22 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('TableSelection model', () {
+    test('TSV keeps visual row order and trailing whitespace', () {
+      final table = TableNode.fromList([
+        ['A', '1'],
+        ['B ', ''],
+      ]);
+      expect(table.toTsv(), 'A\tB \n1\t');
+    });
+
+    test('toMarkdown serializes table as GFM Markdown table', () {
+      final table = TableNode.fromList([
+        ['A', '1'],
+        ['B', '2'],
+      ]);
+      expect(table.toMarkdown(), '| A | B |\n| --- | --- |\n| 1 | 2 |');
+    });
+
     test('normalizes coordinates in forward drag', () {
       const sel = TableSelection(
         startCol: 0,
@@ -70,7 +88,8 @@ void main() {
       );
     }
 
-    testWidgets('dragging across cells activates TableSelection and clears text selection',
+    testWidgets(
+        'dragging across cells activates TableSelection and clears text selection',
         (tester) async {
       final state = createTableState();
       await tester.pumpWidget(
@@ -114,7 +133,77 @@ void main() {
       state.dispose();
     });
 
-    testWidgets('clicking col handle selects entire column and Delete clears it with undo support',
+    testWidgets('clicking outside or on a selected cell clears the cell range',
+        (tester) async {
+      final table = TableNode.fromList([
+        ['A', '1'],
+        ['B', '2'],
+      ]);
+      final state = EditorState(
+        document: Document(
+          root: pageNode(
+            children: [
+              table.node,
+              paragraphNode(text: 'After table'),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 700,
+            height: 500,
+            child: AppFlowyEditor(
+              editorState: state,
+              editorStyle: EditorStyle.desktop(padding: EdgeInsets.zero),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final tableTopLeft = tester.getTopLeft(find.byType(TableView));
+      final start = tableTopLeft + const Offset(50, 40);
+      final end = tableTopLeft + const Offset(200, 70);
+      Future<void> selectCells() async {
+        final drag = await tester.startGesture(start);
+        await tester.pump();
+        await drag.moveTo(end);
+        await tester.pump();
+        await drag.up();
+        await tester.pump();
+        expect(
+          find.byKey(const ValueKey('table-selection-border')),
+          findsOneWidget,
+        );
+      }
+
+      await selectCells();
+      final paragraphTopLeft = tester.getTopLeft(
+        find.byKey(state.document.root.children.last.key),
+      );
+      await tester.tapAt(paragraphTopLeft + const Offset(10, 12));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('table-selection-border')),
+        findsNothing,
+      );
+
+      await selectCells();
+      await tester.tapAt(start);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('table-selection-border')),
+        findsNothing,
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      state.dispose();
+    });
+
+    testWidgets(
+        'clicking col handle selects entire column and Delete clears it with undo support',
         (tester) async {
       final state = createTableState();
       await tester.pumpWidget(
@@ -161,9 +250,16 @@ void main() {
       // 撤销验证
       state.undoManager.undo();
       await tester.pump();
-      final restoredTable = TableNode(node: state.document.root.children.single);
-      expect(restoredTable.getCell(0, 0).children.single.delta?.toPlainText(), 'A');
-      expect(restoredTable.getCell(0, 1).children.single.delta?.toPlainText(), '1');
+      final restoredTable =
+          TableNode(node: state.document.root.children.single);
+      expect(
+        restoredTable.getCell(0, 0).children.single.delta?.toPlainText(),
+        'A',
+      );
+      expect(
+        restoredTable.getCell(0, 1).children.single.delta?.toPlainText(),
+        '1',
+      );
 
       await tester.pumpWidget(const SizedBox.shrink());
       state.dispose();
@@ -217,7 +313,7 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
       await tester.pump();
 
-      expect(clipboardText, 'A\tB\n1\t2');
+      expect(clipboardText, '| A | B |\n| --- | --- |\n| 1 | 2 |');
 
       // 按 Escape 清空选区
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -225,6 +321,52 @@ void main() {
 
       await tester.pumpWidget(const SizedBox.shrink());
       state.dispose();
+    });
+
+    testWidgets(
+        'dragging cells across table triggers autoscroll and clamps bounds correctly',
+        (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+      final state = createTableState();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 700,
+            height: 400,
+            child: AppFlowyEditor(
+              editorState: state,
+              editorStyle: EditorStyle.desktop(padding: EdgeInsets.zero),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final tableFinder = find.byType(TableView);
+      final tableTopLeft = tester.getTopLeft(tableFinder);
+
+      // 从 (0, 0) 开始拖拽，拖到 (1, 1) 右下外缘进行 clamp 测试
+      final startOffset = tableTopLeft + const Offset(50, 40);
+      final farOffset = tableTopLeft + const Offset(230, 80);
+
+      final gesture = await tester.startGesture(startOffset);
+      await tester.pump();
+      await gesture.moveTo(farOffset);
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+
+      // 选区成功被 clamp 到了整表 (0, 0) 到 (1, 1)
+      expect(
+        find.byKey(const ValueKey('table-selection-border')),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      state.dispose();
+      debugDefaultTargetPlatformOverride = null;
     });
   });
 
@@ -247,7 +389,148 @@ void main() {
       );
     }
 
-    test('cell-internal text selection is preserved without atomic expansion', () {
+    testWidgets(
+        'whole-table selection uses cell colors and Cmd+C copies the table',
+        (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      copyCommand.updateCommand(command: 'ctrl+c', macOSCommand: 'cmd+c');
+      String? clipboardText;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            clipboardText = (call.arguments as Map)['text'] as String?;
+          }
+          return null;
+        },
+      );
+
+      const primary = Color(0xFF8752B5);
+      final state = createMultiBlockState();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(
+            colorScheme: const ColorScheme.light(primary: primary),
+          ),
+          home: SizedBox(
+            width: 700,
+            height: 500,
+            child: AppFlowyEditor(
+              editorState: state,
+              editorStyle: EditorStyle.desktop(padding: EdgeInsets.zero),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      state.updateSelectionWithReason(
+        Selection(
+          start: Position(path: [0], offset: 2),
+          end: Position(path: [1, 1, 0], offset: 1),
+        ),
+        reason: SelectionUpdateReason.uiEvent,
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(state.selection!.end.path, [1]);
+      expect(
+        find.byKey(const ValueKey('table-selection-border')),
+        findsOneWidget,
+      );
+      final cells = find.byType(TableCelBlockWidget);
+      expect(cells, findsNWidgets(4));
+      for (final cell in cells.evaluate()) {
+        expect(TableSelectionScope.of(cell), isNotNull);
+      }
+      final expectedColor = Color.alphaBlend(
+        primary.withValues(alpha: 0.18),
+        Theme.of(tester.element(cells.first)).colorScheme.surface,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(TableView),
+          matching: find.byWidgetPredicate(
+            (widget) => widget is Container && widget.color == expectedColor,
+          ),
+        ),
+        findsNWidgets(4),
+      );
+      expect(
+        find.descendant(
+          of: find.byType(TableView),
+          matching: find.byType(SelectionAreaPaint),
+        ),
+        findsNothing,
+      );
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
+      await tester.pump();
+      expect(clipboardText, 'ove paragraph\n| A | B |\n| --- | --- |\n| 1 | 2 |');
+
+      final tableTopLeft = tester.getTopLeft(find.byType(TableView));
+      final after = tester.getTopLeft(
+            find.byKey(state.document.root.children.last.key),
+          ) +
+          const Offset(10, 12);
+      final drag =
+          await tester.startGesture(tableTopLeft + const Offset(50, 40));
+      await tester.pump();
+      await drag.moveTo(tableTopLeft + const Offset(200, 70));
+      await tester.pump();
+      await drag.moveTo(after);
+      await tester.pump();
+      await drag.moveTo(after + const Offset(10, 1));
+      await tester.pump();
+      await drag.up();
+      await tester.pump();
+      expect(state.selection!.start.path, [1]);
+      expect(state.selection!.end.path, [2]);
+      clipboardText = null;
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
+      await tester.pump();
+      expect(clipboardText, startsWith('| A | B |\n| --- | --- |\n| 1 | 2 |\n'));
+
+      debugDefaultTargetPlatformOverride = null;
+      copyCommand.updateCommand(command: 'ctrl+c', macOSCommand: 'cmd+c');
+
+      state.selection = Selection(
+        start: Position(path: [0], offset: 2),
+        end: Position(path: [2], offset: 5),
+      );
+      expect(
+        state.getTextForCopy(state.selection!),
+        'ove paragraph\n| A | B |\n| --- | --- |\n| 1 | 2 |\nBelow',
+      );
+
+      state.selection = Selection.single(
+        path: [1, 0, 0],
+        startOffset: 0,
+        endOffset: 1,
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(TableSelectionScope.of(tester.element(cells.first)), isNull);
+      expect(
+        find.descendant(
+          of: find.byType(TableView),
+          matching: find.byType(SelectionAreaPaint),
+        ),
+        findsWidgets,
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      state.dispose();
+    });
+
+    test('cell-internal text selection is preserved without atomic expansion',
+        () {
       final state = createMultiBlockState();
       state.registerSelectionCoordinator(const TableSelectionCoordinator());
 
@@ -261,7 +544,8 @@ void main() {
       state.dispose();
     });
 
-    test('dragging downwards into table normalizes table end to whole block', () {
+    test('dragging downwards into table normalizes table end to whole block',
+        () {
       final state = createMultiBlockState();
       state.registerSelectionCoordinator(const TableSelectionCoordinator());
 
@@ -303,7 +587,9 @@ void main() {
       state.dispose();
     });
 
-    test('dragging downwards out of table normalizes table start to whole block', () {
+    test(
+        'dragging downwards out of table normalizes table start to whole block',
+        () {
       final state = createMultiBlockState();
       state.registerSelectionCoordinator(const TableSelectionCoordinator());
 
@@ -324,7 +610,8 @@ void main() {
       state.dispose();
     });
 
-    test('dragging upwards out of table normalizes table start to whole block', () {
+    test('dragging upwards out of table normalizes table start to whole block',
+        () {
       final state = createMultiBlockState();
       state.registerSelectionCoordinator(const TableSelectionCoordinator());
 
@@ -391,6 +678,192 @@ void main() {
 
       await tester.pumpWidget(const SizedBox.shrink());
       state.dispose();
+    });
+
+    testWidgets(
+        'cross-block deletion keeps unselected paragraph text on both sides',
+        (tester) async {
+      for (final (start, end, expected) in [
+        (
+          Position(path: [0], offset: 2),
+          Position(path: [1, 0, 0], offset: 1),
+          ['Ab', 'Below paragraph']
+        ),
+        (
+          Position(path: [1, 0, 0], offset: 1),
+          Position(path: [2], offset: 5),
+          ['Above paragraph', ' paragraph']
+        ),
+        (
+          Position(path: [0], offset: 2),
+          Position(path: [2], offset: 5),
+          ['Ab paragraph']
+        ),
+      ]) {
+        final state = createMultiBlockState();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: SizedBox(
+              width: 700,
+              height: 500,
+              child: AppFlowyEditor(
+                editorState: state,
+                editorStyle: EditorStyle.desktop(padding: EdgeInsets.zero),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        state.selection = Selection(start: start, end: end);
+        expect(await state.deleteSelection(state.selection!), isTrue);
+        await tester.pump();
+        expect(
+          state.document.root.children
+              .map((node) => node.delta?.toPlainText())
+              .toList(),
+          expected,
+        );
+        state.undoManager.undo();
+        await tester.pump();
+        expect(
+          state.document.root.children
+              .any((node) => node.type == TableBlockKeys.type),
+          isTrue,
+        );
+        await tester.pumpWidget(const SizedBox.shrink());
+        state.dispose();
+      }
+    });
+
+    testWidgets('paste replaces an atomic table range after deletion completes',
+        (tester) async {
+      final state = createMultiBlockState();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 700,
+            height: 500,
+            child: AppFlowyEditor(
+              editorState: state,
+              editorStyle: EditorStyle.desktop(padding: EdgeInsets.zero),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      state.selection = Selection(
+        start: Position(path: [0], offset: 2),
+        end: Position(path: [1, 0, 0], offset: 1),
+      );
+      await state.pastePlainText('X');
+      await tester.pump();
+      expect(
+        state.document.root.children
+            .map((node) => node.delta?.toPlainText())
+            .toList(),
+        ['AbX', 'Below paragraph'],
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      state.dispose();
+    });
+
+    testWidgets('cut copies the whole table before deleting the range',
+        (tester) async {
+      String? clipboardText;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            clipboardText = (call.arguments as Map)['text'] as String?;
+          }
+          return null;
+        },
+      );
+      final state = createMultiBlockState();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 700,
+            height: 500,
+            child: AppFlowyEditor(
+              editorState: state,
+              editorStyle: EditorStyle.desktop(padding: EdgeInsets.zero),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      state.selection = Selection(
+        start: Position(path: [0], offset: 2),
+        end: Position(path: [1, 0, 0], offset: 1),
+      );
+      await handleCut(state);
+      await tester.pump();
+      expect(clipboardText, 'ove paragraph\n| A | B |\n| --- | --- |\n| 1 | 2 |');
+      expect(
+        state.document.root.children
+            .map((node) => node.delta?.toPlainText())
+            .toList(),
+        ['Ab', 'Below paragraph'],
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      state.dispose();
+    });
+
+    testWidgets(
+        'dragging gesture from above paragraph across table to below paragraph creates stable cross-block selection',
+        (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+      final state = createMultiBlockState();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 700,
+            height: 500,
+            child: AppFlowyEditor(
+              editorState: state,
+              editorStyle: EditorStyle.desktop(padding: EdgeInsets.zero),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final firstNodeTopLeft = tester.getTopLeft(
+        find.byKey(state.document.root.children.first.key),
+      );
+      final lastNodeTopLeft = tester.getTopLeft(
+        find.byKey(state.document.root.children.last.key),
+      );
+
+      final drag =
+          await tester.startGesture(firstNodeTopLeft + const Offset(10, 10));
+      await tester.pump();
+      await drag.moveTo(firstNodeTopLeft + const Offset(10, 30));
+      await tester.pump();
+      await drag.moveTo(lastNodeTopLeft + const Offset(20, 10));
+      await tester.pump();
+      await drag.up();
+      await tester.pump();
+
+      expect(state.selection, isNotNull);
+      expect(state.selection!.start.path, [0]);
+      expect(state.selection!.end.path, [2]);
+      expect(
+        find.byKey(const ValueKey('table-selection-border')),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      state.dispose();
+      debugDefaultTargetPlatformOverride = null;
     });
   });
 }

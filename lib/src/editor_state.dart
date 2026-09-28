@@ -21,6 +21,13 @@ typedef OnPasteCallback = FutureOr<bool> Function();
 
 abstract class SelectionCoordinator {
   Selection coordinateSelection(EditorState editorState, Selection selection);
+
+  /// Text for an atomic block in a copied document selection.
+  String? textForCopy(Node node) => null;
+
+  /// Whether a descendant's normal text highlight is covered by an atomic
+  /// block highlight.
+  bool suppressSelectionPaint(Node node, Selection selection) => false;
 }
 
 class EditorStateDebugInfo {
@@ -213,16 +220,39 @@ class EditorState {
       IndexedPropertyValueNotifier<List<RemoteSelection>>([]);
 
   final List<SelectionCoordinator> _selectionCoordinators = [];
+  final Map<SelectionCoordinator, int> _selectionCoordinatorReferences = {};
 
   void registerSelectionCoordinator(SelectionCoordinator coordinator) {
-    if (!_selectionCoordinators.contains(coordinator)) {
+    final references = _selectionCoordinatorReferences[coordinator] ?? 0;
+    _selectionCoordinatorReferences[coordinator] = references + 1;
+    if (references == 0) {
       _selectionCoordinators.add(coordinator);
     }
   }
 
   void unregisterSelectionCoordinator(SelectionCoordinator coordinator) {
-    _selectionCoordinators.remove(coordinator);
+    final references = _selectionCoordinatorReferences[coordinator];
+    if (references == null) return;
+    if (references > 1) {
+      _selectionCoordinatorReferences[coordinator] = references - 1;
+    } else {
+      _selectionCoordinatorReferences.remove(coordinator);
+      _selectionCoordinators.remove(coordinator);
+    }
   }
+
+  String? textForAtomicSelectionCopy(Node node) {
+    for (final coordinator in _selectionCoordinators) {
+      final text = coordinator.textForCopy(node);
+      if (text != null) return text;
+    }
+    return null;
+  }
+
+  bool suppressSelectionPaint(Node node, Selection selection) =>
+      _selectionCoordinators.any(
+        (coordinator) => coordinator.suppressSelectionPaint(node, selection),
+      );
 
   Selection? coordinateSelection(Selection? selection) {
     if (selection == null || selection.isCollapsed) {

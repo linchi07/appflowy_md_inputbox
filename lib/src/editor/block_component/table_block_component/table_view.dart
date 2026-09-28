@@ -48,17 +48,24 @@ class _TableViewState extends State<TableView> {
 
   TableSelection? _tableSelection;
   (int col, int row)? _dragStartCell;
+  Offset? _lastGlobalPointerPosition;
+  bool _wholeTableWasSelected = false;
 
   @override
   void initState() {
     super.initState();
+    _wholeTableWasSelected =
+        _isWholeTableSelected(widget.editorState.selection);
     widget.tableNode.node.addListener(_onTableNodeChanged);
     widget.editorState.selectionNotifier.addListener(_onGlobalSelectionChanged);
+    widget.editorState.addScrollViewScrolledListener(_handleAutoScrollWhileDragging);
   }
 
   @override
   void didUpdateWidget(TableView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _wholeTableWasSelected =
+        _isWholeTableSelected(widget.editorState.selection);
     if (oldWidget.tableNode.node != widget.tableNode.node) {
       oldWidget.tableNode.node.removeListener(_onTableNodeChanged);
       widget.tableNode.node.addListener(_onTableNodeChanged);
@@ -66,13 +73,22 @@ class _TableViewState extends State<TableView> {
     if (oldWidget.editorState != widget.editorState) {
       oldWidget.editorState.selectionNotifier
           .removeListener(_onGlobalSelectionChanged);
+      oldWidget.editorState
+          .removeScrollViewScrolledListener(_handleAutoScrollWhileDragging);
       widget.editorState.selectionNotifier
           .addListener(_onGlobalSelectionChanged);
+      widget.editorState
+          .addScrollViewScrolledListener(_handleAutoScrollWhileDragging);
     }
   }
 
   @override
   void dispose() {
+    if (_dragStartCell != null) {
+      widget.editorState.autoScroller?.stopAutoScroll();
+    }
+    widget.editorState
+        .removeScrollViewScrolledListener(_handleAutoScrollWhileDragging);
     widget.tableNode.node.removeListener(_onTableNodeChanged);
     widget.editorState.selectionNotifier
         .removeListener(_onGlobalSelectionChanged);
@@ -87,24 +103,43 @@ class _TableViewState extends State<TableView> {
   }
 
   void _onGlobalSelectionChanged() {
-    if (!mounted || _tableSelection == null) {
-      return;
-    }
+    if (!mounted) return;
     final sel = widget.editorState.selection;
-    if (sel != null && sel.start.path.isNotEmpty && sel.end.path.isNotEmpty) {
-      if (sel.start.path.first != sel.end.path.first) {
-        setState(() {
-          _tableSelection = null;
-        });
-      }
+    final wholeTableSelected = _isWholeTableSelected(sel);
+    final shouldClearLocal = _tableSelection != null &&
+        sel != null &&
+        (wholeTableSelected ||
+            _dragStartCell == null ||
+            sel.start.path.firstOrNull !=
+                widget.tableNode.node.path.firstOrNull ||
+            sel.end.path.firstOrNull != widget.tableNode.node.path.firstOrNull);
+    if (shouldClearLocal || wholeTableSelected != _wholeTableWasSelected) {
+      setState(() {
+        if (shouldClearLocal) _tableSelection = null;
+        _wholeTableWasSelected = wholeTableSelected;
+      });
     }
   }
+
+  bool _isWholeTableSelected(Selection? selection) =>
+      selection != null &&
+      !selection.isCollapsed &&
+      widget.tableNode.node.path.inSelection(selection);
 
   @override
   Widget build(BuildContext context) {
     final table = widget.tableNode;
     final isEditable = widget.editorState.editable;
     final geo = _computeGeometry(table);
+    final selection = _tableSelection ??
+        (_isWholeTableSelected(widget.editorState.selection)
+            ? TableSelection(
+                startCol: 0,
+                startRow: 0,
+                endCol: table.colsLen - 1,
+                endRow: table.rowsLen - 1,
+              )
+            : null);
 
     final totalWidth = SIDE_HEADER_WIDTH +
         geo.totalTableWidth +
@@ -113,15 +148,16 @@ class _TableViewState extends State<TableView> {
         geo.totalTableHeight +
         (isEditable ? SPACING + ADD_ROW_HEIGHT : 0.0);
 
-    return Focus(
+    final focus = Focus(
       focusNode: _keyboardFocusNode,
       onKeyEvent: _handleKeyEvent,
       child: TableSelectionScope(
-        selection: _tableSelection,
+        selection: selection,
         child: Listener(
           onPointerDown: (event) => _handlePointerDown(event, geo),
           onPointerMove: (event) => _handlePointerMove(event, geo),
           onPointerUp: (event) => _handlePointerUp(event),
+          onPointerCancel: (event) => _handlePointerCancel(event),
           child: MouseRegion(
             onHover: (event) => _handleHover(event, geo),
             onExit: (_) => _handleExit(),
@@ -142,8 +178,8 @@ class _TableViewState extends State<TableView> {
                   ),
 
                   // 二维单元格选区外围高亮边框
-                  if (_tableSelection != null)
-                    _buildSelectionBorder(context, geo),
+                  if (selection != null)
+                    _buildSelectionBorder(context, geo, selection),
 
                   if (isEditable) ...[
                     // 左上角样式编辑按钮 (不侵入表格)
@@ -240,10 +276,21 @@ class _TableViewState extends State<TableView> {
         ),
       ),
     );
+    return TapRegion(
+      onTapOutside: (_) {
+        if (_tableSelection != null) {
+          setState(() => _tableSelection = null);
+        }
+      },
+      child: focus,
+    );
   }
 
-  Widget _buildSelectionBorder(BuildContext context, _TableLayoutGeometry geo) {
-    final sel = _tableSelection!;
+  Widget _buildSelectionBorder(
+    BuildContext context,
+    _TableLayoutGeometry geo,
+    TableSelection sel,
+  ) {
     final left = SIDE_HEADER_WIDTH + geo.colLefts[sel.minCol] - geo.borderWidth;
     final top = TOP_HEADER_HEIGHT + geo.rowTops[sel.minRow] - geo.borderWidth;
     final right = SIDE_HEADER_WIDTH +
@@ -276,14 +323,12 @@ class _TableViewState extends State<TableView> {
 
   void _handlePointerDown(PointerDownEvent event, _TableLayoutGeometry geo) {
     final hit = _hitTestCell(event.localPosition, geo);
+    if (_tableSelection != null) {
+      setState(() => _tableSelection = null);
+    }
+    _dragStartCell = hit;
+    _lastGlobalPointerPosition = event.position;
     if (hit != null) {
-      _dragStartCell = hit;
-      if (_tableSelection != null &&
-          !_tableSelection!.contains(hit.$1, hit.$2)) {
-        setState(() {
-          _tableSelection = null;
-        });
-      }
       _keyboardFocusNode.requestFocus();
     }
   }
@@ -292,27 +337,120 @@ class _TableViewState extends State<TableView> {
     if (_dragStartCell == null) {
       return;
     }
-    final hit = _hitTestCell(event.localPosition, geo);
-    if (hit != null) {
-      if (hit != _dragStartCell || _tableSelection != null) {
-        final newSelection = TableSelection(
-          startCol: _dragStartCell!.$1,
-          startRow: _dragStartCell!.$2,
-          endCol: hit.$1,
-          endRow: hit.$2,
-        );
-        if (_tableSelection != newSelection) {
-          setState(() {
-            _tableSelection = newSelection;
-          });
-          widget.editorState.updateSelectionWithReason(null);
-        }
+    _lastGlobalPointerPosition = event.position;
+    widget.editorState.service.scrollService?.startAutoScroll(
+      event.position,
+      edgeOffset: 200,
+      duration: const Duration(milliseconds: 2),
+    );
+
+    final relX = event.localPosition.dx - SIDE_HEADER_WIDTH;
+    final relY = event.localPosition.dy - TOP_HEADER_HEIGHT;
+    final isWithinTableBounds = relX >= -20 &&
+        relX <= geo.totalTableWidth + 40 &&
+        relY >= -20 &&
+        relY <= geo.totalTableHeight + 40;
+
+    if (!isWithinTableBounds) {
+      if (_tableSelection != null) {
+        setState(() => _tableSelection = null);
+      }
+      return;
+    }
+
+    final hit = _clampCell(event.localPosition, geo);
+    if (hit != _dragStartCell || _tableSelection != null) {
+      final newSelection = TableSelection(
+        startCol: _dragStartCell!.$1,
+        startRow: _dragStartCell!.$2,
+        endCol: hit.$1,
+        endRow: hit.$2,
+      );
+      if (_tableSelection != newSelection) {
+        setState(() {
+          _tableSelection = newSelection;
+        });
+        widget.editorState.updateSelectionWithReason(null);
       }
     }
   }
 
   void _handlePointerUp(PointerUpEvent event) {
+    widget.editorState.service.scrollService?.stopAutoScroll();
     _dragStartCell = null;
+    _lastGlobalPointerPosition = null;
+  }
+
+  void _handlePointerCancel(PointerCancelEvent event) {
+    widget.editorState.service.scrollService?.stopAutoScroll();
+    _dragStartCell = null;
+    _lastGlobalPointerPosition = null;
+  }
+
+  void _handleAutoScrollWhileDragging() {
+    if (_dragStartCell == null ||
+        _lastGlobalPointerPosition == null ||
+        !mounted) {
+      return;
+    }
+    widget.editorState.autoScroller?.continueToAutoScroll();
+    final renderBox = context.findRenderObject();
+    if (renderBox is RenderBox) {
+      final localPos = renderBox.globalToLocal(_lastGlobalPointerPosition!);
+      final geo = _computeGeometry(widget.tableNode);
+      final hit = _clampCell(localPos, geo);
+      final newSelection = TableSelection(
+        startCol: _dragStartCell!.$1,
+        startRow: _dragStartCell!.$2,
+        endCol: hit.$1,
+        endRow: hit.$2,
+      );
+      if (_tableSelection != newSelection) {
+        setState(() {
+          _tableSelection = newSelection;
+        });
+        widget.editorState.updateSelectionWithReason(null);
+      }
+    }
+  }
+
+  (int col, int row) _clampCell(Offset pos, _TableLayoutGeometry geo) {
+    final relX = pos.dx - SIDE_HEADER_WIDTH;
+    final relY = pos.dy - TOP_HEADER_HEIGHT;
+
+    int hitCol;
+    if (relX <= 0) {
+      hitCol = 0;
+    } else if (relX >= geo.totalTableWidth) {
+      hitCol = widget.tableNode.colsLen - 1;
+    } else {
+      hitCol = 0;
+      for (var c = 0; c < widget.tableNode.colsLen; c++) {
+        if (relX >= geo.colLefts[c] &&
+            relX <= geo.colLefts[c] + geo.colWidths[c] + geo.borderWidth) {
+          hitCol = c;
+          break;
+        }
+      }
+    }
+
+    int hitRow;
+    if (relY <= 0) {
+      hitRow = 0;
+    } else if (relY >= geo.totalTableHeight) {
+      hitRow = widget.tableNode.rowsLen - 1;
+    } else {
+      hitRow = 0;
+      for (var r = 0; r < widget.tableNode.rowsLen; r++) {
+        if (relY >= geo.rowTops[r] &&
+            relY <= geo.rowTops[r] + geo.rowHeights[r] + geo.borderWidth) {
+          hitRow = r;
+          break;
+        }
+      }
+    }
+
+    return (hitCol, hitRow);
   }
 
   (int col, int row)? _hitTestCell(Offset pos, _TableLayoutGeometry geo) {
@@ -408,21 +546,19 @@ class _TableViewState extends State<TableView> {
     if (sel == null) {
       return;
     }
-    final table = widget.tableNode;
-    final buffer = StringBuffer();
-    for (var r = sel.minRow; r <= sel.maxRow; r++) {
-      final rowValues = <String>[];
-      for (var c = sel.minCol; c <= sel.maxCol; c++) {
-        final cell = table.getCell(c, r);
-        final text = cell.children.firstOrNull?.delta?.toPlainText() ?? '';
-        rowValues.add(text);
-      }
-      buffer.writeln(rowValues.join('\t'));
+    final String text;
+    if (sel.minCol == sel.maxCol && sel.minRow == sel.maxRow) {
+      final cell = widget.tableNode.getCell(sel.minCol, sel.minRow);
+      text = cell.children.firstOrNull?.delta?.toPlainText() ?? '';
+    } else {
+      text = widget.tableNode.toMarkdown(
+        minCol: sel.minCol,
+        minRow: sel.minRow,
+        maxCol: sel.maxCol,
+        maxRow: sel.maxRow,
+      );
     }
-    final tsvString = buffer.toString().trimRight();
-    if (tsvString.isNotEmpty) {
-      await Clipboard.setData(ClipboardData(text: tsvString));
-    }
+    await Clipboard.setData(ClipboardData(text: text));
   }
 
   Widget _buildStyleButton(TableNode table) {

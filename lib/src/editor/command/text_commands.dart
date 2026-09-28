@@ -363,6 +363,35 @@ extension TextTransforms on EditorState {
     return res;
   }
 
+  /// Serialize a document selection for the clipboard. Atomic blocks supply
+  /// their own text and their descendants are not copied a second time.
+  String getTextForCopy(Selection selection) {
+    final normalized = selection.normalized;
+    if (normalized.isCollapsed) return '';
+
+    final nodes = getNodesInSelection(normalized);
+    final parts = <String>[];
+    Node? atomicBlock;
+    for (final node in nodes) {
+      if (atomicBlock != null && atomicBlock.isParentOf(node)) continue;
+      atomicBlock = null;
+
+      final atomicText = textForAtomicSelectionCopy(node);
+      if (atomicText != null) {
+        parts.add(atomicText);
+        atomicBlock = node;
+        continue;
+      }
+
+      final delta = node.delta;
+      if (delta == null) continue;
+      final startIndex = node == nodes.first ? normalized.startIndex : 0;
+      final endIndex = node == nodes.last ? normalized.endIndex : delta.length;
+      parts.add(delta.slice(startIndex, endIndex).toPlainText());
+    }
+    return parts.join('\n');
+  }
+
   /// Get the value of attribute [key] in the given selection.
   ///
   /// If the [Selection] is not passed in, use the current selection.

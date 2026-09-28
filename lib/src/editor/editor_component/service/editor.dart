@@ -253,6 +253,8 @@ class _AppFlowyEditorState extends State<AppFlowyEditor> {
   void initState() {
     super.initState();
 
+    _registerSelectionCoordinators(widget);
+
     editorScrollController = widget.editorScrollController ??
         EditorScrollController(
           editorState: editorState,
@@ -272,6 +274,7 @@ class _AppFlowyEditorState extends State<AppFlowyEditor> {
 
   @override
   void dispose() {
+    _unregisterSelectionCoordinators(widget);
     // dispose the scroll controller if it's created by the editor
     if (widget.editorScrollController == null) {
       editorScrollController.dispose();
@@ -283,6 +286,9 @@ class _AppFlowyEditorState extends State<AppFlowyEditor> {
   @override
   void didUpdateWidget(covariant AppFlowyEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    _unregisterSelectionCoordinators(oldWidget);
+    _registerSelectionCoordinators(widget);
 
     _updateValues();
 
@@ -409,6 +415,24 @@ class _AppFlowyEditorState extends State<AppFlowyEditor> {
   BlockComponentRendererService get _renderer => BlockComponentRenderer(
         builders: {...widget.blockComponentBuilders},
       );
+
+  Iterable<SelectionCoordinator> _coordinatorsFor(AppFlowyEditor editor) =>
+      editor.blockComponentBuilders.values
+          .map((builder) => builder.selectionCoordinator)
+          .whereType<SelectionCoordinator>()
+          .toSet();
+
+  void _registerSelectionCoordinators(AppFlowyEditor editor) {
+    for (final coordinator in _coordinatorsFor(editor)) {
+      editor.editorState.registerSelectionCoordinator(coordinator);
+    }
+  }
+
+  void _unregisterSelectionCoordinators(AppFlowyEditor editor) {
+    for (final coordinator in _coordinatorsFor(editor)) {
+      editor.editorState.unregisterSelectionCoordinator(coordinator);
+    }
+  }
 }
 
 class KeepEditorFocusNotifier extends ValueNotifier<int> {

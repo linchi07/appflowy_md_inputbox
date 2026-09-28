@@ -38,6 +38,10 @@ abstract class BlockComponentBuilder with BlockComponentSelectable {
 
   BlockComponentWidget build(BlockComponentContext blockComponentContext);
 
+  /// Optional selection behavior owned by this block type, including when no
+  /// instance of the block is currently mounted in the viewport.
+  SelectionCoordinator? get selectionCoordinator => null;
+
   bool Function(Node node) showActions = (_) => false;
 
   BlockActionBuilder actionBuilder = (_, __) => const SizedBox.shrink();

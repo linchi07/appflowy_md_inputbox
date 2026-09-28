@@ -62,7 +62,8 @@ class TableDefaults {
   static const Color DEFAULT_BORDER_COLOR = Color(0xFFE2E4E8);
   static const Color DEFAULT_BORDER_HOVER_COLOR = Color(0xFFB0B4BA);
   static const Widget DEFAULT_ADD_ICON = Icon(Icons.add, size: 16);
-  static const Widget DEFAULT_HANDLER_ICON = Icon(Icons.drag_indicator, size: 16);
+  static const Widget DEFAULT_HANDLER_ICON =
+      Icon(Icons.drag_indicator, size: 16);
 
   static double colWidth = DEFAULT_COL_WIDTH;
   static double rowHeight = DEFAULT_ROW_HEIGHT;
@@ -94,6 +95,10 @@ class TableBlockComponentBuilder extends BlockComponentBuilder {
 
   final TableBlockComponentMenuBuilder? menuBuilder;
   final TableStyle tableStyle;
+
+  @override
+  SelectionCoordinator get selectionCoordinator =>
+      const TableSelectionCoordinator();
 
   @override
   BlockComponentWidget build(BlockComponentContext blockComponentContext) {
@@ -226,17 +231,9 @@ class _TableBlockComponentWidgetState extends State<TableBlockComponentWidget>
 
   late final editorState = Provider.of<EditorState>(context, listen: false);
   final _scrollController = ScrollController();
-  static const _coordinator = TableSelectionCoordinator();
-
-  @override
-  void initState() {
-    super.initState();
-    editorState.registerSelectionCoordinator(_coordinator);
-  }
 
   @override
   void dispose() {
-    editorState.unregisterSelectionCoordinator(_coordinator);
     _scrollController.dispose();
     super.dispose();
   }
@@ -272,7 +269,6 @@ class _TableBlockComponentWidgetState extends State<TableBlockComponentWidget>
       blockColor: editorState.editorStyle.selectionColor,
       supportTypes: const [
         BlockSelectionType.block,
-        BlockSelectionType.selection,
       ],
       child: child,
     );

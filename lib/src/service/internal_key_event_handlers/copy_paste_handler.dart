@@ -3,7 +3,6 @@ import 'package:flutter/widgets.dart';
 
 int _textLengthOfNode(Node node) => node.delta?.length ?? 0;
 
-
 void handlePastePlainText(EditorState editorState, String plainText) {
   final selection = editorState.selection?.normalized;
   if (selection == null) {
@@ -32,7 +31,6 @@ void handlePastePlainText(EditorState editorState, String plainText) {
   }
 }
 
-
 Selection _computeSelectionAfterPasteMultipleNodes(
   EditorState editorState,
   List<Node> nodes,
@@ -48,7 +46,7 @@ Selection _computeSelectionAfterPasteMultipleNodes(
   );
 }
 
-void handleCopy(EditorState editorState) async {
+Future<void> handleCopy(EditorState editorState) async {
   final selection = editorState.selection?.normalized;
   if (selection == null) {
     return;
@@ -62,10 +60,10 @@ void handleCopy(EditorState editorState) async {
     }
     text = node.delta?.toPlainText() ?? '';
   } else {
-    text = editorState.getTextInSelection(selection).join('\n');
+    text = editorState.getTextForCopy(selection);
   }
 
-  return AppFlowyClipboard.setData(
+  await AppFlowyClipboard.setData(
     text: text,
     html: null,
   );
@@ -251,9 +249,9 @@ bool _isNodeInsideTable(Node node) {
 }
 
 /// 2. delete selected content
-void handleCut(EditorState editorState) {
-  handleCopy(editorState);
-  deleteSelectedContent(editorState);
+Future<void> handleCut(EditorState editorState) async {
+  await handleCopy(editorState);
+  await deleteSelectedContent(editorState);
 }
 
 Future<void> deleteSelectedContent(EditorState editorState) async {

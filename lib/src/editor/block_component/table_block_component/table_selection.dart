@@ -1,7 +1,10 @@
 import 'dart:math' as math;
 import 'package:appflowy_editor/src/core/location/position.dart';
 import 'package:appflowy_editor/src/core/location/selection.dart';
+import 'package:appflowy_editor/src/core/document/node.dart';
+import 'package:appflowy_editor/src/core/document/path.dart';
 import 'package:appflowy_editor/src/editor/block_component/table_block_component/table_block_component.dart';
+import 'package:appflowy_editor/src/editor/block_component/table_block_component/table_node.dart';
 import 'package:appflowy_editor/src/editor_state.dart';
 import 'package:flutter/widgets.dart';
 
@@ -58,10 +61,7 @@ class TableSelection {
 
   @override
   int get hashCode =>
-      startCol.hashCode ^
-      startRow.hashCode ^
-      endCol.hashCode ^
-      endRow.hashCode;
+      startCol.hashCode ^ startRow.hashCode ^ endCol.hashCode ^ endRow.hashCode;
 }
 
 /// InheritedWidget that provides the active [TableSelection] down the widget tree.
@@ -92,6 +92,23 @@ class TableSelectionScope extends InheritedWidget {
 /// is normalized to be selected as a whole unit, matching Obsidian's atomic table behavior.
 class TableSelectionCoordinator implements SelectionCoordinator {
   const TableSelectionCoordinator();
+
+  @override
+  String? textForCopy(Node node) => node.type == TableBlockKeys.type
+      ? TableNode(node: node).toMarkdown()
+      : null;
+
+  @override
+  bool suppressSelectionPaint(Node node, Selection selection) {
+    for (var ancestor = node.parent;
+        ancestor != null;
+        ancestor = ancestor.parent) {
+      if (ancestor.type == TableBlockKeys.type) {
+        return ancestor.path.inSelection(selection) && !selection.isCollapsed;
+      }
+    }
+    return false;
+  }
 
   @override
   Selection coordinateSelection(EditorState editorState, Selection selection) {

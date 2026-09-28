@@ -126,12 +126,16 @@ class _BlockSelectionAreaState extends State<BlockSelectionArea>
           return sizedBox;
         }
 
+        final editorState = context.read<EditorState>();
+        if (editorState.suppressSelectionPaint(widget.node, selection)) {
+          return sizedBox;
+        }
+
         final path = widget.node.path;
         if (!path.inSelection(selection)) {
           return sizedBox;
         }
 
-        final editorState = context.read<EditorState>();
         if (editorState.selectionType == SelectionType.block) {
           if (!widget.supportTypes.contains(BlockSelectionType.block) ||
               !path.inSelection(selection, isSameDepth: true) ||
@@ -206,7 +210,11 @@ class _BlockSelectionAreaState extends State<BlockSelectionArea>
     final path = widget.node.path;
 
     // the current path is in the selection
-    if (selection != null && path.inSelection(selection)) {
+    if (selection != null &&
+        path.inSelection(selection) &&
+        !context
+            .read<EditorState>()
+            .suppressSelectionPaint(widget.node, selection)) {
       if (widget.supportTypes.contains(BlockSelectionType.block) &&
           context.read<EditorState>().selectionType == SelectionType.block) {
         if (!path.inSelection(selection, isSameDepth: true)) {

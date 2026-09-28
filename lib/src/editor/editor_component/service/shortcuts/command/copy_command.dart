@@ -21,12 +21,11 @@ CommandShortcutEventHandler _copyCommandHandler = (editorState) {
     return KeyEventResult.ignored;
   }
 
-  // plain text.
-  final text = editorState.getTextInSelection(selection).join('\n');
+  final text = editorState.getTextForCopy(selection);
 
   () async {
     await AppFlowyClipboard.setData(
-      text: text.isEmpty ? null : text,
+      text: text,
     );
   }();
 

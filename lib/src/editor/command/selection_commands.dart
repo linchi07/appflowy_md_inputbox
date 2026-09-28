@@ -68,6 +68,65 @@ extension SelectionTransform on EditorState {
     // Get the nodes that are fully or partially selected.
     final nodes = getNodesInSelection(selection);
 
+    // A cross-block table is one atomic node. The general traversal below
+    // visits its cell descendants and can try to delete text from the table
+    // node itself. Handle top-level ranges containing a table as one range.
+    final startPath = selection.start.path;
+    final endPath = selection.end.path;
+    if (startPath.length == 1 &&
+        endPath.length == 1 &&
+        startPath.first >= 0 &&
+        endPath.first < document.root.children.length &&
+        startPath.first < endPath.first &&
+        document.root.children
+            .skip(startPath.first)
+            .take(endPath.first - startPath.first + 1)
+            .any((node) => node.type == TableBlockKeys.type)) {
+      final first = document.root.children[startPath.first];
+      final last = document.root.children[endPath.first];
+      if (first.delta != null && last.delta != null) {
+        transaction.mergeText(
+          first,
+          last,
+          leftOffset: selection.startIndex,
+          rightOffset: selection.endIndex,
+        );
+        transaction.deleteNodesAtPath(
+          [startPath.first + 1],
+          endPath.first - startPath.first,
+        );
+      } else if (first.delta != null) {
+        transaction.deleteText(
+          first,
+          selection.startIndex,
+          first.delta!.length - selection.startIndex,
+        );
+        transaction.deleteNodesAtPath(
+          [startPath.first + 1],
+          endPath.first - startPath.first,
+        );
+      } else if (last.delta != null) {
+        transaction.deleteText(last, 0, selection.endIndex);
+        transaction.deleteNodesAtPath(
+          [startPath.first],
+          endPath.first - startPath.first,
+        );
+      } else {
+        transaction.deleteNodesAtPath(
+          [startPath.first],
+          endPath.first - startPath.first + 1,
+        );
+      }
+      transaction.afterSelection = Selection.collapsed(
+        Position(
+          path: [startPath.first],
+          offset: first.delta == null ? 0 : selection.startIndex,
+        ),
+      );
+      await apply(transaction);
+      return true;
+    }
+
     // If only one node is selected, then we can just delete the selected text
     // or node.
     if (nodes.length == 1) {

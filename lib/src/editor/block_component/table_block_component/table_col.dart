@@ -30,6 +30,30 @@ class _TableColState extends State<TableCol> {
   final Map<Node, (int, VoidCallback)> _listeners = {};
 
   @override
+  void initState() {
+    super.initState();
+    _scheduleRowHeightUpdates();
+  }
+
+  @override
+  void didUpdateWidget(TableCol oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.tableNode.rowsLen != widget.tableNode.rowsLen ||
+        oldWidget.tableNode.colsLen != widget.tableNode.colsLen) {
+      _scheduleRowHeightUpdates();
+    }
+  }
+
+  void _scheduleRowHeightUpdates() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      for (var i = 0; i < widget.tableNode.rowsLen; i++) {
+        updateRowHeightCallback(i);
+      }
+    });
+  }
+
+  @override
   void dispose() {
     for (final entry in _listeners.entries) {
       entry.key.removeListener(entry.value.$2);
@@ -85,7 +109,6 @@ class _TableColState extends State<TableCol> {
 
     for (var i = 0; i < rowsLen; i++) {
       final node = widget.tableNode.getCell(widget.colIdx, i);
-      updateRowHeightCallback(i);
       addListener(node, i);
       addListener(node.children.first, i);
       activeNodes.addAll([node, node.children.first]);
