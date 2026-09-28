@@ -19,6 +19,10 @@ typedef EditorTransactionValue = (
 
 typedef OnPasteCallback = FutureOr<bool> Function();
 
+abstract class SelectionCoordinator {
+  Selection coordinateSelection(EditorState editorState, Selection selection);
+}
+
 class EditorStateDebugInfo {
   EditorStateDebugInfo({
     this.debugPaintSizeEnabled = false,
@@ -208,17 +212,41 @@ class EditorState {
   final PropertyValueNotifier<List<RemoteSelection>> remoteSelections =
       IndexedPropertyValueNotifier<List<RemoteSelection>>([]);
 
+  final List<SelectionCoordinator> _selectionCoordinators = [];
+
+  void registerSelectionCoordinator(SelectionCoordinator coordinator) {
+    if (!_selectionCoordinators.contains(coordinator)) {
+      _selectionCoordinators.add(coordinator);
+    }
+  }
+
+  void unregisterSelectionCoordinator(SelectionCoordinator coordinator) {
+    _selectionCoordinators.remove(coordinator);
+  }
+
+  Selection? coordinateSelection(Selection? selection) {
+    if (selection == null || selection.isCollapsed) {
+      return selection;
+    }
+    var result = selection;
+    for (final coordinator in _selectionCoordinators) {
+      result = coordinator.coordinateSelection(this, result);
+    }
+    return result;
+  }
+
   /// Sets the selection of the editor.
   set selection(Selection? value) {
+    final coordinated = coordinateSelection(value);
     // clear the toggled style when the selection is changed.
-    if (selectionNotifier.value != value) {
+    if (selectionNotifier.value != coordinated) {
       _toggledStyle.clear();
     }
 
     // reset slice flag
     sliceUpcomingAttributes = true;
 
-    selectionNotifier.value = value;
+    selectionNotifier.value = coordinated;
   }
 
   SelectionType? _selectionType;

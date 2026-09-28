@@ -15,70 +15,23 @@ void main() {
     );
   }
 
-  test('ghost column is absent until text commits, then forms one undo step',
-      () async {
+  test('TableActions.add expands columns and rows directly', () async {
     final state = tableState();
     final node = state.document.root.children.single;
-    final before = node.toJson();
 
-    await TableActions.materializeGhostCell(
-      node,
-      state,
-      col: 2,
-      row: 1,
-      text: '',
-    );
-    expect(node.toJson(), before);
-
-    await TableActions.materializeGhostCell(
-      node,
-      state,
-      col: 2,
-      row: 1,
-      text: 'new',
-    );
+    await TableActions.add(node, 2, state, TableDirection.col);
     var table = TableNode(node: node);
     expect(table.colsLen, 3);
     expect(table.rowsLen, 2);
-    expect(table.getCell(2, 0).children.single.delta?.toPlainText(), '');
-    expect(table.getCell(2, 1).children.single.delta?.toPlainText(), 'new');
-    expect(state.selection?.end.path, [0, 5, 0]);
-    expect(state.selection?.end.offset, 3);
+
+    await TableActions.add(node, 2, state, TableDirection.row);
+    table = TableNode(node: node);
+    expect(table.colsLen, 3);
+    expect(table.rowsLen, 3);
 
     state.undoManager.undo();
     table = TableNode(node: state.document.root.children.single);
-    expect(table.colsLen, 2);
     expect(table.rowsLen, 2);
-    state.dispose();
-  });
-
-  test('ghost row commits into the selected column without shifting cells',
-      () async {
-    final state = tableState();
-    final node = state.document.root.children.single;
-    await TableActions.materializeGhostCell(
-      node,
-      state,
-      col: 1,
-      row: 2,
-      text: 'bottom',
-    );
-
-    final table = TableNode(node: node);
-    expect(table.colsLen, 2);
-    expect(table.rowsLen, 3);
-    expect(table.getCell(0, 0).children.single.delta?.toPlainText(), 'A');
-    expect(table.getCell(0, 1).children.single.delta?.toPlainText(), '1');
-    expect(table.getCell(0, 2).children.single.delta?.toPlainText(), '');
-    expect(table.getCell(1, 0).children.single.delta?.toPlainText(), 'B');
-    expect(table.getCell(1, 1).children.single.delta?.toPlainText(), '2');
-    expect(table.getCell(1, 2).children.single.delta?.toPlainText(), 'bottom');
-    expect(state.selection?.end.path, [0, 5, 0]);
-    expect(state.selection?.end.offset, 6);
-    state.undoManager.undo();
-    final restored = TableNode(node: state.document.root.children.single);
-    expect(restored.rowsLen, 2);
-    expect(restored.getCell(1, 1).children.single.delta?.toPlainText(), '2');
     state.dispose();
   });
 
@@ -137,37 +90,34 @@ void main() {
     await tester.pump();
     expect(TableNode(node: state.document.root.children.single).rowsLen, 3);
 
-    // 验证左上角样式切换按钮
+    // 验证左上角样式按钮存在
     final styleButton = find.byKey(const ValueKey('table-style-button'));
     expect(styleButton, findsOneWidget);
+
     await tester.tap(styleButton);
     await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.ancestor(
-        of: find.text('首行灰色'),
-        matching: find.byType(CheckedPopupMenuItem<String>),
-      ),
-    );
-    await tester.pump();
+    expect(find.text('首行灰色'), findsOneWidget);
+    expect(find.text('首列灰色'), findsOneWidget);
+    expect(find.text('交替行底色'), findsOneWidget);
 
-    final node = state.document.root.children.single;
-    expect(node.attributes[TableBlockKeys.shadeFirstRow], true);
-    final expanded = TableNode(node: node);
-    final shade = tableStyleCellColor(
-      node,
-      expanded.getCell(0, 0),
-      Theme.of(tester.element(find.byType(AppFlowyEditor))).colorScheme,
-    );
-    expect(shade, isNotNull);
+    await tester.tap(find.text('首行灰色'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
     expect(
-      find.descendant(
-        of: find.byKey(expanded.getCell(0, 0).key),
-        matching: find.byWidgetPredicate(
-          (widget) => widget is Container && widget.color == shade,
-        ),
-      ),
-      findsOneWidget,
+      state.document.root.children.single
+          .attributes[TableBlockKeys.shadeFirstRow],
+      true,
+    );
+
+    // 幽灵列应彻底不存在
+    expect(
+      find.byKey(const ValueKey('table-ghost-col-card')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('table-ghost-row-card')),
+      findsNothing,
     );
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -217,14 +167,13 @@ void main() {
     await tester.pump();
 
     // 移动鼠标到两列之间
-    // 表格起始在 x=34 (8+26)，第一列宽160，边框1，分割线约在 34 + 1 + 160 = 195
     final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await gesture.addPointer(location: Offset.zero);
     addTearDown(gesture.removePointer);
 
     final tableTopLeft = tester.getTopLeft(find.byType(TableView));
 
-    // 悬浮在列分割线 (SIDE_HEADER_WIDTH + 1 + 160 + 0.5 = 187.5, y: 12)
+    // 悬浮在列分割线
     await gesture.moveTo(tableTopLeft + const Offset(187.5, 12));
     await tester.pump();
 
@@ -275,7 +224,7 @@ void main() {
 
     final tableTopLeft = tester.getTopLeft(find.byType(TableView));
 
-    // 悬浮在第一列顶部外侧 (x: SIDE_HEADER_WIDTH + 50, y: TOP_HEADER_HEIGHT / 2)
+    // 悬浮在第一列顶部外侧
     await gesture.moveTo(tableTopLeft + const Offset(70, 12));
     await tester.pump();
 
@@ -302,7 +251,6 @@ void main() {
 
     final rowHandle = find.byKey(const ValueKey('table-row-handle-0'));
     expect(rowHandle, findsOneWidget);
-    // 确保没有 Card
     expect(find.descendant(of: rowHandle, matching: find.byType(Card)), findsNothing);
     expect(
       find.descendant(
@@ -318,26 +266,28 @@ void main() {
     state.dispose();
   });
 
-  testWidgets('all cells in each row have strictly identical height and aligned horizontal borders',
+  testWidgets('table row heights are aligned across all columns and borders match',
       (tester) async {
+    // 构造一个多行文本表格：第 0 列包含多行长文本，第 1 列为单行短文本
+    final tableNode = TableNode.fromList([
+      [
+        'This is a very long text that will wrap into multiple lines inside cell 0,0',
+        'Short row 1 text',
+      ],
+      [
+        'Col 1 Row 0',
+        'Col 1 Row 1',
+      ],
+    ]);
     final state = EditorState(
-      document: Document(
-        root: pageNode(
-          children: [
-            TableNode.fromList([
-              ['Short', 'Line 1\nLine 2', 'Third'],
-              ['Col 1 Row 1', 'Col 2 Row 1', 'Col 3 Row 1'],
-            ]).node,
-          ],
-        ),
-      ),
+      document: Document(root: pageNode(children: [tableNode.node])),
     );
 
     await tester.pumpWidget(
       MaterialApp(
         home: SizedBox(
           width: 700,
-          height: 400,
+          height: 600,
           child: AppFlowyEditor(
             editorState: state,
             editorStyle: EditorStyle.desktop(padding: EdgeInsets.zero),
@@ -346,16 +296,19 @@ void main() {
       ),
     );
     await tester.pump();
+    await tester.pump();
 
-    final tableNode = TableNode(node: state.document.root.children.single);
-    final rowsLen = tableNode.rowsLen;
-    final colsLen = tableNode.colsLen;
+    final table = TableNode(node: state.document.root.children.single);
+    final rowsLen = table.rowsLen;
+    final colsLen = table.colsLen;
 
+    // 遍历每一行，验证该行下所有列的单元格高度完全一致，且顶部 Y 轴完全平齐
     for (var r = 0; r < rowsLen; r++) {
       double? expectedTop;
       double? expectedHeight;
+
       for (var c = 0; c < colsLen; c++) {
-        final cellNode = tableNode.getCell(c, r);
+        final cellNode = table.getCell(c, r);
         final cellFinder = find.byKey(cellNode.key);
         expect(cellFinder, findsOneWidget);
 

@@ -4,87 +4,6 @@ import 'package:appflowy_editor/src/editor/block_component/table_block_component
 class TableActions {
   const TableActions._();
 
-  /// Turns one UI-only edge cell into a complete row or column. The document
-  /// stays unchanged until the first committed character reaches this method.
-  static Future<void> materializeGhostCell(
-    Node tableNode,
-    EditorState editorState, {
-    required int col,
-    required int row,
-    required String text,
-  }) async {
-    if (!editorState.editable || text.isEmpty) {
-      return;
-    }
-
-    final table = TableNode(node: tableNode);
-    final cols = table.colsLen;
-    final rows = table.rowsLen;
-    if (cols == 0 || rows == 0) {
-      return;
-    }
-
-    final transaction = editorState.transaction;
-    int cellIndex;
-    if (col == cols && row >= 0 && row < rows) {
-      final cells = <Node>[];
-      for (var currentRow = 0; currentRow < rows; currentRow++) {
-        final cell = tableCellNode(
-          currentRow == row ? text : '',
-          currentRow,
-          cols,
-        );
-        cell.updateAttributes({
-          TableCellBlockKeys.height: table.getRowHeight(currentRow),
-          TableCellBlockKeys.width: table.config.colDefaultWidth,
-          if (table
-                  .getCell(0, currentRow)
-                  .attributes[TableCellBlockKeys.rowBackgroundColor]
-              case final color?)
-            TableCellBlockKeys.rowBackgroundColor: color,
-        });
-        cells.add(cell);
-      }
-      transaction.insertNodes(tableNode.children.last.path.next, cells);
-      transaction.updateNode(tableNode, {TableBlockKeys.colsLen: cols + 1});
-      cellIndex = cols * rows + row;
-    } else if (row == rows && col >= 0 && col < cols) {
-      // Insert from right to left so each old column path remains stable while
-      // the transaction transforms the later operations.
-      for (var currentCol = cols - 1; currentCol >= 0; currentCol--) {
-        final cell = tableCellNode(
-          currentCol == col ? text : '',
-          rows,
-          currentCol,
-        );
-        cell.updateAttributes({
-          TableCellBlockKeys.height: table.config.rowDefaultHeight,
-          TableCellBlockKeys.width: table.getColWidth(currentCol),
-          if (table
-                  .getCell(currentCol, 0)
-                  .attributes[TableCellBlockKeys.colBackgroundColor]
-              case final color?)
-            TableCellBlockKeys.colBackgroundColor: color,
-        });
-        transaction.insertNode(
-          table.getCell(currentCol, rows - 1).path.next,
-          cell,
-        );
-      }
-      transaction.updateNode(tableNode, {TableBlockKeys.rowsLen: rows + 1});
-      cellIndex = col * (rows + 1) + rows;
-    } else {
-      throw ArgumentError(
-        'Ghost cell must be just below or right of the table',
-      );
-    }
-
-    transaction.afterSelection = Selection.collapsed(
-      Position(path: tableNode.path + [cellIndex, 0], offset: text.length),
-    );
-    await editorState.apply(transaction);
-  }
-
   static void toggleStyle(
     Node tableNode,
     EditorState editorState,
@@ -103,16 +22,16 @@ class TableActions {
     editorState.apply(transaction, withUpdateSelection: false);
   }
 
-  static void add(
+  static Future<void> add(
     Node node,
     int position,
     EditorState editorState,
     TableDirection dir,
-  ) {
+  ) async {
     if (dir == TableDirection.col) {
-      _addCol(node, position, editorState);
+      await _addCol(node, position, editorState);
     } else {
-      _addRow(node, position, editorState);
+      await _addRow(node, position, editorState);
     }
   }
 
@@ -170,7 +89,11 @@ class TableActions {
   }
 }
 
-void _addCol(Node tableNode, int position, EditorState editorState) {
+Future<void> _addCol(
+  Node tableNode,
+  int position,
+  EditorState editorState,
+) async {
   assert(position >= 0);
 
   final transaction = editorState.transaction;
@@ -221,10 +144,14 @@ void _addCol(Node tableNode, int position, EditorState editorState) {
   transaction.insertNodes(insertPath, cellNodes);
   transaction.updateNode(tableNode, {TableBlockKeys.colsLen: colsLen + 1});
 
-  editorState.apply(transaction, withUpdateSelection: false);
+  await editorState.apply(transaction, withUpdateSelection: false);
 }
 
-void _addRow(Node tableNode, int position, EditorState editorState) async {
+Future<void> _addRow(
+  Node tableNode,
+  int position,
+  EditorState editorState,
+) async {
   assert(position >= 0);
 
   final int rowsLen = tableNode.attributes[TableBlockKeys.rowsLen];

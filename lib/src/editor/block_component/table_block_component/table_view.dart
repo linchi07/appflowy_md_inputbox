@@ -53,6 +53,7 @@ class _TableViewState extends State<TableView> {
   void initState() {
     super.initState();
     widget.tableNode.node.addListener(_onTableNodeChanged);
+    widget.editorState.selectionNotifier.addListener(_onGlobalSelectionChanged);
   }
 
   @override
@@ -62,11 +63,19 @@ class _TableViewState extends State<TableView> {
       oldWidget.tableNode.node.removeListener(_onTableNodeChanged);
       widget.tableNode.node.addListener(_onTableNodeChanged);
     }
+    if (oldWidget.editorState != widget.editorState) {
+      oldWidget.editorState.selectionNotifier
+          .removeListener(_onGlobalSelectionChanged);
+      widget.editorState.selectionNotifier
+          .addListener(_onGlobalSelectionChanged);
+    }
   }
 
   @override
   void dispose() {
     widget.tableNode.node.removeListener(_onTableNodeChanged);
+    widget.editorState.selectionNotifier
+        .removeListener(_onGlobalSelectionChanged);
     _keyboardFocusNode.dispose();
     super.dispose();
   }
@@ -74,6 +83,20 @@ class _TableViewState extends State<TableView> {
   void _onTableNodeChanged() {
     if (mounted) {
       setState(() {});
+    }
+  }
+
+  void _onGlobalSelectionChanged() {
+    if (!mounted || _tableSelection == null) {
+      return;
+    }
+    final sel = widget.editorState.selection;
+    if (sel != null && sel.start.path.isNotEmpty && sel.end.path.isNotEmpty) {
+      if (sel.start.path.first != sel.end.path.first) {
+        setState(() {
+          _tableSelection = null;
+        });
+      }
     }
   }
 

@@ -226,9 +226,17 @@ class _TableBlockComponentWidgetState extends State<TableBlockComponentWidget>
 
   late final editorState = Provider.of<EditorState>(context, listen: false);
   final _scrollController = ScrollController();
+  static const _coordinator = TableSelectionCoordinator();
+
+  @override
+  void initState() {
+    super.initState();
+    editorState.registerSelectionCoordinator(_coordinator);
+  }
 
   @override
   void dispose() {
+    editorState.unregisterSelectionCoordinator(_coordinator);
     _scrollController.dispose();
     super.dispose();
   }
@@ -264,6 +272,7 @@ class _TableBlockComponentWidgetState extends State<TableBlockComponentWidget>
       blockColor: editorState.editorStyle.selectionColor,
       supportTypes: const [
         BlockSelectionType.block,
+        BlockSelectionType.selection,
       ],
       child: child,
     );

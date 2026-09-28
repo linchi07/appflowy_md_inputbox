@@ -227,4 +227,170 @@ void main() {
       state.dispose();
     });
   });
+
+  group('TableSelectionCoordinator (Obsidian atomic table selection)', () {
+    EditorState createMultiBlockState() {
+      final table = TableNode.fromList([
+        ['A', '1'],
+        ['B', '2'],
+      ]);
+      return EditorState(
+        document: Document(
+          root: pageNode(
+            children: [
+              paragraphNode(text: 'Above paragraph'),
+              table.node,
+              paragraphNode(text: 'Below paragraph'),
+            ],
+          ),
+        ),
+      );
+    }
+
+    test('cell-internal text selection is preserved without atomic expansion', () {
+      final state = createMultiBlockState();
+      state.registerSelectionCoordinator(const TableSelectionCoordinator());
+
+      // 单个单元格内部文字选择: path [1, 0, 0], offset 0..1
+      final innerSel = Selection(
+        start: Position(path: [1, 0, 0], offset: 0),
+        end: Position(path: [1, 0, 0], offset: 1),
+      );
+      state.selection = innerSel;
+      expect(state.selection, innerSel);
+      state.dispose();
+    });
+
+    test('dragging downwards into table normalizes table end to whole block', () {
+      final state = createMultiBlockState();
+      state.registerSelectionCoordinator(const TableSelectionCoordinator());
+
+      // 从上方段落 (path: [0]) 拖拽进入表格的某个内部 cell (path: [1, 1, 0])
+      state.selection = Selection(
+        start: Position(path: [0], offset: 2),
+        end: Position(path: [1, 1, 0], offset: 1),
+      );
+
+      // 表格作为一个整体被包含：终点对齐到表格整体末尾 [1] offset 1
+      expect(
+        state.selection,
+        Selection(
+          start: Position(path: [0], offset: 2),
+          end: Position(path: [1], offset: 1),
+        ),
+      );
+      state.dispose();
+    });
+
+    test('dragging upwards into table normalizes table end to whole block', () {
+      final state = createMultiBlockState();
+      state.registerSelectionCoordinator(const TableSelectionCoordinator());
+
+      // 从下方段落 (path: [2]) 向上拖拽进入表格的某个内部 cell (path: [1, 0, 0])
+      state.selection = Selection(
+        start: Position(path: [2], offset: 3),
+        end: Position(path: [1, 0, 0], offset: 1),
+      );
+
+      // 表格作为一个整体被包含：终点对齐到表格整体开头 [1] offset 0
+      expect(
+        state.selection,
+        Selection(
+          start: Position(path: [2], offset: 3),
+          end: Position(path: [1], offset: 0),
+        ),
+      );
+      state.dispose();
+    });
+
+    test('dragging downwards out of table normalizes table start to whole block', () {
+      final state = createMultiBlockState();
+      state.registerSelectionCoordinator(const TableSelectionCoordinator());
+
+      // 从表格内某个 cell (path: [1, 0, 0]) 向下拖拽到下方段落 (path: [2])
+      state.selection = Selection(
+        start: Position(path: [1, 0, 0], offset: 1),
+        end: Position(path: [2], offset: 4),
+      );
+
+      // 表格作为一个整体被包含：起点对齐到表格整体开头 [1] offset 0
+      expect(
+        state.selection,
+        Selection(
+          start: Position(path: [1], offset: 0),
+          end: Position(path: [2], offset: 4),
+        ),
+      );
+      state.dispose();
+    });
+
+    test('dragging upwards out of table normalizes table start to whole block', () {
+      final state = createMultiBlockState();
+      state.registerSelectionCoordinator(const TableSelectionCoordinator());
+
+      // 从表格内某个 cell (path: [1, 1, 0]) 向上拖拽到上方段落 (path: [0])
+      state.selection = Selection(
+        start: Position(path: [1, 1, 0], offset: 1),
+        end: Position(path: [0], offset: 2),
+      );
+
+      // 表格作为一个整体被包含：起点对齐到表格整体末尾 [1] offset 1
+      expect(
+        state.selection,
+        Selection(
+          start: Position(path: [1], offset: 1),
+          end: Position(path: [0], offset: 2),
+        ),
+      );
+      state.dispose();
+    });
+
+    testWidgets('cross-block deletion deletes table as an atomic block',
+        (tester) async {
+      final state = createMultiBlockState();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 700,
+            height: 500,
+            child: AppFlowyEditor(
+              editorState: state,
+              editorStyle: EditorStyle.desktop(padding: EdgeInsets.zero),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // 跨块选区：从上方段落跨越到表格
+      state.selection = Selection(
+        start: Position(path: [0], offset: 0),
+        end: Position(path: [1, 1, 0], offset: 1),
+      );
+      await tester.pump();
+
+      // 表格应该被整体包含
+      expect(state.selection!.end.path, [1]);
+      expect(state.selection!.end.offset, 1);
+
+      // 删除选区，整张表格应被一次性原子化删除
+      await state.deleteSelection(state.selection!);
+      await tester.pump();
+
+      // 文档中只剩下 1 个块（原表格已不存在）
+      final rootBlocks = state.document.root.children;
+      expect(rootBlocks.any((b) => b.type == TableBlockKeys.type), isFalse);
+
+      // 撤销后表格恢复
+      state.undoManager.undo();
+      await tester.pump();
+      expect(
+        state.document.root.children.any((b) => b.type == TableBlockKeys.type),
+        isTrue,
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      state.dispose();
+    });
+  });
 }
