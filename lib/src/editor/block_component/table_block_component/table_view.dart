@@ -5,6 +5,7 @@ import 'package:appflowy_editor/src/editor/block_component/table_block_component
 import 'package:appflowy_editor/src/editor/block_component/table_block_component/table_col.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class TableView extends StatefulWidget {
   const TableView({
@@ -36,12 +37,17 @@ class _TableViewState extends State<TableView> {
   static const Color DEFAULT_INDICATOR_HOVER_COLOR = Color(0xFF616161);
   static const Color DEFAULT_ADD_BUTTON_HOVER_BG = Color(0xFFF3F4F6);
 
+  final FocusNode _keyboardFocusNode = FocusNode();
+
   int? _hoveredCol;
   int? _hoveredRow;
   int? _hoveredColDivider;
   int? _hoveredRowDivider;
   bool _hoveringAddCol = false;
   bool _hoveringAddRow = false;
+
+  TableSelection? _tableSelection;
+  (int col, int row)? _dragStartCell;
 
   @override
   void initState() {
@@ -61,6 +67,7 @@ class _TableViewState extends State<TableView> {
   @override
   void dispose() {
     widget.tableNode.node.removeListener(_onTableNodeChanged);
+    _keyboardFocusNode.dispose();
     super.dispose();
   }
 
@@ -83,113 +90,316 @@ class _TableViewState extends State<TableView> {
         geo.totalTableHeight +
         (isEditable ? SPACING + ADD_ROW_HEIGHT : 0.0);
 
-    return MouseRegion(
-      onHover: (event) => _handleHover(event, geo),
-      onExit: (_) => _handleExit(),
-      child: SizedBox(
-        width: totalWidth,
-        height: totalHeight,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            // 表格主体网格
-            Positioned(
-              left: SIDE_HEADER_WIDTH,
-              top: TOP_HEADER_HEIGHT,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: _buildColumns(context),
+    return Focus(
+      focusNode: _keyboardFocusNode,
+      onKeyEvent: _handleKeyEvent,
+      child: TableSelectionScope(
+        selection: _tableSelection,
+        child: Listener(
+          onPointerDown: (event) => _handlePointerDown(event, geo),
+          onPointerMove: (event) => _handlePointerMove(event, geo),
+          onPointerUp: (event) => _handlePointerUp(event),
+          child: MouseRegion(
+            onHover: (event) => _handleHover(event, geo),
+            onExit: (_) => _handleExit(),
+            child: SizedBox(
+              width: totalWidth,
+              height: totalHeight,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // 表格主体网格
+                  Positioned(
+                    left: SIDE_HEADER_WIDTH,
+                    top: TOP_HEADER_HEIGHT,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: _buildColumns(context),
+                    ),
+                  ),
+
+                  // 二维单元格选区外围高亮边框
+                  if (_tableSelection != null)
+                    _buildSelectionBorder(context, geo),
+
+                  if (isEditable) ...[
+                    // 左上角样式编辑按钮 (不侵入表格)
+                    Positioned(
+                      left: (SIDE_HEADER_WIDTH - 20) / 2,
+                      top: (TOP_HEADER_HEIGHT - 20) / 2,
+                      width: 20,
+                      height: 20,
+                      child: _buildStyleButton(table),
+                    ),
+
+                    // 列 handle (表格外，浅灰色图标，无 fill / shape)
+                    if (_hoveredCol != null && _hoveredColDivider == null)
+                      Positioned(
+                        key: ValueKey('table-col-handle-$_hoveredCol'),
+                        left: SIDE_HEADER_WIDTH +
+                            geo.colLefts[_hoveredCol!] +
+                            geo.colWidths[_hoveredCol!] / 2 -
+                            10,
+                        top: (TOP_HEADER_HEIGHT - 18) / 2,
+                        width: 20,
+                        height: 18,
+                        child: _buildColHandle(_hoveredCol!),
+                      ),
+
+                    // 行 handle (表格外，浅灰色图标，无 fill / shape)
+                    if (_hoveredRow != null && _hoveredRowDivider == null)
+                      Positioned(
+                        key: ValueKey('table-row-handle-$_hoveredRow'),
+                        left: (SIDE_HEADER_WIDTH - 18) / 2,
+                        top: TOP_HEADER_HEIGHT +
+                            geo.rowTops[_hoveredRow!] +
+                            geo.rowHeights[_hoveredRow!] / 2 -
+                            10,
+                        width: 18,
+                        height: 20,
+                        child: _buildRowHandle(_hoveredRow!),
+                      ),
+
+                    // 两列之间的插入三角形
+                    if (_hoveredColDivider != null)
+                      Positioned(
+                        key: ValueKey(
+                          'table-insert-col-divider-$_hoveredColDivider',
+                        ),
+                        left: SIDE_HEADER_WIDTH +
+                            geo.colDividerX[_hoveredColDivider!] -
+                            8,
+                        top: TOP_HEADER_HEIGHT - 18,
+                        width: 16,
+                        height: 18,
+                        child: _buildColDividerTriangle(_hoveredColDivider!),
+                      ),
+
+                    // 两行之间的插入三角形
+                    if (_hoveredRowDivider != null)
+                      Positioned(
+                        key: ValueKey(
+                          'table-insert-row-divider-$_hoveredRowDivider',
+                        ),
+                        left: SIDE_HEADER_WIDTH - 18,
+                        top: TOP_HEADER_HEIGHT +
+                            geo.rowDividerY[_hoveredRowDivider!] -
+                            8,
+                        width: 18,
+                        height: 16,
+                        child: _buildRowDividerTriangle(_hoveredRowDivider!),
+                      ),
+
+                    // 右侧加列横框（和列同高，同设计样式）
+                    Positioned(
+                      key: const ValueKey('table-add-col-button'),
+                      left: SIDE_HEADER_WIDTH + geo.totalTableWidth + SPACING,
+                      top: TOP_HEADER_HEIGHT,
+                      width: ADD_COL_WIDTH,
+                      height: geo.totalTableHeight,
+                      child: _buildAddColButton(geo.totalTableHeight),
+                    ),
+
+                    // 下方加行横框（和行同宽，同设计样式）
+                    Positioned(
+                      key: const ValueKey('table-add-row-button'),
+                      left: SIDE_HEADER_WIDTH,
+                      top: TOP_HEADER_HEIGHT + geo.totalTableHeight + SPACING,
+                      width: geo.totalTableWidth,
+                      height: ADD_ROW_HEIGHT,
+                      child: _buildAddRowButton(geo.totalTableWidth),
+                    ),
+                  ],
+                ],
               ),
             ),
-
-            if (isEditable) ...[
-              // 左上角样式编辑按钮 (不侵入表格)
-              Positioned(
-                left: (SIDE_HEADER_WIDTH - 20) / 2,
-                top: (TOP_HEADER_HEIGHT - 20) / 2,
-                width: 20,
-                height: 20,
-                child: _buildStyleButton(table),
-              ),
-
-              // 列 handle (表格外，浅灰色图标，无 fill / shape)
-              if (_hoveredCol != null && _hoveredColDivider == null)
-                Positioned(
-                  key: ValueKey('table-col-handle-$_hoveredCol'),
-                  left: SIDE_HEADER_WIDTH +
-                      geo.colLefts[_hoveredCol!] +
-                      geo.colWidths[_hoveredCol!] / 2 -
-                      10,
-                  top: (TOP_HEADER_HEIGHT - 18) / 2,
-                  width: 20,
-                  height: 18,
-                  child: _buildColHandle(_hoveredCol!),
-                ),
-
-              // 行 handle (表格外，浅灰色图标，无 fill / shape)
-              if (_hoveredRow != null && _hoveredRowDivider == null)
-                Positioned(
-                  key: ValueKey('table-row-handle-$_hoveredRow'),
-                  left: (SIDE_HEADER_WIDTH - 18) / 2,
-                  top: TOP_HEADER_HEIGHT +
-                      geo.rowTops[_hoveredRow!] +
-                      geo.rowHeights[_hoveredRow!] / 2 -
-                      10,
-                  width: 18,
-                  height: 20,
-                  child: _buildRowHandle(_hoveredRow!),
-                ),
-
-              // 两列之间的插入三角形
-              if (_hoveredColDivider != null)
-                Positioned(
-                  key: ValueKey('table-insert-col-divider-$_hoveredColDivider'),
-                  left: SIDE_HEADER_WIDTH +
-                      geo.colDividerX[_hoveredColDivider!] -
-                      8,
-                  top: TOP_HEADER_HEIGHT - 18,
-                  width: 16,
-                  height: 18,
-                  child: _buildColDividerTriangle(_hoveredColDivider!),
-                ),
-
-              // 两行之间的插入三角形
-              if (_hoveredRowDivider != null)
-                Positioned(
-                  key: ValueKey('table-insert-row-divider-$_hoveredRowDivider'),
-                  left: SIDE_HEADER_WIDTH - 18,
-                  top: TOP_HEADER_HEIGHT +
-                      geo.rowDividerY[_hoveredRowDivider!] -
-                      8,
-                  width: 18,
-                  height: 16,
-                  child: _buildRowDividerTriangle(_hoveredRowDivider!),
-                ),
-
-              // 右侧加列横框（和列同高，同设计样式）
-              Positioned(
-                key: const ValueKey('table-add-col-button'),
-                left: SIDE_HEADER_WIDTH + geo.totalTableWidth + SPACING,
-                top: TOP_HEADER_HEIGHT,
-                width: ADD_COL_WIDTH,
-                height: geo.totalTableHeight,
-                child: _buildAddColButton(geo.totalTableHeight),
-              ),
-
-              // 下方加行横框（和行同宽，同设计样式）
-              Positioned(
-                key: const ValueKey('table-add-row-button'),
-                left: SIDE_HEADER_WIDTH,
-                top: TOP_HEADER_HEIGHT + geo.totalTableHeight + SPACING,
-                width: geo.totalTableWidth,
-                height: ADD_ROW_HEIGHT,
-                child: _buildAddRowButton(geo.totalTableWidth),
-              ),
-            ],
-          ],
+          ),
         ),
       ),
     );
+  }
+
+  Widget _buildSelectionBorder(BuildContext context, _TableLayoutGeometry geo) {
+    final sel = _tableSelection!;
+    final left = SIDE_HEADER_WIDTH + geo.colLefts[sel.minCol] - geo.borderWidth;
+    final top = TOP_HEADER_HEIGHT + geo.rowTops[sel.minRow] - geo.borderWidth;
+    final right = SIDE_HEADER_WIDTH +
+        geo.colLefts[sel.maxCol] +
+        geo.colWidths[sel.maxCol] +
+        geo.borderWidth;
+    final bottom = TOP_HEADER_HEIGHT +
+        geo.rowTops[sel.maxRow] +
+        geo.rowHeights[sel.maxRow] +
+        geo.borderWidth;
+
+    return Positioned(
+      key: const ValueKey('table-selection-border'),
+      left: left,
+      top: top,
+      width: math.max(0.0, right - left),
+      height: math.max(0.0, bottom - top),
+      child: IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: Theme.of(context).colorScheme.primary,
+              width: 1.5,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _handlePointerDown(PointerDownEvent event, _TableLayoutGeometry geo) {
+    final hit = _hitTestCell(event.localPosition, geo);
+    if (hit != null) {
+      _dragStartCell = hit;
+      if (_tableSelection != null &&
+          !_tableSelection!.contains(hit.$1, hit.$2)) {
+        setState(() {
+          _tableSelection = null;
+        });
+      }
+      _keyboardFocusNode.requestFocus();
+    }
+  }
+
+  void _handlePointerMove(PointerMoveEvent event, _TableLayoutGeometry geo) {
+    if (_dragStartCell == null) {
+      return;
+    }
+    final hit = _hitTestCell(event.localPosition, geo);
+    if (hit != null) {
+      if (hit != _dragStartCell || _tableSelection != null) {
+        final newSelection = TableSelection(
+          startCol: _dragStartCell!.$1,
+          startRow: _dragStartCell!.$2,
+          endCol: hit.$1,
+          endRow: hit.$2,
+        );
+        if (_tableSelection != newSelection) {
+          setState(() {
+            _tableSelection = newSelection;
+          });
+          widget.editorState.updateSelectionWithReason(null);
+        }
+      }
+    }
+  }
+
+  void _handlePointerUp(PointerUpEvent event) {
+    _dragStartCell = null;
+  }
+
+  (int col, int row)? _hitTestCell(Offset pos, _TableLayoutGeometry geo) {
+    final relX = pos.dx - SIDE_HEADER_WIDTH;
+    final relY = pos.dy - TOP_HEADER_HEIGHT;
+    if (relX < 0 ||
+        relX > geo.totalTableWidth ||
+        relY < 0 ||
+        relY > geo.totalTableHeight) {
+      return null;
+    }
+
+    int? hitCol;
+    for (var c = 0; c < widget.tableNode.colsLen; c++) {
+      if (relX >= geo.colLefts[c] &&
+          relX <= geo.colLefts[c] + geo.colWidths[c] + geo.borderWidth) {
+        hitCol = c;
+        break;
+      }
+    }
+
+    int? hitRow;
+    for (var r = 0; r < widget.tableNode.rowsLen; r++) {
+      if (relY >= geo.rowTops[r] &&
+          relY <= geo.rowTops[r] + geo.rowHeights[r] + geo.borderWidth) {
+        hitRow = r;
+        break;
+      }
+    }
+
+    if (hitCol != null && hitRow != null) {
+      return (hitCol, hitRow);
+    }
+    return null;
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+
+    if (_tableSelection != null) {
+      if (event.logicalKey == LogicalKeyboardKey.delete ||
+          event.logicalKey == LogicalKeyboardKey.backspace) {
+        _clearSelectedCells();
+        return KeyEventResult.handled;
+      }
+
+      if (event.logicalKey == LogicalKeyboardKey.escape) {
+        setState(() {
+          _tableSelection = null;
+        });
+        return KeyEventResult.handled;
+      }
+
+      if (event.logicalKey == LogicalKeyboardKey.keyC &&
+          (HardwareKeyboard.instance.isMetaPressed ||
+              HardwareKeyboard.instance.isControlPressed)) {
+        _copySelectedCells();
+        return KeyEventResult.handled;
+      }
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  Future<void> _clearSelectedCells() async {
+    final sel = _tableSelection;
+    if (sel == null || !widget.editorState.editable) {
+      return;
+    }
+    final transaction = widget.editorState.transaction;
+    final table = widget.tableNode;
+    for (var r = sel.minRow; r <= sel.maxRow; r++) {
+      for (var c = sel.minCol; c <= sel.maxCol; c++) {
+        final cell = table.getCell(c, r);
+        final paragraph = cell.children.firstOrNull;
+        if (paragraph != null) {
+          final length = paragraph.delta?.length ?? 0;
+          if (length > 0) {
+            transaction.replaceText(paragraph, 0, length, '');
+          }
+        }
+      }
+    }
+    if (transaction.operations.isNotEmpty) {
+      await widget.editorState.apply(transaction);
+    }
+  }
+
+  Future<void> _copySelectedCells() async {
+    final sel = _tableSelection;
+    if (sel == null) {
+      return;
+    }
+    final table = widget.tableNode;
+    final buffer = StringBuffer();
+    for (var r = sel.minRow; r <= sel.maxRow; r++) {
+      final rowValues = <String>[];
+      for (var c = sel.minCol; c <= sel.maxCol; c++) {
+        final cell = table.getCell(c, r);
+        final text = cell.children.firstOrNull?.delta?.toPlainText() ?? '';
+        rowValues.add(text);
+      }
+      buffer.writeln(rowValues.join('\t'));
+    }
+    final tsvString = buffer.toString().trimRight();
+    if (tsvString.isNotEmpty) {
+      await Clipboard.setData(ClipboardData(text: tsvString));
+    }
   }
 
   Widget _buildStyleButton(TableNode table) {
@@ -228,13 +438,27 @@ class _TableViewState extends State<TableView> {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: () => showActionMenu(
-          context,
-          widget.tableNode.node,
-          widget.editorState,
-          colIdx,
-          TableDirection.col,
-        ),
+        onTap: () {
+          _keyboardFocusNode.requestFocus();
+          setState(() {
+            _tableSelection = TableSelection(
+              startCol: colIdx,
+              startRow: 0,
+              endCol: colIdx,
+              endRow: widget.tableNode.rowsLen - 1,
+            );
+          });
+          widget.editorState.updateSelectionWithReason(null);
+        },
+        onSecondaryTap: () {
+          showActionMenu(
+            context,
+            widget.tableNode.node,
+            widget.editorState,
+            colIdx,
+            TableDirection.col,
+          );
+        },
         child: Center(
           child: Transform.rotate(
             angle: math.pi / 2,
@@ -253,13 +477,27 @@ class _TableViewState extends State<TableView> {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: () => showActionMenu(
-          context,
-          widget.tableNode.node,
-          widget.editorState,
-          rowIdx,
-          TableDirection.row,
-        ),
+        onTap: () {
+          _keyboardFocusNode.requestFocus();
+          setState(() {
+            _tableSelection = TableSelection(
+              startCol: 0,
+              startRow: rowIdx,
+              endCol: widget.tableNode.colsLen - 1,
+              endRow: rowIdx,
+            );
+          });
+          widget.editorState.updateSelectionWithReason(null);
+        },
+        onSecondaryTap: () {
+          showActionMenu(
+            context,
+            widget.tableNode.node,
+            widget.editorState,
+            rowIdx,
+            TableDirection.row,
+          );
+        },
         child: const Center(
           child: Icon(
             Icons.drag_indicator,
@@ -539,6 +777,7 @@ class _TableViewState extends State<TableView> {
     return List.generate(
       widget.tableNode.colsLen,
       (i) => TableCol(
+        key: ValueKey('table-col-$i'),
         colIdx: i,
         editorState: widget.editorState,
         tableNode: widget.tableNode,

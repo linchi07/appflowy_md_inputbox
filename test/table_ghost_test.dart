@@ -1,6 +1,5 @@
 import 'dart:ui';
 import 'package:appflowy_editor/appflowy_editor.dart';
-import 'package:appflowy_editor/src/editor/block_component/table_block_component/table_ghost_cell.dart';
 import 'package:appflowy_editor/src/editor/block_component/table_block_component/table_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -365,11 +364,17 @@ void main() {
         expectedHeight ??= cellRect.height;
 
         // 同一行的单元格顶部 Y 坐标必须绝对对齐
-        expect(cellRect.top, closeTo(expectedTop, 0.01),
-            reason: 'Cell ($c, $r) top is not aligned with other cells in row $r');
+        expect(
+          cellRect.top,
+          closeTo(expectedTop, 0.01),
+          reason: 'Cell ($c, $r) top is not aligned with other cells in row $r',
+        );
         // 同一行的单元格高度必须严格一致
-        expect(cellRect.height, closeTo(expectedHeight, 0.01),
-            reason: 'Cell ($c, $r) height is not equal to other cells in row $r');
+        expect(
+          cellRect.height,
+          closeTo(expectedHeight, 0.01),
+          reason: 'Cell ($c, $r) height is not equal to other cells in row $r',
+        );
       }
     }
 

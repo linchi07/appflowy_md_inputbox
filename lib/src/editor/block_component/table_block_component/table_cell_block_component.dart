@@ -111,19 +111,33 @@ class _TableCeBlockWidgetState extends State<TableCelBlockWidget> {
           (n.attributes[TableCellBlockKeys.rowBackgroundColor] as String?)
               ?.tryToColor(),
     );
+    final col =
+        widget.node.attributes[TableCellBlockKeys.colPosition] as int? ?? 0;
+    final row =
+        widget.node.attributes[TableCellBlockKeys.rowPosition] as int? ?? 0;
     final tableNode = widget.node.parent!;
+    final tableSelection = TableSelectionScope.of(context);
+    final isSelected = tableSelection?.contains(col, row) ?? false;
+    final baseColor = explicitColor ??
+        tableStyleCellColor(
+          tableNode,
+          widget.node,
+          Theme.of(context).colorScheme,
+        );
+    final effectiveColor = isSelected
+        ? Color.alphaBlend(
+            Theme.of(context).colorScheme.primary.withValues(alpha: 0.18),
+            baseColor ?? Theme.of(context).colorScheme.surface,
+          )
+        : baseColor;
+
     return AnimatedBuilder(
       animation: tableNode,
       builder: (context, child) => Container(
         constraints: BoxConstraints(
           minHeight: cellHeight,
         ),
-        color: explicitColor ??
-            tableStyleCellColor(
-              tableNode,
-              widget.node,
-              Theme.of(context).colorScheme,
-            ),
+        color: effectiveColor,
         child: child,
       ),
       child: Align(
