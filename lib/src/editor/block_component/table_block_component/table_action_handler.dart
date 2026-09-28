@@ -78,25 +78,22 @@ Widget defaultMenuBuilder(
   int position,
   TableDirection dir,
 ) {
-  return Card(
-    elevation: 3.0,
-    child: MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () => showActionMenu(
-          context,
-          node,
-          editorState,
-          position,
-          dir,
-        ),
-        child: dir == TableDirection.col
-            ? Transform.rotate(
-                angle: math.pi / 2,
-                child: TableDefaults.handlerIcon,
-              )
-            : TableDefaults.handlerIcon,
+  return MouseRegion(
+    cursor: SystemMouseCursors.click,
+    child: GestureDetector(
+      onTap: () => showActionMenu(
+        context,
+        node,
+        editorState,
+        position,
+        dir,
       ),
+      child: dir == TableDirection.col
+          ? Transform.rotate(
+              angle: math.pi / 2,
+              child: TableDefaults.handlerIcon,
+            )
+          : TableDefaults.handlerIcon,
     ),
   );
 }

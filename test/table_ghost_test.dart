@@ -1,5 +1,7 @@
+import 'dart:ui';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor/src/editor/block_component/table_block_component/table_ghost_cell.dart';
+import 'package:appflowy_editor/src/editor/block_component/table_block_component/table_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -99,7 +101,7 @@ void main() {
   });
 
   testWidgets(
-      'ghost inputs materialize only after typing and style menu shades',
+      'add column and row buttons expand table and style menu works',
       (tester) async {
     final state = tableState();
     await tester.pumpWidget(
@@ -116,47 +118,32 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('table-ghost-row-0')), findsOneWidget);
-    expect(find.byKey(const ValueKey('table-ghost-col-1')), findsOneWidget);
+    // 验证初始列数与行数
     expect(TableNode(node: state.document.root.children.single).colsLen, 2);
+    expect(TableNode(node: state.document.root.children.single).rowsLen, 2);
 
-    final ghost = find.descendant(
-      of: find.byKey(const ValueKey('table-ghost-col-1')),
-      matching: find.byType(TextField),
-    );
-    await tester.tap(ghost);
-    await tester.pump();
-    expect(TableNode(node: state.document.root.children.single).colsLen, 2);
-    await tester.enterText(ghost, 'new');
+    // 验证加列横框存在，点击增加一列
+    final addColButton = find.byKey(const ValueKey('table-add-col-button'));
+    expect(addColButton, findsOneWidget);
+    await tester.tap(addColButton);
     await tester.pump();
     await tester.pump();
+    expect(TableNode(node: state.document.root.children.single).colsLen, 3);
 
-    final node = state.document.root.children.single;
-    final table = TableNode(node: node);
-    expect(table.colsLen, 3);
-    expect(table.getCell(2, 1).children.single.delta?.toPlainText(), 'new');
-    expect(state.selection?.end.path, table.getCell(2, 1).children.single.path);
-    expect(state.focusNotifier.value, isTrue);
+    // 验证加行横框存在，点击增加一行
+    final addRowButton = find.byKey(const ValueKey('table-add-row-button'));
+    expect(addRowButton, findsOneWidget);
+    await tester.tap(addRowButton);
+    await tester.pump();
+    await tester.pump();
+    expect(TableNode(node: state.document.root.children.single).rowsLen, 3);
 
-    final ghostRow = find.descendant(
-      of: find.byKey(const ValueKey('table-ghost-row-1')),
-      matching: find.byType(TextField),
-    );
-    await tester.tap(ghostRow);
-    await tester.pump();
-    expect(TableNode(node: node).rowsLen, 2);
-    await tester.enterText(ghostRow, 'bottom');
-    await tester.pump();
-    await tester.pump();
-    final expanded = TableNode(node: node);
-    expect(expanded.rowsLen, 3);
-    expect(
-      expanded.getCell(1, 2).children.single.delta?.toPlainText(),
-      'bottom',
-    );
-
-    await tester.tap(find.byKey(const ValueKey('table-style-button')));
+    // 验证左上角样式切换按钮
+    final styleButton = find.byKey(const ValueKey('table-style-button'));
+    expect(styleButton, findsOneWidget);
+    await tester.tap(styleButton);
     await tester.pumpAndSettle();
+
     await tester.tap(
       find.ancestor(
         of: find.text('首行灰色'),
@@ -164,20 +151,16 @@ void main() {
       ),
     );
     await tester.pump();
+
+    final node = state.document.root.children.single;
     expect(node.attributes[TableBlockKeys.shadeFirstRow], true);
-    expect(
-      tableStyleCellColor(
-        node,
-        expanded.getCell(0, 0),
-        Theme.of(tester.element(find.byType(AppFlowyEditor))).colorScheme,
-      ),
-      isNotNull,
-    );
+    final expanded = TableNode(node: node);
     final shade = tableStyleCellColor(
       node,
       expanded.getCell(0, 0),
       Theme.of(tester.element(find.byType(AppFlowyEditor))).colorScheme,
     );
+    expect(shade, isNotNull);
     expect(
       find.descendant(
         of: find.byKey(expanded.getCell(0, 0).key),
@@ -192,7 +175,7 @@ void main() {
     state.dispose();
   });
 
-  testWidgets('read-only tables omit ghost inputs and editing controls',
+  testWidgets('read-only tables omit controls and buttons',
       (tester) async {
     final state = tableState();
     await tester.pumpWidget(
@@ -209,52 +192,129 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.byType(TableGhostCell), findsNothing);
+    expect(find.byKey(const ValueKey('table-add-col-button')), findsNothing);
+    expect(find.byKey(const ValueKey('table-add-row-button')), findsNothing);
     expect(find.byKey(const ValueKey('table-style-button')), findsNothing);
     expect(TableNode(node: state.document.root.children.single).colsLen, 2);
     await tester.pumpWidget(const SizedBox.shrink());
     state.dispose();
   });
 
-  testWidgets('IME composition does not materialize a ghost cell early',
+  testWidgets('hovering dividers reveals insertion triangles to add row/col',
       (tester) async {
     final state = tableState();
     await tester.pumpWidget(
       MaterialApp(
         home: SizedBox(
           width: 700,
-          height: 320,
-          child: AppFlowyEditor(editorState: state),
+          height: 400,
+          child: AppFlowyEditor(
+            editorState: state,
+            editorStyle: EditorStyle.desktop(padding: EdgeInsets.zero),
+          ),
         ),
       ),
     );
     await tester.pump();
-    final ghost = find.descendant(
-      of: find.byKey(const ValueKey('table-ghost-row-0')),
-      matching: find.byType(TextField),
-    );
-    await tester.showKeyboard(ghost);
-    tester.testTextInput.updateEditingValue(
-      const TextEditingValue(
-        text: '中',
-        selection: TextSelection.collapsed(offset: 1),
-        composing: TextRange(start: 0, end: 1),
-      ),
-    );
-    await tester.pump();
-    expect(TableNode(node: state.document.root.children.single).rowsLen, 2);
 
-    tester.testTextInput.updateEditingValue(
-      const TextEditingValue(
-        text: '中',
-        selection: TextSelection.collapsed(offset: 1),
+    // 移动鼠标到两列之间
+    // 表格起始在 x=34 (8+26)，第一列宽160，边框1，分割线约在 34 + 1 + 160 = 195
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    final tableTopLeft = tester.getTopLeft(find.byType(TableView));
+
+    // 悬浮在列分割线 (SIDE_HEADER_WIDTH + 1 + 160 + 0.5 = 187.5, y: 12)
+    await gesture.moveTo(tableTopLeft + const Offset(187.5, 12));
+    await tester.pump();
+
+    final colTriangle = find.byKey(const ValueKey('table-insert-col-divider-1'));
+    expect(colTriangle, findsOneWidget);
+    await tester.tap(colTriangle);
+    await tester.pump();
+    expect(TableNode(node: state.document.root.children.single).colsLen, 3);
+
+    final table = TableNode(node: state.document.root.children.single);
+    final row0Height = table.getRowHeight(0);
+    final divider1Y = 26.0 + 1.0 + row0Height + 0.5;
+
+    // 悬浮在两行之间
+    await gesture.moveTo(tableTopLeft + Offset(12, divider1Y));
+    await tester.pump();
+
+    final rowTriangle = find.byKey(const ValueKey('table-insert-row-divider-1'));
+    expect(rowTriangle, findsOneWidget);
+    await tester.tap(rowTriangle);
+    await tester.pump();
+    expect(TableNode(node: state.document.root.children.single).rowsLen, 3);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    state.dispose();
+  });
+
+  testWidgets('column and row drag handles appear on hover outside table without fill or shape',
+      (tester) async {
+    final state = tableState();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 700,
+          height: 400,
+          child: AppFlowyEditor(
+            editorState: state,
+            editorStyle: EditorStyle.desktop(padding: EdgeInsets.zero),
+          ),
+        ),
       ),
     );
     await tester.pump();
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+
+    final tableTopLeft = tester.getTopLeft(find.byType(TableView));
+
+    // 悬浮在第一列顶部外侧 (x: SIDE_HEADER_WIDTH + 50, y: TOP_HEADER_HEIGHT / 2)
+    await gesture.moveTo(tableTopLeft + const Offset(70, 12));
     await tester.pump();
-    final table = TableNode(node: state.document.root.children.single);
-    expect(table.rowsLen, 3);
-    expect(table.getCell(0, 2).children.single.delta?.toPlainText(), '中');
+
+    final colHandle = find.byKey(const ValueKey('table-col-handle-0'));
+    expect(colHandle, findsOneWidget);
+    // 确保没有 Card
+    expect(find.descendant(of: colHandle, matching: find.byType(Card)), findsNothing);
+    // 确保包含 drag_indicator 图标
+    expect(
+      find.descendant(
+        of: colHandle,
+        matching: find.byWidgetPredicate(
+          (w) => w is Icon && w.icon == Icons.drag_indicator,
+        ),
+      ),
+      findsOneWidget,
+    );
+
+    // 悬浮在第一行左侧外侧
+    final row0Height = TableNode(node: state.document.root.children.single).getRowHeight(0);
+    final row0CenterY = 26.0 + 1.0 + row0Height / 2;
+    await gesture.moveTo(tableTopLeft + Offset(12, row0CenterY));
+    await tester.pump();
+
+    final rowHandle = find.byKey(const ValueKey('table-row-handle-0'));
+    expect(rowHandle, findsOneWidget);
+    // 确保没有 Card
+    expect(find.descendant(of: rowHandle, matching: find.byType(Card)), findsNothing);
+    expect(
+      find.descendant(
+        of: rowHandle,
+        matching: find.byWidgetPredicate(
+          (w) => w is Icon && w.icon == Icons.drag_indicator,
+        ),
+      ),
+      findsOneWidget,
+    );
+
     await tester.pumpWidget(const SizedBox.shrink());
     state.dispose();
   });
