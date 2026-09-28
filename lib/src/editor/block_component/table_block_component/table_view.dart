@@ -44,6 +44,33 @@ class _TableViewState extends State<TableView> {
   bool _hoveringAddRow = false;
 
   @override
+  void initState() {
+    super.initState();
+    widget.tableNode.node.addListener(_onTableNodeChanged);
+  }
+
+  @override
+  void didUpdateWidget(TableView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.tableNode.node != widget.tableNode.node) {
+      oldWidget.tableNode.node.removeListener(_onTableNodeChanged);
+      widget.tableNode.node.addListener(_onTableNodeChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.tableNode.node.removeListener(_onTableNodeChanged);
+    super.dispose();
+  }
+
+  void _onTableNodeChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final table = widget.tableNode;
     final isEditable = widget.editorState.editable;

@@ -39,7 +39,16 @@ class _TableColBorderState extends State<TableColBorder> {
         : buildFixedBorder(context);
   }
 
+  double _getColsHeight(BuildContext context) {
+    return context.select(
+          (Node n) =>
+              (n.attributes[TableBlockKeys.colsHeight] as num?)?.toDouble(),
+        ) ??
+        widget.tableNode.colsHeight;
+  }
+
   MouseRegion buildResizableBorder(BuildContext context) {
+    final colsHeight = _getColsHeight(context);
     return MouseRegion(
       cursor: SystemMouseCursors.resizeLeftRight,
       onEnter: (_) => setState(() => _borderHovering = true),
@@ -71,9 +80,7 @@ class _TableColBorderState extends State<TableColBorder> {
         child: Container(
           key: _borderKey,
           width: widget.tableNode.config.borderWidth,
-          height: context.select(
-            (Node n) => n.attributes[TableBlockKeys.colsHeight],
-          ),
+          height: colsHeight,
           color: _borderHovering || _borderDragging
               ? widget.borderHoverColor
               : widget.borderColor,
@@ -83,11 +90,10 @@ class _TableColBorderState extends State<TableColBorder> {
   }
 
   Container buildFixedBorder(BuildContext context) {
+    final colsHeight = _getColsHeight(context);
     return Container(
       width: widget.tableNode.config.borderWidth,
-      height: context.select(
-        (Node n) => n.attributes[TableBlockKeys.colsHeight],
-      ),
+      height: colsHeight,
       color: widget.borderColor,
     );
   }

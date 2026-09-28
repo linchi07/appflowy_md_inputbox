@@ -318,4 +318,62 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     state.dispose();
   });
+
+  testWidgets('all cells in each row have strictly identical height and aligned horizontal borders',
+      (tester) async {
+    final state = EditorState(
+      document: Document(
+        root: pageNode(
+          children: [
+            TableNode.fromList([
+              ['Short', 'Line 1\nLine 2', 'Third'],
+              ['Col 1 Row 1', 'Col 2 Row 1', 'Col 3 Row 1'],
+            ]).node,
+          ],
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 700,
+          height: 400,
+          child: AppFlowyEditor(
+            editorState: state,
+            editorStyle: EditorStyle.desktop(padding: EdgeInsets.zero),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final tableNode = TableNode(node: state.document.root.children.single);
+    final rowsLen = tableNode.rowsLen;
+    final colsLen = tableNode.colsLen;
+
+    for (var r = 0; r < rowsLen; r++) {
+      double? expectedTop;
+      double? expectedHeight;
+      for (var c = 0; c < colsLen; c++) {
+        final cellNode = tableNode.getCell(c, r);
+        final cellFinder = find.byKey(cellNode.key);
+        expect(cellFinder, findsOneWidget);
+
+        final cellRect = tester.getRect(cellFinder);
+        expectedTop ??= cellRect.top;
+        expectedHeight ??= cellRect.height;
+
+        // 同一行的单元格顶部 Y 坐标必须绝对对齐
+        expect(cellRect.top, closeTo(expectedTop, 0.01),
+            reason: 'Cell ($c, $r) top is not aligned with other cells in row $r');
+        // 同一行的单元格高度必须严格一致
+        expect(cellRect.height, closeTo(expectedHeight, 0.01),
+            reason: 'Cell ($c, $r) height is not equal to other cells in row $r');
+      }
+    }
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    state.dispose();
+  });
 }

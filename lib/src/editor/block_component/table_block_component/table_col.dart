@@ -90,10 +90,16 @@ class _TableColState extends State<TableCol> {
       addListener(node.children.first, i);
       activeNodes.addAll([node, node.children.first]);
 
+      final rowHeight = widget.tableNode.getRowHeight(i);
       cells.addAll([
-        widget.editorState.renderer.build(
-          context,
-          node,
+        Container(
+          constraints: BoxConstraints(
+            minHeight: rowHeight,
+          ),
+          child: widget.editorState.renderer.build(
+            context,
+            node,
+          ),
         ),
         cellBorder,
       ]);

@@ -192,28 +192,40 @@ class TableNode {
     EditorState? editorState,
     Transaction? transaction,
   }) {
-    // The extra 8 is because of paragraph padding
-    double maxHeight = _cells
-        .map<double>((c) => c[row].children.first.rect.height + 8)
-        .reduce(max);
+    if (row >= rowsLen) {
+      return;
+    }
 
-    if (_cells[0][row].attributes[TableCellBlockKeys.height] != maxHeight &&
-        !maxHeight.isNaN) {
-      for (int i = 0; i < colsLen; i++) {
-        final currHeight = _cells[i][row].attributes[TableCellBlockKeys.height];
-        if (currHeight == maxHeight) {
-          continue;
+    double maxHeight = _config.rowDefaultHeight;
+    for (var col = 0; col < colsLen; col++) {
+      if (row < _cells[col].length) {
+        final paragraph = _cells[col][row].children.firstOrNull;
+        if (paragraph != null) {
+          final pHeight = paragraph.rect.height;
+          if (pHeight > 0) {
+            final contentHeight = pHeight + 8.0;
+            if (contentHeight > maxHeight) {
+              maxHeight = contentHeight;
+            }
+          }
         }
+      }
+    }
 
-        if (transaction != null) {
-          transaction.updateNode(
-            _cells[i][row],
-            {TableCellBlockKeys.height: maxHeight},
-          );
-        } else {
-          _cells[i][row].updateAttributes(
-            {TableCellBlockKeys.height: maxHeight},
-          );
+    final currentHeight = getRowHeight(row);
+    if ((currentHeight - maxHeight).abs() > 0.5 && !maxHeight.isNaN) {
+      for (var col = 0; col < colsLen; col++) {
+        if (row < _cells[col].length) {
+          if (transaction != null) {
+            transaction.updateNode(
+              _cells[col][row],
+              {TableCellBlockKeys.height: maxHeight},
+            );
+          } else {
+            _cells[col][row].updateAttributes(
+              {TableCellBlockKeys.height: maxHeight},
+            );
+          }
         }
       }
     }
