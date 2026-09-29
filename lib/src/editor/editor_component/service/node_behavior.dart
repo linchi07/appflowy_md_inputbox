@@ -24,6 +24,8 @@ class NodeBehavior {
     this.commandShortcuts = const [],
     this.completion,
     this.serialize,
+    this.atomic = false,
+    this.preventMergeAtStart = false,
     this.pasteAsPlainText = false,
     this.literalPaste,
     this.isolateOnPaste = false,
@@ -35,6 +37,12 @@ class NodeBehavior {
   final List<CommandShortcutEvent> commandShortcuts;
   final NodeCompletionProvider? completion;
   final NodeTextSerializer? serialize;
+
+  /// Keep a structured block intact in cross-block selections and deletions.
+  final bool atomic;
+
+  /// Do not merge the first text node of this container with its predecessor.
+  final bool preventMergeAtStart;
 
   /// Treat pasted text as literal content while editing this node.
   final bool pasteAsPlainText;

@@ -186,9 +186,7 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
     final selectedNode = selection == null || !selection.isSingle
         ? null
         : editorState.getNodeAtPath(selection.start.path);
-    final nodeEvents =
-        editorState.behaviorFor(selectedNode)?.commandShortcuts ??
-            const <CommandShortcutEvent>[];
+    final nodeEvents = editorState.commandShortcutsFor(selectedNode);
     for (final shortcutEvent in [
       ...nodeEvents,
       ...widget.commandShortcutEvents,

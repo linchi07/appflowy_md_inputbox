@@ -16,9 +16,9 @@ final CommandShortcutEvent copyCommand = CommandShortcutEvent(
 );
 
 CommandShortcutEventHandler _copyCommandHandler = (editorState) {
-  final tableHandler = editorState.activeTableSelectionHandler;
-  if (tableHandler != null) {
-    final text = tableHandler.getSelectedText();
+  final rangeHandler = editorState.activeRangeSelectionHandler;
+  if (rangeHandler != null) {
+    final text = rangeHandler.getSelectedText();
     if (text != null && text.isNotEmpty) {
       () async {
         await AppFlowyClipboard.setData(

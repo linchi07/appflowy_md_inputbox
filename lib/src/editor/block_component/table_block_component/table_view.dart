@@ -14,19 +14,22 @@ class TableView extends StatefulWidget {
     required this.tableNode,
     required this.tableStyle,
     this.menuBuilder,
+    this.menuEntriesBuilder,
   });
 
   final EditorState editorState;
   final TableNode tableNode;
   final TableBlockComponentMenuBuilder? menuBuilder;
+  final TableMenuEntriesBuilder? menuEntriesBuilder;
   final TableStyle tableStyle;
 
   @override
   State<TableView> createState() => _TableViewState();
 }
 
-class _TableViewState extends State<TableView> implements TableSelectionHandler {
-  static const double SIDE_HEADER_WIDTH = 26.0;
+class _TableViewState extends State<TableView>
+    implements RangeSelectionHandler {
+  static const double SIDE_HEADER_WIDTH = 48.0;
   static const double TOP_HEADER_HEIGHT = 26.0;
   static const double ADD_COL_WIDTH = 20.0;
   static const double ADD_ROW_HEIGHT = 20.0;
@@ -50,6 +53,7 @@ class _TableViewState extends State<TableView> implements TableSelectionHandler 
   (int col, int row)? _dragStartCell;
   Offset? _lastGlobalPointerPosition;
   bool _wholeTableWasSelected = false;
+  bool _customMenuOpen = false;
 
   void _setTableSelection(TableSelection? selection) {
     if (_tableSelection != selection) {
@@ -58,9 +62,9 @@ class _TableViewState extends State<TableView> implements TableSelectionHandler 
       });
     }
     if (selection != null) {
-      widget.editorState.activeTableSelectionHandler = this;
-    } else if (widget.editorState.activeTableSelectionHandler == this) {
-      widget.editorState.activeTableSelectionHandler = null;
+      widget.editorState.activeRangeSelectionHandler = this;
+    } else if (widget.editorState.activeRangeSelectionHandler == this) {
+      widget.editorState.activeRangeSelectionHandler = null;
     }
   }
 
@@ -83,7 +87,7 @@ class _TableViewState extends State<TableView> implements TableSelectionHandler 
   }
 
   @override
-  Future<void> clearSelectedCells() async {
+  Future<void> clearSelectedContent() async {
     final sel = _tableSelection;
     if (sel == null || !widget.editorState.editable) {
       return;
@@ -116,7 +120,7 @@ class _TableViewState extends State<TableView> implements TableSelectionHandler 
     final text = getSelectedText();
     if (text != null && text.isNotEmpty) {
       await AppFlowyClipboard.setData(text: text);
-      await clearSelectedCells();
+      await clearSelectedContent();
     }
   }
 
@@ -134,7 +138,8 @@ class _TableViewState extends State<TableView> implements TableSelectionHandler 
         _isWholeTableSelected(widget.editorState.selection);
     widget.tableNode.node.addListener(_onTableNodeChanged);
     widget.editorState.selectionNotifier.addListener(_onGlobalSelectionChanged);
-    widget.editorState.addScrollViewScrolledListener(_handleAutoScrollWhileDragging);
+    widget.editorState
+        .addScrollViewScrolledListener(_handleAutoScrollWhileDragging);
   }
 
   @override
@@ -147,8 +152,8 @@ class _TableViewState extends State<TableView> implements TableSelectionHandler 
       widget.tableNode.node.addListener(_onTableNodeChanged);
     }
     if (oldWidget.editorState != widget.editorState) {
-      if (oldWidget.editorState.activeTableSelectionHandler == this) {
-        oldWidget.editorState.activeTableSelectionHandler = null;
+      if (oldWidget.editorState.activeRangeSelectionHandler == this) {
+        oldWidget.editorState.activeRangeSelectionHandler = null;
       }
       oldWidget.editorState.selectionNotifier
           .removeListener(_onGlobalSelectionChanged);
@@ -159,15 +164,15 @@ class _TableViewState extends State<TableView> implements TableSelectionHandler 
       widget.editorState
           .addScrollViewScrolledListener(_handleAutoScrollWhileDragging);
       if (_tableSelection != null) {
-        widget.editorState.activeTableSelectionHandler = this;
+        widget.editorState.activeRangeSelectionHandler = this;
       }
     }
   }
 
   @override
   void dispose() {
-    if (widget.editorState.activeTableSelectionHandler == this) {
-      widget.editorState.activeTableSelectionHandler = null;
+    if (widget.editorState.activeRangeSelectionHandler == this) {
+      widget.editorState.activeRangeSelectionHandler = null;
     }
     if (_dragStartCell != null) {
       widget.editorState.autoScroller?.stopAutoScroll();
@@ -278,30 +283,28 @@ class _TableViewState extends State<TableView> implements TableSelectionHandler 
                       child: _buildStyleButton(table),
                     ),
 
-                    // 列 handle (表格外，浅灰色图标，无 fill / shape)
+                    // 列操作按钮 (表格外，调色板与删除 x 按钮)
                     if (_hoveredCol != null && _hoveredColDivider == null)
                       Positioned(
                         key: ValueKey('table-col-handle-$_hoveredCol'),
                         left: SIDE_HEADER_WIDTH +
                             geo.colLefts[_hoveredCol!] +
-                            geo.colWidths[_hoveredCol!] / 2 -
-                            10,
-                        top: (TOP_HEADER_HEIGHT - 18) / 2,
-                        width: 20,
-                        height: 18,
+                            (geo.colWidths[_hoveredCol!] - 40) / 2,
+                        top: (TOP_HEADER_HEIGHT - 20) / 2,
+                        width: 40,
+                        height: 20,
                         child: _buildColHandle(_hoveredCol!),
                       ),
 
-                    // 行 handle (表格外，浅灰色图标，无 fill / shape)
+                    // 行操作按钮 (表格外，调色板与删除 x 按钮)
                     if (_hoveredRow != null && _hoveredRowDivider == null)
                       Positioned(
                         key: ValueKey('table-row-handle-$_hoveredRow'),
-                        left: (SIDE_HEADER_WIDTH - 18) / 2,
+                        left: (SIDE_HEADER_WIDTH - 40) / 2,
                         top: TOP_HEADER_HEIGHT +
                             geo.rowTops[_hoveredRow!] +
-                            geo.rowHeights[_hoveredRow!] / 2 -
-                            10,
-                        width: 18,
+                            (geo.rowHeights[_hoveredRow!] - 20) / 2,
+                        width: 40,
                         height: 20,
                         child: _buildRowHandle(_hoveredRow!),
                       ),
@@ -578,7 +581,7 @@ class _TableViewState extends State<TableView> implements TableSelectionHandler 
     if (_tableSelection != null) {
       if (event.logicalKey == LogicalKeyboardKey.delete ||
           event.logicalKey == LogicalKeyboardKey.backspace) {
-        clearSelectedCells();
+        clearSelectedContent();
         return KeyEventResult.handled;
       }
 
@@ -605,105 +608,179 @@ class _TableViewState extends State<TableView> implements TableSelectionHandler 
   }
 
   Widget _buildStyleButton(TableNode table) {
-    return PopupMenuButton<String>(
-      key: const ValueKey('table-style-button'),
-      tooltip: '表格样式',
-      icon: const Icon(
-        Icons.tune_outlined,
-        size: 16,
-        color: DEFAULT_INDICATOR_COLOR,
+    return Builder(
+      builder: (buttonContext) => _TableActionButton(
+        key: const ValueKey('table-style-button'),
+        icon: Icons.tune_outlined,
+        tooltip: '表格样式',
+        onTap: () => showTableStyleMenu(
+          buttonContext,
+          table.node,
+          widget.editorState,
+        ),
       ),
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(),
-      splashRadius: 12,
-      onSelected: (key) => TableActions.toggleStyle(
-        table.node,
-        widget.editorState,
-        key,
-      ),
-      itemBuilder: (context) => [
-        for (final (key, label) in [
-          (TableBlockKeys.shadeFirstRow, '首行灰色'),
-          (TableBlockKeys.shadeFirstColumn, '首列灰色'),
-          (TableBlockKeys.stripeRows, '交替行底色'),
-        ])
-          CheckedPopupMenuItem<String>(
-            value: key,
-            checked: table.node.attributes[key] == true,
-            child: Text(label),
-          ),
-      ],
+    );
+  }
+
+  void _deleteCol(int colIdx) {
+    if (!widget.editorState.editable) {
+      return;
+    }
+    _setTableSelection(null);
+    setState(() {
+      _hoveredCol = null;
+      _hoveredRow = null;
+      _hoveredColDivider = null;
+      _hoveredRowDivider = null;
+    });
+    TableActions.delete(
+      widget.tableNode.node,
+      colIdx,
+      widget.editorState,
+      TableDirection.col,
+    );
+  }
+
+  void _deleteRow(int rowIdx) {
+    if (!widget.editorState.editable) {
+      return;
+    }
+    _setTableSelection(null);
+    setState(() {
+      _hoveredCol = null;
+      _hoveredRow = null;
+      _hoveredColDivider = null;
+      _hoveredRowDivider = null;
+    });
+    TableActions.delete(
+      widget.tableNode.node,
+      rowIdx,
+      widget.editorState,
+      TableDirection.row,
     );
   }
 
   Widget _buildColHandle(int colIdx) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () {
-          _keyboardFocusNode.requestFocus();
-          _setTableSelection(TableSelection(
-            startCol: colIdx,
-            startRow: 0,
-            endCol: colIdx,
-            endRow: widget.tableNode.rowsLen - 1,
-          ));
-          widget.editorState.updateSelectionWithReason(null);
-        },
-        onSecondaryTap: () {
-          showActionMenu(
-            context,
-            widget.tableNode.node,
-            widget.editorState,
-            colIdx,
-            TableDirection.col,
-          );
-        },
-        child: Center(
-          child: Transform.rotate(
-            angle: math.pi / 2,
-            child: const Icon(
-              Icons.drag_indicator,
-              size: 16,
-              color: DEFAULT_INDICATOR_COLOR,
+    if (widget.menuBuilder case final builder?) {
+      return builder(
+        widget.tableNode.node,
+        widget.editorState,
+        colIdx,
+        TableDirection.col,
+        () => setState(() => _customMenuOpen = true),
+        () => setState(() => _customMenuOpen = false),
+      );
+    }
+    return Builder(
+      builder: (btnContext) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _TableActionButton(
+              key: ValueKey('table-col-color-$colIdx'),
+              icon: Icons.palette_outlined,
+              tooltip: '设置列颜色',
+              onTap: () {
+                showTableColorMenu(
+                  btnContext,
+                  widget.tableNode.node,
+                  widget.editorState,
+                  colIdx,
+                  TableDirection.col,
+                );
+              },
+              onSecondaryTap: () => showActionMenu(
+                btnContext,
+                widget.tableNode.node,
+                widget.editorState,
+                colIdx,
+                TableDirection.col,
+                menuEntriesBuilder: widget.menuEntriesBuilder,
+              ),
             ),
-          ),
-        ),
-      ),
+            const SizedBox(width: 3),
+            _TableActionButton(
+              key: ValueKey('table-col-delete-$colIdx'),
+              icon: Icons.close,
+              tooltip: '删除此列',
+              hoverBgColor: const Color(0xFFFFEBEE),
+              hoverIconColor: const Color(0xFFE53935),
+              onTap: () => _deleteCol(colIdx),
+              onSecondaryTap: () => showActionMenu(
+                btnContext,
+                widget.tableNode.node,
+                widget.editorState,
+                colIdx,
+                TableDirection.col,
+                menuEntriesBuilder: widget.menuEntriesBuilder,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
   Widget _buildRowHandle(int rowIdx) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () {
-          _keyboardFocusNode.requestFocus();
-          _setTableSelection(TableSelection(
-            startCol: 0,
-            startRow: rowIdx,
-            endCol: widget.tableNode.colsLen - 1,
-            endRow: rowIdx,
-          ));
-          widget.editorState.updateSelectionWithReason(null);
-        },
-        onSecondaryTap: () {
-          showActionMenu(
-            context,
-            widget.tableNode.node,
-            widget.editorState,
-            rowIdx,
-            TableDirection.row,
-          );
-        },
-        child: const Center(
-          child: Icon(
-            Icons.drag_indicator,
-            size: 16,
-            color: DEFAULT_INDICATOR_COLOR,
-          ),
-        ),
-      ),
+    if (widget.menuBuilder case final builder?) {
+      return builder(
+        widget.tableNode.node,
+        widget.editorState,
+        rowIdx,
+        TableDirection.row,
+        () => setState(() => _customMenuOpen = true),
+        () => setState(() => _customMenuOpen = false),
+      );
+    }
+    return Builder(
+      builder: (btnContext) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _TableActionButton(
+              key: ValueKey('table-row-color-$rowIdx'),
+              icon: Icons.palette_outlined,
+              tooltip: '设置行颜色',
+              onTap: () {
+                showTableColorMenu(
+                  btnContext,
+                  widget.tableNode.node,
+                  widget.editorState,
+                  rowIdx,
+                  TableDirection.row,
+                );
+              },
+              onSecondaryTap: () => showActionMenu(
+                btnContext,
+                widget.tableNode.node,
+                widget.editorState,
+                rowIdx,
+                TableDirection.row,
+                menuEntriesBuilder: widget.menuEntriesBuilder,
+              ),
+            ),
+            const SizedBox(width: 3),
+            _TableActionButton(
+              key: ValueKey('table-row-delete-$rowIdx'),
+              icon: Icons.close,
+              tooltip: '删除此行',
+              hoverBgColor: const Color(0xFFFFEBEE),
+              hoverIconColor: const Color(0xFFE53935),
+              onTap: () => _deleteRow(rowIdx),
+              onSecondaryTap: () => showActionMenu(
+                btnContext,
+                widget.tableNode.node,
+                widget.editorState,
+                rowIdx,
+                TableDirection.row,
+                menuEntriesBuilder: widget.menuEntriesBuilder,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -846,6 +923,7 @@ class _TableViewState extends State<TableView> implements TableSelectionHandler 
   }
 
   void _handleHover(PointerHoverEvent event, _TableLayoutGeometry geo) {
+    if (_customMenuOpen) return;
     final pos = event.localPosition;
     final relX = pos.dx - SIDE_HEADER_WIDTH;
     final relY = pos.dy - TOP_HEADER_HEIGHT;
@@ -915,6 +993,7 @@ class _TableViewState extends State<TableView> implements TableSelectionHandler 
   }
 
   void _handleExit() {
+    if (_customMenuOpen) return;
     if (_hoveredCol != null ||
         _hoveredRow != null ||
         _hoveredColDivider != null ||
@@ -1008,4 +1087,68 @@ class _TableLayoutGeometry {
   final double totalTableWidth;
   final double totalTableHeight;
   final double borderWidth;
+}
+
+class _TableActionButton extends StatefulWidget {
+  const _TableActionButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.onSecondaryTap,
+    this.hoverBgColor,
+    this.hoverIconColor,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final VoidCallback? onSecondaryTap;
+  final Color? hoverBgColor;
+  final Color? hoverIconColor;
+
+  @override
+  State<_TableActionButton> createState() => _TableActionButtonState();
+}
+
+class _TableActionButtonState extends State<_TableActionButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        onSecondaryTap: widget.onSecondaryTap,
+        child: Tooltip(
+          message: widget.tooltip,
+          child: Center(
+            child: Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                color: _isHovered
+                    ? (widget.hoverBgColor ?? const Color(0xFFEEEEEE))
+                    : Colors.transparent,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Icon(
+                  widget.icon,
+                  size: 13,
+                  color: _isHovered
+                      ? (widget.hoverIconColor ?? const Color(0xFF424242))
+                      : _TableViewState.DEFAULT_INDICATOR_COLOR,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

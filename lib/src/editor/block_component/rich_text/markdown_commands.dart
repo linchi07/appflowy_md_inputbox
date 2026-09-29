@@ -47,8 +47,7 @@ bool insertMarkdownNewLine(
   final node = editorState.getNodeAtPath(selection.start.path);
   final delta = node?.delta;
   if (node == null || delta == null) return false;
-  if (node.findParent((ancestor) => ancestor.type == TableBlockKeys.type) !=
-      null) {
+  if (editorState.atomicAncestorOf(node) != null) {
     return false;
   }
 

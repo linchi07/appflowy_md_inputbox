@@ -1,196 +1,251 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor/src/editor/block_component/table_block_component/util.dart';
-import 'package:appflowy_editor/src/editor/toolbar/desktop/items/utils/overlay_util.dart';
 import 'package:flutter/material.dart';
 
-void showActionMenu(
+SelectionMenuStyle? _menuStyle(EditorState state) =>
+    state.editorStyle.selectionMenuStyle;
+
+void showTableStyleMenu(BuildContext context, Node node, EditorState state) {
+  final anchor = EditorPopoverMenu.anchorRect(context);
+  if (anchor == null) return;
+  EditorPopoverMenu.show(
+    context: context,
+    anchor: anchor,
+    style: _menuStyle(state),
+    entries: [
+      for (final (key, label) in [
+        (TableBlockKeys.shadeFirstRow, '首行灰色'),
+        (TableBlockKeys.shadeFirstColumn, '首列灰色'),
+        (TableBlockKeys.stripeRows, '交替行底色'),
+      ])
+        EditorMenuEntry(
+          label: label,
+          icon: Icons.format_paint_outlined,
+          selected: node.attributes[key] == true,
+          onSelected: () => TableActions.toggleStyle(node, state, key),
+        ),
+    ],
+  );
+}
+
+void showTableColorMenu(
   BuildContext context,
   Node node,
-  EditorState editorState,
+  EditorState state,
   int position,
   TableDirection dir,
 ) {
-  final Offset pos =
-      (context.findRenderObject() as RenderBox).localToGlobal(Offset.zero);
-  final rect = Rect.fromLTWH(
-    pos.dx,
-    pos.dy,
-    context.size?.width ?? 0,
-    context.size?.height ?? 0,
-  );
-  OverlayEntry? overlay;
-
-  var (top, bottom, left) = positionFromRect(rect, editorState);
-  top = top != null ? top - 35 : top;
-
-  void dismissOverlay() {
-    overlay?.remove();
-    overlay = null;
-  }
-
-  overlay = FullScreenOverlayEntry(
-    top: top,
-    bottom: bottom,
-    left: left,
-    builder: (context) {
-      return basicOverlay(
-        context,
-        width: 200,
-        height: 230,
-        children: [
-          _menuItem(
-              context,
-              dir == TableDirection.col
-                  ? AppFlowyEditorL10n.current.colAddBefore
-                  : AppFlowyEditorL10n.current.rowAddBefore,
-              dir == TableDirection.col
-                  ? Icons.first_page
-                  : Icons.vertical_align_top, () {
-            TableActions.add(node, position, editorState, dir);
-            dismissOverlay();
-          }),
-          _menuItem(
-              context,
-              dir == TableDirection.col
-                  ? AppFlowyEditorL10n.current.colAddAfter
-                  : AppFlowyEditorL10n.current.rowAddAfter,
-              dir == TableDirection.col
-                  ? Icons.last_page
-                  : Icons.vertical_align_bottom, () {
-            TableActions.add(node, position + 1, editorState, dir);
-            dismissOverlay();
-          }),
-          _menuItem(
-              context,
-              dir == TableDirection.col
-                  ? AppFlowyEditorL10n.current.colRemove
-                  : AppFlowyEditorL10n.current.rowRemove,
-              Icons.delete, () {
-            TableActions.delete(node, position, editorState, dir);
-            dismissOverlay();
-          }),
-          _menuItem(
-              context,
-              dir == TableDirection.col
-                  ? AppFlowyEditorL10n.current.colDuplicate
-                  : AppFlowyEditorL10n.current.rowDuplicate,
-              Icons.content_copy, () {
-            TableActions.duplicate(node, position, editorState, dir);
-            dismissOverlay();
-          }),
-          _menuItem(
-            context,
-            AppFlowyEditorL10n.current.backgroundColor,
-            Icons.format_color_fill,
-            () {
-              final cell = dir == TableDirection.col
-                  ? getCellNode(node, position, 0)
-                  : getCellNode(node, 0, position);
-              final key = dir == TableDirection.col
-                  ? TableCellBlockKeys.colBackgroundColor
-                  : TableCellBlockKeys.rowBackgroundColor;
-
-              _showColorMenu(
-                context,
-                (color) {
-                  TableActions.setBgColor(
-                    node,
-                    position,
-                    editorState,
-                    color,
-                    dir,
-                  );
-                },
-                top: top,
-                bottom: bottom,
-                left: left,
-                selectedColorHex: cell?.attributes[key],
-              );
-              dismissOverlay();
-            },
-          ),
-          _menuItem(
-              context,
-              dir == TableDirection.col
-                  ? AppFlowyEditorL10n.current.colClear
-                  : AppFlowyEditorL10n.current.rowClear,
-              Icons.clear, () {
-            TableActions.clear(node, position, editorState, dir);
-            dismissOverlay();
-          }),
-        ],
-      );
-    },
-  ).build();
-  Overlay.of(context, rootOverlay: true).insert(overlay!);
+  final anchor = EditorPopoverMenu.anchorRect(context);
+  if (anchor == null) return;
+  _showColorAt(context, anchor, node, state, position, dir);
 }
 
-Widget _menuItem(
+void _showColorAt(
   BuildContext context,
-  String text,
-  IconData icon,
-  Function() action,
-) {
-  return SizedBox(
-    height: 36,
-    child: TextButton.icon(
-      onPressed: () {
-        action();
-      },
-      icon: Icon(icon, color: Theme.of(context).iconTheme.color),
-      style: buildOverlayButtonStyle(context),
-      label: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Text(
-              text,
-              softWrap: false,
-              maxLines: 1,
-              overflow: TextOverflow.fade,
-              style: TextStyle(
-                color: Theme.of(context).textTheme.labelLarge?.color,
-              ),
-            ),
-          ),
-        ],
+  Rect anchor,
+  Node node,
+  EditorState state,
+  int position,
+  TableDirection dir, {
+  OverlayState? overlayState,
+}) {
+  final cell = dir == TableDirection.col
+      ? getCellNode(node, position, 0)
+      : getCellNode(node, 0, position);
+  final key = dir == TableDirection.col
+      ? TableCellBlockKeys.colBackgroundColor
+      : TableCellBlockKeys.rowBackgroundColor;
+  final selected = cell?.attributes[key] as String?;
+  void setColor(String? color) =>
+      TableActions.setBgColor(node, position, state, color, dir);
+  EditorPopoverMenu.show(
+    context: context,
+    anchor: anchor,
+    overlayState: overlayState,
+    width: 238,
+    maxHeight: 400,
+    footerHeight: 52,
+    style: _menuStyle(state),
+    entries: [
+      EditorMenuEntry(
+        label: AppFlowyEditorL10n.current.clearHighlightColor,
+        icon: Icons.format_color_reset_outlined,
+        selected: selected == null,
+        onSelected: () => setColor(null),
       ),
+      for (final option in generateHighlightColorOptions())
+        EditorMenuEntry(
+          label: option.name,
+          leading: DecoratedBox(
+            decoration: BoxDecoration(
+              color: option.colorHex.tryToColor(),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+            ),
+            child: const SizedBox(width: 15, height: 15),
+          ),
+          selected: selected == option.colorHex,
+          onSelected: () => setColor(option.colorHex),
+        ),
+    ],
+    footerBuilder: (context, dismiss) => _CustomColorInput(
+      initial: selected,
+      onSubmitted: (color) {
+        dismiss();
+        setColor(color);
+      },
     ),
   );
 }
 
-void _showColorMenu(
+void showActionMenu(
   BuildContext context,
-  Function(String?) action, {
-  double? top,
-  double? bottom,
-  double? left,
-  String? selectedColorHex,
+  Node node,
+  EditorState state,
+  int position,
+  TableDirection dir, {
+  TableMenuEntriesBuilder? menuEntriesBuilder,
 }) {
-  OverlayEntry? overlay;
+  final anchor = EditorPopoverMenu.anchorRect(context);
+  if (anchor == null) return;
+  final rootOverlay = Overlay.maybeOf(context, rootOverlay: true);
+  final overlayContext = rootOverlay?.context ?? context;
+  final defaultEntries = <EditorMenuEntry>[
+    EditorMenuEntry(
+      label: dir == TableDirection.col
+          ? AppFlowyEditorL10n.current.colAddBefore
+          : AppFlowyEditorL10n.current.rowAddBefore,
+      icon: dir == TableDirection.col
+          ? Icons.first_page
+          : Icons.vertical_align_top,
+      onSelected: () => TableActions.add(node, position, state, dir),
+    ),
+    EditorMenuEntry(
+      label: dir == TableDirection.col
+          ? AppFlowyEditorL10n.current.colAddAfter
+          : AppFlowyEditorL10n.current.rowAddAfter,
+      icon: dir == TableDirection.col
+          ? Icons.last_page
+          : Icons.vertical_align_bottom,
+      onSelected: () => TableActions.add(node, position + 1, state, dir),
+    ),
+    EditorMenuEntry(
+      label: dir == TableDirection.col
+          ? AppFlowyEditorL10n.current.colDuplicate
+          : AppFlowyEditorL10n.current.rowDuplicate,
+      icon: Icons.content_copy_outlined,
+      onSelected: () => TableActions.duplicate(node, position, state, dir),
+    ),
+    EditorMenuEntry(
+      label: AppFlowyEditorL10n.current.backgroundColor,
+      icon: Icons.palette_outlined,
+      onSelected: () => _showColorAt(
+        overlayContext,
+        anchor,
+        node,
+        state,
+        position,
+        dir,
+        overlayState: rootOverlay,
+      ),
+    ),
+    EditorMenuEntry(
+      label: dir == TableDirection.col
+          ? AppFlowyEditorL10n.current.colClear
+          : AppFlowyEditorL10n.current.rowClear,
+      icon: Icons.backspace_outlined,
+      onSelected: () => TableActions.clear(node, position, state, dir),
+    ),
+    EditorMenuEntry(
+      label: dir == TableDirection.col
+          ? AppFlowyEditorL10n.current.colRemove
+          : AppFlowyEditorL10n.current.rowRemove,
+      icon: Icons.delete_outline,
+      onSelected: () => TableActions.delete(node, position, state, dir),
+    ),
+  ];
+  EditorPopoverMenu.show(
+    context: context,
+    anchor: anchor,
+    style: _menuStyle(state),
+    entries:
+        menuEntriesBuilder?.call(node, state, position, dir) ?? defaultEntries,
+  );
+}
 
-  void dismissOverlay() {
-    overlay?.remove();
-    overlay = null;
+class _CustomColorInput extends StatefulWidget {
+  const _CustomColorInput({required this.initial, required this.onSubmitted});
+  final String? initial;
+  final ValueChanged<String> onSubmitted;
+
+  @override
+  State<_CustomColorInput> createState() => _CustomColorInputState();
+}
+
+class _CustomColorInputState extends State<_CustomColorInput> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initial == null
+        ? ''
+        : '#${widget.initial!.replaceFirst('0x', '')}',
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
-  overlay = FullScreenOverlayEntry(
-    top: top,
-    bottom: bottom,
-    left: left,
-    builder: (context) {
-      return ColorPicker(
-        title: AppFlowyEditorL10n.current.highlightColor,
-        selectedColorHex: selectedColorHex,
-        colorOptions: generateHighlightColorOptions(),
-        onSubmittedColorHex: (color, _) {
-          action(color);
-          dismissOverlay();
-        },
-        resetText: AppFlowyEditorL10n.current.clearHighlightColor,
-        resetIconName: 'clear_highlight_color',
-      );
-    },
-  ).build();
-  Overlay.of(context, rootOverlay: true).insert(overlay!);
+  void _submit() {
+    final hex = _controller.text.trim().replaceFirst('#', '').toUpperCase();
+    if (!RegExp(r'^(?:[0-9A-F]{6}|[0-9A-F]{8})$').hasMatch(hex)) return;
+    widget.onSubmitted('0x${hex.length == 6 ? 'FF' : ''}$hex');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.onSurface;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 7, 8, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 32,
+              child: TextField(
+                controller: _controller,
+                onSubmitted: (_) => _submit(),
+                style: TextStyle(fontSize: 12, color: color),
+                decoration: InputDecoration(
+                  hintText: '#RRGGBB / #AARRGGBB',
+                  isDense: true,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(4),
+                    borderSide:
+                        BorderSide(color: color.withValues(alpha: 0.25)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(4),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Semantics(
+            button: true,
+            label: '应用颜色',
+            child: GestureDetector(
+              onTap: _submit,
+              child: Icon(Icons.check, size: 18, color: color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

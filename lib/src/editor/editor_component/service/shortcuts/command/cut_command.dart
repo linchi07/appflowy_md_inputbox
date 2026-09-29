@@ -16,13 +16,13 @@ final CommandShortcutEvent cutCommand = CommandShortcutEvent(
 );
 
 CommandShortcutEventHandler _cutCommandHandler = (editorState) {
-  final tableHandler = editorState.activeTableSelectionHandler;
-  if (tableHandler != null) {
-    final text = tableHandler.getSelectedText();
+  final rangeHandler = editorState.activeRangeSelectionHandler;
+  if (rangeHandler != null) {
+    final text = rangeHandler.getSelectedText();
     if (text != null && text.isNotEmpty) {
       () async {
         await AppFlowyClipboard.setData(text: text);
-        await tableHandler.clearSelectedCells();
+        await rangeHandler.clearSelectedContent();
       }();
 
       return KeyEventResult.handled;

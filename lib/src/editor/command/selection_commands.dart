@@ -50,10 +50,11 @@ extension SelectionTransform on EditorState {
   /// For the other cases, this function just deletes all the nodes.
   Future<bool> deleteSelection(
     Selection selection, {
-    List<String> ignoreNodeTypes = const [
-      TableCellBlockKeys.type,
-    ],
+    List<String> ignoreNodeTypes = const [],
   }) async {
+    bool isProtectedContainer(Node? node) =>
+        node != null &&
+        (ignoreNodeTypes.contains(node.type) || preventsMergeAtStart(node));
     // Nothing to do if the selection is collapsed.
     if (selection.isCollapsed) {
       return false;
@@ -68,9 +69,7 @@ extension SelectionTransform on EditorState {
     // Get the nodes that are fully or partially selected.
     final nodes = getNodesInSelection(selection);
 
-    // A cross-block table is one atomic node. The general traversal below
-    // visits its cell descendants and can try to delete text from the table
-    // node itself. Handle top-level ranges containing a table as one range.
+    // Structured atomic blocks are deleted as a single top-level range.
     final startPath = selection.start.path;
     final endPath = selection.end.path;
     if (startPath.length == 1 &&
@@ -81,7 +80,7 @@ extension SelectionTransform on EditorState {
         document.root.children
             .skip(startPath.first)
             .take(endPath.first - startPath.first + 1)
-            .any((node) => node.type == TableBlockKeys.type)) {
+            .any(isAtomicBlock)) {
       final first = document.root.children[startPath.first];
       final last = document.root.children[endPath.first];
       if (first.delta != null && last.delta != null) {
@@ -130,8 +129,8 @@ extension SelectionTransform on EditorState {
     // If only one node is selected, then we can just delete the selected text
     // or node.
     if (nodes.length == 1) {
-      // If table cell is selected, clear the cell node child.
-      final node = ignoreNodeTypes.contains(nodes.first.type)
+      // Clear a protected container's text child without deleting its structure.
+      final node = isProtectedContainer(nodes.first)
           ? nodes.first.children.first
           : nodes.first;
       if (node.delta != null) {
@@ -140,7 +139,7 @@ extension SelectionTransform on EditorState {
           selection.startIndex,
           selection.length,
         );
-      } else if (!ignoreNodeTypes.contains(node.parent?.type)) {
+      } else if (!isProtectedContainer(node.parent)) {
         transaction.deleteNode(node);
       }
     }
@@ -170,8 +169,8 @@ extension SelectionTransform on EditorState {
         // The first node is at the beginning of the selection.
         // All other nodes can be deleted.
         if (i != 0) {
-          // Never delete a table cell node child
-          if (ignoreNodeTypes.contains(node.parent?.type)) {
+          // Keep children of protected structured containers.
+          if (isProtectedContainer(node.parent)) {
             if (!nodes.any((n) => n.id == node.parent?.parent?.id)) {
               transaction.deleteText(
                 node,
@@ -180,17 +179,17 @@ extension SelectionTransform on EditorState {
               );
             }
           }
-          // If first node was inside table cell then it wasn't mergable to last
+          // If the first node is in a protected container it cannot be merged.
           // node, So we should not delete the last node. Just delete part of
           // the text inside selection
           else if (node.id == nodes.last.id &&
-              ignoreNodeTypes.contains(nodes.first.parent?.type)) {
+              isProtectedContainer(nodes.first.parent)) {
             transaction.deleteText(
               node,
               0,
               selection.end.offset,
             );
-          } else if (!ignoreNodeTypes.contains(node.type)) {
+          } else if (!isProtectedContainer(node)) {
             transaction.deleteNode(node);
           }
           continue;
@@ -200,8 +199,7 @@ extension SelectionTransform on EditorState {
         // and also the current node isn't inside table cell, then we can merge
         // the text between the two nodes.
         if (nodes.last.delta != null &&
-            ![node.parent?.type, nodes.last.parent?.type]
-                .any((type) => ignoreNodeTypes.contains(type))) {
+            ![node.parent, nodes.last.parent].any(isProtectedContainer)) {
           transaction.mergeText(
             node,
             nodes.last,
@@ -231,10 +229,9 @@ extension SelectionTransform on EditorState {
 
         // Otherwise, we can just delete the selected text.
         else {
-          // If the last or first node is inside table we will only delete
-          // selection part of first node.
-          if (ignoreNodeTypes.contains(nodes.last.parent?.type) ||
-              ignoreNodeTypes.contains(node.parent?.type)) {
+          // Keep the text boundary of a protected structured container.
+          if (isProtectedContainer(nodes.last.parent) ||
+              isProtectedContainer(node.parent)) {
             transaction.deleteText(
               node,
               selection.startIndex,

@@ -34,6 +34,7 @@ class TableConfig {
       TableBlockKeys.colDefaultWidth: colDefaultWidth,
       TableBlockKeys.rowDefaultHeight: rowDefaultHeight,
       TableBlockKeys.colMinimumWidth: colMinimumWidth,
+      TableBlockKeys.borderWidth: borderWidth,
     };
   }
 

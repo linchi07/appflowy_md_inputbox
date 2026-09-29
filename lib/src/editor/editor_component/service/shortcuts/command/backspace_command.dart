@@ -89,29 +89,21 @@ CommandShortcutEventHandler _backspaceInCollapsedSelection = (editorState) {
           ),
         );
     } else {
-      // If the deletion crosses columns and starts from the beginning position
-      // skip the node deletion process
-      // otherwise it will cause an error in table rendering.
-      if (node.parent?.type == TableCellBlockKeys.type &&
+      if (editorState.preventsMergeAtStart(node.parent) &&
           position.offset == 0) {
         return KeyEventResult.handled;
       }
 
-      Node? tableParent =
-          node.findParent((element) => element.type == TableBlockKeys.type);
-      Node? prevTableParent;
+      final atomicParent = editorState.atomicAncestorOf(node);
+      Node? prevAtomicParent;
       final prev = node.previousNodeWhere((element) {
-        prevTableParent = element
-            .findParent((element) => element.type == TableBlockKeys.type);
-        // break if only one is in a table or they're in different tables
-        return tableParent != prevTableParent ||
+        prevAtomicParent = editorState.atomicAncestorOf(element);
+        return atomicParent != prevAtomicParent ||
             // merge with the previous node contains delta or it's a divider.
             element.delta != null ||
             element.type == DividerBlockKeys.type;
       });
-      // table nodes should be deleted using the table menu
-      // in-table paragraphs should only be deleted inside the table
-      if (prev != null && tableParent == prevTableParent) {
+      if (prev != null && atomicParent == prevAtomicParent) {
         if (prev.delta != null) {
           transaction
             ..mergeText(prev, node)

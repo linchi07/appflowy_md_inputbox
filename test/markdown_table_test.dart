@@ -36,5 +36,19 @@ void main() {
     expect(text.contains('| A | B |'), true);
     expect(text.contains('| --- | --- |'), true);
     expect(text.contains('| 1 | 2 |'), true);
+    editorState.dispose();
+  });
+
+  test('EditorState uses the table serializer for special characters', () {
+    final table = TableNode.fromList([
+      ['A|B', 'line 1\nline 2'],
+      ['C', 'D'],
+    ]);
+    final state = EditorState(
+      document: Document(root: pageNode(children: [table.node])),
+    );
+    expect(state.text, table.toMarkdown());
+    expect(state.text, contains(r'A\|B'));
+    state.dispose();
   });
 }

@@ -11,12 +11,19 @@ EditorState _editorWithText(String source, {int? offset}) {
 }
 
 void main() {
-  test('ordinary Enter registers Markdown continuation', () {
+  test('table shortcuts are dispatched from the table behavior', () {
     expect(standardCommandShortcutEvents, contains(enterMarkdownShortcutEvent));
+    final table = TableNode.fromList([
+      [''],
+    ]);
+    final state =
+        EditorState(document: Document(root: pageNode(children: [table.node])));
+    final cellText = table.getCell(0, 0).children.first;
     expect(
-      standardCommandShortcutEvents.indexOf(enterInTableCell),
-      lessThan(standardCommandShortcutEvents.indexOf(enterMarkdownShortcutEvent)),
+      state.commandShortcutsFor(cellText),
+      contains(enterInTableCell),
     );
+    state.dispose();
   });
 
   test('Markdown Enter leaves native table-cell navigation to its handler', () {

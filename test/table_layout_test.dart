@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:appflowy_editor/src/editor/block_component/table_block_component/table_config.dart';
 import 'package:appflowy_editor/src/editor/block_component/table_block_component/table_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -52,8 +53,59 @@ void main() {
     state.dispose();
   });
 
-  testWidgets(
-      'add column and row buttons expand table and style menu works',
+  testWidgets('new table uses the current editor table style', (tester) async {
+    final state = EditorState(
+      document: Document(
+        root: pageNode(children: [paragraphNode(delta: Delta()..insert('/'))]),
+      ),
+    )..selection = Selection.collapsed(Position(path: [0], offset: 1));
+    const style = TableStyle(
+      colWidth: 215,
+      rowHeight: 44,
+      colMinimumWidth: 55,
+      borderWidth: 2,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppFlowyEditor(
+          editorState: state,
+          blockComponentBuilders: {
+            ...standardBlockComponentBuilderMap,
+            TableBlockKeys.type: TableBlockComponentBuilder(tableStyle: style),
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final context = tester.element(find.byType(AppFlowyEditor));
+    tableMenuItem.handler(
+      state,
+      SelectionMenu(
+        context: context,
+        editorState: state,
+        selectionMenuItems: [],
+      ),
+      context,
+    );
+    await tester.pump();
+
+    final table = state.document.root.children.single;
+    expect(table.type, TableBlockKeys.type);
+    expect(TableConfig.fromJson(table.attributes).toJson(), {
+      TableBlockKeys.colDefaultWidth: style.colWidth,
+      TableBlockKeys.rowDefaultHeight: style.rowHeight,
+      TableBlockKeys.colMinimumWidth: style.colMinimumWidth,
+      TableBlockKeys.borderWidth: style.borderWidth,
+    });
+    expect(TableDefaults.colWidth, 160);
+    expect(TableDefaults.borderWidth, 1);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    state.dispose();
+  });
+
+  testWidgets('add column and row buttons expand table and style menu works',
       (tester) async {
     final state = tableState();
     await tester.pumpWidget(
@@ -124,8 +176,7 @@ void main() {
     state.dispose();
   });
 
-  testWidgets('read-only tables omit controls and buttons',
-      (tester) async {
+  testWidgets('read-only tables omit controls and buttons', (tester) async {
     final state = tableState();
     await tester.pumpWidget(
       MaterialApp(
@@ -174,10 +225,11 @@ void main() {
     final tableTopLeft = tester.getTopLeft(find.byType(TableView));
 
     // 悬浮在列分割线
-    await gesture.moveTo(tableTopLeft + const Offset(187.5, 12));
+    await gesture.moveTo(tableTopLeft + const Offset(209.5, 12));
     await tester.pump();
 
-    final colTriangle = find.byKey(const ValueKey('table-insert-col-divider-1'));
+    final colTriangle =
+        find.byKey(const ValueKey('table-insert-col-divider-1'));
     expect(colTriangle, findsOneWidget);
     await tester.tap(colTriangle);
     await tester.pump();
@@ -191,7 +243,8 @@ void main() {
     await gesture.moveTo(tableTopLeft + Offset(12, divider1Y));
     await tester.pump();
 
-    final rowTriangle = find.byKey(const ValueKey('table-insert-row-divider-1'));
+    final rowTriangle =
+        find.byKey(const ValueKey('table-insert-row-divider-1'));
     expect(rowTriangle, findsOneWidget);
     await tester.tap(rowTriangle);
     await tester.pump();
@@ -201,7 +254,8 @@ void main() {
     state.dispose();
   });
 
-  testWidgets('column and row drag handles appear on hover outside table without fill or shape',
+  testWidgets(
+      'column and row drag handles appear on hover outside table without fill or shape',
       (tester) async {
     final state = tableState();
     await tester.pumpWidget(
@@ -231,32 +285,53 @@ void main() {
     final colHandle = find.byKey(const ValueKey('table-col-handle-0'));
     expect(colHandle, findsOneWidget);
     // 确保没有 Card
-    expect(find.descendant(of: colHandle, matching: find.byType(Card)), findsNothing);
-    // 确保包含 drag_indicator 图标
+    expect(find.descendant(of: colHandle, matching: find.byType(Card)),
+        findsNothing);
+    // 确保包含 palette_outlined 图标 (调色板) 和 close 图标 (X删除按钮)
     expect(
       find.descendant(
         of: colHandle,
         matching: find.byWidgetPredicate(
-          (w) => w is Icon && w.icon == Icons.drag_indicator,
+          (w) => w is Icon && w.icon == Icons.palette_outlined,
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: colHandle,
+        matching: find.byWidgetPredicate(
+          (w) => w is Icon && w.icon == Icons.close,
         ),
       ),
       findsOneWidget,
     );
 
     // 悬浮在第一行左侧外侧
-    final row0Height = TableNode(node: state.document.root.children.single).getRowHeight(0);
+    final row0Height =
+        TableNode(node: state.document.root.children.single).getRowHeight(0);
     final row0CenterY = 26.0 + 1.0 + row0Height / 2;
     await gesture.moveTo(tableTopLeft + Offset(12, row0CenterY));
     await tester.pump();
 
     final rowHandle = find.byKey(const ValueKey('table-row-handle-0'));
     expect(rowHandle, findsOneWidget);
-    expect(find.descendant(of: rowHandle, matching: find.byType(Card)), findsNothing);
+    expect(find.descendant(of: rowHandle, matching: find.byType(Card)),
+        findsNothing);
     expect(
       find.descendant(
         of: rowHandle,
         matching: find.byWidgetPredicate(
-          (w) => w is Icon && w.icon == Icons.drag_indicator,
+          (w) => w is Icon && w.icon == Icons.palette_outlined,
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: rowHandle,
+        matching: find.byWidgetPredicate(
+          (w) => w is Icon && w.icon == Icons.close,
         ),
       ),
       findsOneWidget,
@@ -266,7 +341,8 @@ void main() {
     state.dispose();
   });
 
-  testWidgets('table row heights are aligned across all columns and borders match',
+  testWidgets(
+      'table row heights are aligned across all columns and borders match',
       (tester) async {
     // 构造一个多行文本表格：第 0 列包含多行长文本，第 1 列为单行短文本
     final tableNode = TableNode.fromList([

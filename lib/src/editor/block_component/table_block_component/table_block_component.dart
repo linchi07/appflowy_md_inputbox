@@ -2,6 +2,7 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'table_config.dart';
 import 'table_view.dart';
 
 class TableBlockKeys {
@@ -65,12 +66,12 @@ class TableDefaults {
   static const Widget DEFAULT_HANDLER_ICON =
       Icon(Icons.drag_indicator, size: 16);
 
-  static double colWidth = DEFAULT_COL_WIDTH;
-  static double rowHeight = DEFAULT_ROW_HEIGHT;
-  static double colMinimumWidth = DEFAULT_COL_MINIMUM_WIDTH;
-  static double borderWidth = DEFAULT_BORDER_WIDTH;
-  static Color borderColor = DEFAULT_BORDER_COLOR;
-  static Color borderHoverColor = DEFAULT_BORDER_HOVER_COLOR;
+  static const double colWidth = DEFAULT_COL_WIDTH;
+  static const double rowHeight = DEFAULT_ROW_HEIGHT;
+  static const double colMinimumWidth = DEFAULT_COL_MINIMUM_WIDTH;
+  static const double borderWidth = DEFAULT_BORDER_WIDTH;
+  static const Color borderColor = DEFAULT_BORDER_COLOR;
+  static const Color borderHoverColor = DEFAULT_BORDER_HOVER_COLOR;
   static Widget get addIcon => DEFAULT_ADD_ICON;
   static Widget get handlerIcon => DEFAULT_HANDLER_ICON;
 }
@@ -86,14 +87,23 @@ typedef TableBlockComponentMenuBuilder = Widget Function(
   VoidCallback?,
 );
 
+typedef TableMenuEntriesBuilder = List<EditorMenuEntry> Function(
+  Node node,
+  EditorState editorState,
+  int position,
+  TableDirection direction,
+);
+
 class TableBlockComponentBuilder extends BlockComponentBuilder {
   TableBlockComponentBuilder({
     super.configuration,
     this.tableStyle = const TableStyle(),
     this.menuBuilder,
+    this.menuEntriesBuilder,
   });
 
   final TableBlockComponentMenuBuilder? menuBuilder;
+  final TableMenuEntriesBuilder? menuEntriesBuilder;
   final TableStyle tableStyle;
 
   @override
@@ -103,17 +113,13 @@ class TableBlockComponentBuilder extends BlockComponentBuilder {
   @override
   BlockComponentWidget build(BlockComponentContext blockComponentContext) {
     final node = blockComponentContext.node;
-    TableDefaults.colWidth = tableStyle.colWidth;
-    TableDefaults.rowHeight = tableStyle.rowHeight;
-    TableDefaults.colMinimumWidth = tableStyle.colMinimumWidth;
-    TableDefaults.borderWidth = tableStyle.borderWidth;
-
     return TableBlockComponentWidget(
       key: node.key,
       tableNode: TableNode(node: node),
       node: node,
       configuration: configuration,
       menuBuilder: menuBuilder,
+      menuEntriesBuilder: menuEntriesBuilder,
       tableStyle: tableStyle,
       showActions: showActions(node),
       actionBuilder: (context, state) => actionBuilder(
@@ -205,6 +211,7 @@ class TableBlockComponentWidget extends BlockComponentStatefulWidget {
     required super.node,
     this.tableStyle = const TableStyle(),
     this.menuBuilder,
+    this.menuEntriesBuilder,
     super.showActions,
     super.actionBuilder,
     super.actionTrailingBuilder,
@@ -214,6 +221,7 @@ class TableBlockComponentWidget extends BlockComponentStatefulWidget {
   final TableNode tableNode;
 
   final TableBlockComponentMenuBuilder? menuBuilder;
+  final TableMenuEntriesBuilder? menuEntriesBuilder;
   final TableStyle tableStyle;
 
   @override
@@ -250,6 +258,7 @@ class _TableBlockComponentWidgetState extends State<TableBlockComponentWidget>
           tableNode: widget.tableNode,
           editorState: editorState,
           menuBuilder: widget.menuBuilder,
+          menuEntriesBuilder: widget.menuEntriesBuilder,
           tableStyle: widget.tableStyle,
         ),
       ),
@@ -374,10 +383,23 @@ SelectionMenuItem tableMenuItem = SelectionMenuItem(
       return;
     }
 
-    final tableNode = TableNode.fromList([
-      ['', ''],
-      ['', ''],
-    ]);
+    final tableBuilder =
+        editorState.renderer.blockComponentBuilder(TableBlockKeys.type);
+    final tableStyle = tableBuilder is TableBlockComponentBuilder
+        ? tableBuilder.tableStyle
+        : const TableStyle();
+    final tableNode = TableNode.fromList(
+      [
+        ['', ''],
+        ['', ''],
+      ],
+      config: TableConfig(
+        colDefaultWidth: tableStyle.colWidth,
+        rowDefaultHeight: tableStyle.rowHeight,
+        colMinimumWidth: tableStyle.colMinimumWidth,
+        borderWidth: tableStyle.borderWidth,
+      ),
+    );
 
     final transaction = editorState.transaction;
     final delta = currentNode.delta;

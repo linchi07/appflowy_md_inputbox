@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:flutter/gestures.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor/src/editor/block_component/table_block_component/table_view.dart';
 import 'package:appflowy_editor/src/editor/block_component/base_component/selection/selection_area_painter.dart';
@@ -113,7 +114,7 @@ void main() {
       // (0, 0) 单元格大约在 (SIDE_HEADER_WIDTH + 40, TOP_HEADER_HEIGHT + 20)
       // (1, 1) 单元格大约在 (SIDE_HEADER_WIDTH + 200, TOP_HEADER_HEIGHT + 60)
       final startOffset = tableTopLeft + const Offset(50, 40);
-      final endOffset = tableTopLeft + const Offset(200, 70);
+      final endOffset = tableTopLeft + const Offset(222, 70);
 
       final gesture = await tester.startGesture(startOffset);
       await tester.pump();
@@ -165,7 +166,7 @@ void main() {
 
       final tableTopLeft = tester.getTopLeft(find.byType(TableView));
       final start = tableTopLeft + const Offset(50, 40);
-      final end = tableTopLeft + const Offset(200, 70);
+      final end = tableTopLeft + const Offset(222, 70);
       Future<void> selectCells() async {
         final drag = await tester.startGesture(start);
         await tester.pump();
@@ -203,7 +204,7 @@ void main() {
     });
 
     testWidgets(
-        'clicking col handle selects entire column and Delete clears it with undo support',
+        'clicking col x button deletes the entire column and can be undone',
         (tester) async {
       final state = createTableState();
       await tester.pumpWidget(
@@ -233,25 +234,33 @@ void main() {
       final colHandle = find.byKey(const ValueKey('table-col-handle-0'));
       expect(colHandle, findsOneWidget);
 
-      await tester.tap(colHandle);
+      final colDeleteBtn = find.descendant(
+        of: colHandle,
+        matching: find.byIcon(Icons.close),
+      );
+      expect(colDeleteBtn, findsOneWidget);
+      final colPaletteBtn = find.descendant(
+        of: colHandle,
+        matching: find.byIcon(Icons.palette_outlined),
+      );
+      expect(colPaletteBtn, findsOneWidget);
+
+      await tester.tap(colDeleteBtn);
       await tester.pump();
 
-      // 按 Delete 键批量清空选中的第 0 列 (Row 0: 'A', Row 1: '1')
-      await tester.sendKeyEvent(LogicalKeyboardKey.delete);
-      await tester.pump();
-
+      // 点击 x 按钮后，第 0 列已被完整删除，表格变为 1 列
       final table = TableNode(node: state.document.root.children.single);
-      expect(table.getCell(0, 0).children.single.delta?.toPlainText(), '');
-      expect(table.getCell(0, 1).children.single.delta?.toPlainText(), '');
-      // 第 1 列未受影响
-      expect(table.getCell(1, 0).children.single.delta?.toPlainText(), 'B');
-      expect(table.getCell(1, 1).children.single.delta?.toPlainText(), '2');
+      expect(table.colsLen, 1);
+      // 原第 1 列（B, 2）成为当前第 0 列
+      expect(table.getCell(0, 0).children.single.delta?.toPlainText(), 'B');
+      expect(table.getCell(0, 1).children.single.delta?.toPlainText(), '2');
 
       // 撤销验证
       state.undoManager.undo();
       await tester.pump();
       final restoredTable =
           TableNode(node: state.document.root.children.single);
+      expect(restoredTable.colsLen, 2);
       expect(
         restoredTable.getCell(0, 0).children.single.delta?.toPlainText(),
         'A',
@@ -260,6 +269,275 @@ void main() {
         restoredTable.getCell(0, 1).children.single.delta?.toPlainText(),
         '1',
       );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      state.dispose();
+    });
+
+    testWidgets(
+        'clicking row x button deletes the entire row and can be undone',
+        (tester) async {
+      final state = createTableState();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 700,
+            height: 400,
+            child: AppFlowyEditor(
+              editorState: state,
+              editorStyle: EditorStyle.desktop(padding: EdgeInsets.zero),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+
+      final tableTopLeft = tester.getTopLeft(find.byType(TableView));
+
+      // 悬浮在第 0 行 handle 区域
+      final row0Height =
+          TableNode(node: state.document.root.children.single).getRowHeight(0);
+      final row0CenterY = 26.0 + 1.0 + row0Height / 2;
+      await mouse.moveTo(tableTopLeft + Offset(12, row0CenterY));
+      await tester.pump();
+
+      final rowHandle = find.byKey(const ValueKey('table-row-handle-0'));
+      expect(rowHandle, findsOneWidget);
+
+      final rowDeleteBtn = find.descendant(
+        of: rowHandle,
+        matching: find.byIcon(Icons.close),
+      );
+      expect(rowDeleteBtn, findsOneWidget);
+      final rowPaletteBtn = find.descendant(
+        of: rowHandle,
+        matching: find.byIcon(Icons.palette_outlined),
+      );
+      expect(rowPaletteBtn, findsOneWidget);
+
+      await tester.tap(rowDeleteBtn);
+      await tester.pump();
+
+      // 点击 x 按钮后，第 0 行已被完整删除，表格变为 1 行
+      final table = TableNode(node: state.document.root.children.single);
+      expect(table.rowsLen, 1);
+      // 原第 1 行（1, 2）成为当前第 0 行
+      expect(table.getCell(0, 0).children.single.delta?.toPlainText(), '1');
+      expect(table.getCell(1, 0).children.single.delta?.toPlainText(), '2');
+
+      // 撤销验证
+      state.undoManager.undo();
+      await tester.pump();
+      final restoredTable =
+          TableNode(node: state.document.root.children.single);
+      expect(restoredTable.rowsLen, 2);
+      expect(
+        restoredTable.getCell(0, 0).children.single.delta?.toPlainText(),
+        'A',
+      );
+      expect(
+        restoredTable.getCell(1, 0).children.single.delta?.toPlainText(),
+        'B',
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      state.dispose();
+    });
+
+    testWidgets(
+        'clicking palette button opens color menu and sets column background color',
+        (tester) async {
+      final state = createTableState();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 700,
+            height: 400,
+            child: AppFlowyEditor(
+              editorState: state,
+              editorStyle: EditorStyle.desktop(padding: EdgeInsets.zero),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+
+      final tableTopLeft = tester.getTopLeft(find.byType(TableView));
+
+      // 悬浮在第 0 列 handle 区域
+      await mouse.moveTo(tableTopLeft + const Offset(114, 12));
+      await tester.pump();
+
+      final colPaletteBtn = find.byKey(const ValueKey('table-col-color-0'));
+      expect(colPaletteBtn, findsOneWidget);
+
+      await tester.tap(colPaletteBtn);
+      await tester.pumpAndSettle();
+
+      // 调色板使用与表格其他操作相同的菜单界面。
+      final firstColor = generateHighlightColorOptions().first;
+      expect(find.text(firstColor.name), findsOneWidget);
+      await tester.tap(find.text(firstColor.name));
+      await tester.pumpAndSettle();
+
+      // 验证第 0 列背景颜色已设置
+      final table = TableNode(node: state.document.root.children.single);
+      final cell0 = table.getCell(0, 0);
+      expect(
+        cell0.attributes[TableCellBlockKeys.colBackgroundColor],
+        firstColor.colorHex,
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      state.dispose();
+    });
+
+    testWidgets('row palette stays visible while the mouse moves onto it',
+        (tester) async {
+      final state = createTableState();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 700,
+            height: 400,
+            child: AppFlowyEditor(
+              editorState: state,
+              editorStyle: EditorStyle.desktop(padding: EdgeInsets.zero),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      final tableTopLeft = tester.getTopLeft(find.byType(TableView));
+      final rowHeight =
+          TableNode(node: state.document.root.children.single).getRowHeight(0);
+      final rowCenterY = 26.0 + 1.0 + rowHeight / 2;
+
+      await mouse.moveTo(tableTopLeft + Offset(30, rowCenterY));
+      await tester.pump();
+      final palette = find.byKey(const ValueKey('table-row-color-0'));
+      expect(palette, findsOneWidget);
+
+      final paletteCenter = tester.getCenter(palette);
+      await mouse.moveTo(paletteCenter);
+      await tester.pump();
+      expect(palette, findsOneWidget);
+
+      await mouse.down(paletteCenter);
+      await mouse.up();
+      await tester.pumpAndSettle();
+      expect(
+        find.text(generateHighlightColorOptions().first.name),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      state.dispose();
+    });
+
+    testWidgets('row action menu can open its color submenu', (tester) async {
+      final state = createTableState();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 700,
+            height: 400,
+            child: AppFlowyEditor(
+              editorState: state,
+              editorStyle: EditorStyle.desktop(padding: EdgeInsets.zero),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      final tableTopLeft = tester.getTopLeft(find.byType(TableView));
+      final rowHeight =
+          TableNode(node: state.document.root.children.single).getRowHeight(0);
+      await mouse.moveTo(tableTopLeft + Offset(30, 27 + rowHeight / 2));
+      await tester.pump();
+      final palette = find.byKey(const ValueKey('table-row-color-0'));
+      expect(palette, findsOneWidget);
+      await tester.tapAt(
+        tester.getCenter(palette),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryMouseButton,
+      );
+      await tester.pump();
+
+      await tester.tap(find.text(AppFlowyEditorL10n.current.backgroundColor));
+      await tester.pump();
+      expect(
+        find.text(generateHighlightColorOptions().first.name),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      state.dispose();
+    });
+
+    testWidgets('table menus accept entries from the shared menu interface',
+        (tester) async {
+      final state = createTableState();
+      var selected = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 700,
+            height: 400,
+            child: AppFlowyEditor(
+              editorState: state,
+              editorStyle: EditorStyle.desktop(padding: EdgeInsets.zero),
+              blockComponentBuilders: {
+                ...standardBlockComponentBuilderMap,
+                TableBlockKeys.type: TableBlockComponentBuilder(
+                  menuEntriesBuilder:
+                      (node, editorState, position, direction) => [
+                    EditorMenuEntry(
+                      label: 'Custom table action',
+                      onSelected: () => selected = true,
+                    ),
+                  ],
+                ),
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      final tableTopLeft = tester.getTopLeft(find.byType(TableView));
+      final rowHeight =
+          TableNode(node: state.document.root.children.single).getRowHeight(0);
+      await mouse.moveTo(tableTopLeft + Offset(30, 27 + rowHeight / 2));
+      await tester.pump();
+      await tester.tapAt(
+        tester.getCenter(find.byKey(const ValueKey('table-row-color-0'))),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryMouseButton,
+      );
+      await tester.pump();
+      expect(find.text('Custom table action'), findsOneWidget);
+      await tester.tap(find.text('Custom table action'));
+      await tester.pump();
+      expect(selected, isTrue);
 
       await tester.pumpWidget(const SizedBox.shrink());
       state.dispose();
@@ -298,7 +576,7 @@ void main() {
 
       // 从 (0, 0) 拖拽到 (1, 1) 框选全表
       final startOffset = tableTopLeft + const Offset(50, 40);
-      final endOffset = tableTopLeft + const Offset(200, 70);
+      final endOffset = tableTopLeft + const Offset(222, 70);
 
       final gesture = await tester.startGesture(startOffset);
       await tester.pump();
@@ -473,7 +751,8 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
       await tester.pump();
-      expect(clipboardText, 'ove paragraph\n| A | B |\n| --- | --- |\n| 1 | 2 |');
+      expect(
+          clipboardText, 'ove paragraph\n| A | B |\n| --- | --- |\n| 1 | 2 |');
 
       final tableTopLeft = tester.getTopLeft(find.byType(TableView));
       final after = tester.getTopLeft(
@@ -483,7 +762,7 @@ void main() {
       final drag =
           await tester.startGesture(tableTopLeft + const Offset(50, 40));
       await tester.pump();
-      await drag.moveTo(tableTopLeft + const Offset(200, 70));
+      await drag.moveTo(tableTopLeft + const Offset(222, 70));
       await tester.pump();
       await drag.moveTo(after);
       await tester.pump();
@@ -498,7 +777,8 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
       await tester.pump();
-      expect(clipboardText, startsWith('| A | B |\n| --- | --- |\n| 1 | 2 |\n'));
+      expect(
+          clipboardText, startsWith('| A | B |\n| --- | --- |\n| 1 | 2 |\n'));
 
       state.selection = Selection(
         start: Position(path: [0], offset: 2),
@@ -805,7 +1085,8 @@ void main() {
       );
       await handleCut(state);
       await tester.pump();
-      expect(clipboardText, 'ove paragraph\n| A | B |\n| --- | --- |\n| 1 | 2 |');
+      expect(
+          clipboardText, 'ove paragraph\n| A | B |\n| --- | --- |\n| 1 | 2 |');
       expect(
         state.document.root.children
             .map((node) => node.delta?.toPlainText())
@@ -910,9 +1191,10 @@ void main() {
       final tableTopLeft = tester.getTopLeft(tableFinder);
 
       // 拖拽框选整表单元格
-      final drag = await tester.startGesture(tableTopLeft + const Offset(50, 40));
+      final drag =
+          await tester.startGesture(tableTopLeft + const Offset(50, 40));
       await tester.pump();
-      await drag.moveTo(tableTopLeft + const Offset(200, 70));
+      await drag.moveTo(tableTopLeft + const Offset(222, 70));
       await tester.pump();
       await drag.up();
       await tester.pump();
@@ -944,7 +1226,13 @@ void main() {
       final tableNode = TableNode(node: state.document.root.children[1]);
       for (var r = 0; r < tableNode.rowsLen; r++) {
         for (var c = 0; c < tableNode.colsLen; c++) {
-          final text = tableNode.getCell(c, r).children.firstOrNull?.delta?.toPlainText() ?? '';
+          final text = tableNode
+                  .getCell(c, r)
+                  .children
+                  .firstOrNull
+                  ?.delta
+                  ?.toPlainText() ??
+              '';
           expect(text, '');
         }
       }

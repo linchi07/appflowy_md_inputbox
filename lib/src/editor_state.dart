@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:appflowy_editor/src/editor/block_component/standard_node_behaviors.dart';
 import 'package:appflowy_editor/src/editor/editor_component/service/scroll/auto_scroller.dart';
 import 'package:appflowy_editor/src/editor/util/platform_extension.dart';
 import 'package:appflowy_editor/src/history/undo_manager.dart';
@@ -30,9 +31,9 @@ abstract class SelectionCoordinator {
   bool suppressSelectionPaint(Node node, Selection selection) => false;
 }
 
-abstract class TableSelectionHandler {
+abstract class RangeSelectionHandler {
   String? getSelectedText();
-  Future<void> clearSelectedCells();
+  Future<void> clearSelectedContent();
   void cancelSelection();
 }
 
@@ -225,8 +226,8 @@ class EditorState {
   final PropertyValueNotifier<List<RemoteSelection>> remoteSelections =
       IndexedPropertyValueNotifier<List<RemoteSelection>>([]);
 
-  /// Active table cell range selection handler.
-  TableSelectionHandler? activeTableSelectionHandler;
+  /// Active block-owned range selection handler.
+  RangeSelectionHandler? activeRangeSelectionHandler;
 
   final List<SelectionCoordinator> _selectionCoordinators = [];
   final Map<SelectionCoordinator, int> _selectionCoordinatorReferences = {};
@@ -382,39 +383,6 @@ class EditorState {
         if (serialize != null) return serialize(block);
         if (block.type == DividerBlockKeys.type) {
           return '---';
-        }
-        if (block.type == TableBlockKeys.type) {
-          final tableNode = TableNode(node: block);
-          final rowsLen = tableNode.rowsLen;
-          final colsLen = tableNode.colsLen;
-          if (rowsLen == 0 || colsLen == 0) return '';
-
-          final List<String> tableMarkdown = [];
-          final List<List<String>> rows = List.generate(
-            rowsLen,
-            (_) => List.generate(colsLen, (_) => ''),
-          );
-
-          for (var c = 0; c < colsLen; c++) {
-            for (var r = 0; r < rowsLen; r++) {
-              final cellNode = tableNode.getCell(c, r);
-              final cellText = cellNode.children.isNotEmpty
-                  ? (cellNode.children.first.delta?.toPlainText() ?? '')
-                      .replaceAll('\n', ' ')
-                  : '';
-              rows[r][c] = cellText;
-            }
-          }
-
-          tableMarkdown.add('| ${rows[0].join(' | ')} |');
-          tableMarkdown
-              .add('| ${List.generate(colsLen, (_) => '---').join(' | ')} |');
-
-          for (var r = 1; r < rowsLen; r++) {
-            tableMarkdown.add('| ${rows[r].join(' | ')} |');
-          }
-
-          return tableMarkdown.join('\n');
         }
         return block.delta?.toPlainText() ?? '';
       });
@@ -654,11 +622,12 @@ class EditorState {
 
   /// Optional node-local input behavior, keyed by [Node.type].
   Map<String, NodeBehavior> get nodeBehaviors => _nodeBehaviors;
-  Map<String, NodeBehavior> _nodeBehaviors = const {};
+  Map<String, NodeBehavior> _nodeBehaviors = {...standardNodeBehaviors};
 
   set nodeBehaviors(Map<String, NodeBehavior> value) {
-    if (mapEquals(_nodeBehaviors, value)) return;
-    _nodeBehaviors = value;
+    final merged = {...standardNodeBehaviors, ...value};
+    if (mapEquals(_nodeBehaviors, merged)) return;
+    _nodeBehaviors = merged;
     _blockTextCache.clear();
     _cachedText = null;
     _totalTextLength = null;
@@ -666,6 +635,21 @@ class EditorState {
 
   NodeBehavior? behaviorFor(Node? node) =>
       node == null ? null : _nodeBehaviors[node.type];
+
+  bool isAtomicBlock(Node node) => behaviorFor(node)?.atomic == true;
+
+  Node? atomicAncestorOf(Node node) =>
+      node.findParent((ancestor) => isAtomicBlock(ancestor));
+
+  bool preventsMergeAtStart(Node? node) =>
+      behaviorFor(node)?.preventMergeAtStart == true;
+
+  Iterable<CommandShortcutEvent> commandShortcutsFor(Node? node) sync* {
+    for (var current = node; current != null; current = current.parent) {
+      yield* behaviorFor(current)?.commandShortcuts ??
+          const <CommandShortcutEvent>[];
+    }
+  }
 
   // only used for testing
   bool disableSealTimer = false;
@@ -1139,12 +1123,12 @@ class EditorState {
 
     // Ordinary text edits change serialized length by exactly the delta's
     // inserted/deleted UTF-16 units. Avoid reserializing a long paragraph on
-    // each keystroke. Tables have a custom Markdown serializer below.
+    // each keystroke. Structured blocks use their registered serializer.
     if (op is UpdateTextOperation && op.path.length == 1) {
       final block = root.childAtIndexOrNull(op.path.first);
       if (block != null &&
           block.hasDelta &&
-          block.type != TableBlockKeys.type &&
+          behaviorFor(block)?.serialize == null &&
           block.type != DividerBlockKeys.type) {
         if (document.updateText(op.path, op.delta)) {
           var lengthDelta = 0;

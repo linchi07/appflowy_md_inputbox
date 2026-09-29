@@ -55,8 +55,7 @@ final List<CommandShortcutEvent> standardCommandShortcutEvents = [
 
   // backspace
   convertToParagraphCommand,
-  ...tableCommands,
-  // Keep table-cell Enter navigation ahead of Markdown line continuation.
+  // Node-owned shortcuts run before the standard commands.
   enterMarkdownShortcutEvent,
   backspaceCommand,
   deleteLeftWordCommand,

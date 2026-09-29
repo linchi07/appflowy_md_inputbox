@@ -47,20 +47,15 @@ CommandShortcutEventHandler _deleteInCollapsedSelection = (editorState) {
   final transaction = editorState.transaction;
 
   if (position.offset == delta.length) {
-    Node? tableParent =
-        node.findParent((element) => element.type == TableBlockKeys.type);
-    Node? nextTableParent;
+    final atomicParent = editorState.atomicAncestorOf(node);
+    Node? nextAtomicParent;
     final next = node.findDownward((element) {
-      nextTableParent =
-          element.findParent((element) => element.type == TableBlockKeys.type);
-      // break if only one is in a table or they're in different tables
-      return tableParent != nextTableParent ||
+      nextAtomicParent = editorState.atomicAncestorOf(element);
+      return atomicParent != nextAtomicParent ||
           // merge the next node with delta
           element.delta != null;
     });
-    // table nodes should be deleted using the table menu
-    // in-table paragraphs should only be deleted inside the table
-    if (next != null && tableParent == nextTableParent) {
+    if (next != null && atomicParent == nextAtomicParent) {
       if (next.children.isNotEmpty) {
         final path = node.path + [node.children.length];
         transaction.insertNodes(path, next.children);
