@@ -273,11 +273,9 @@ Future<void> deleteSelectedContent(EditorState editorState) async {
         Position(path: node.path, offset: nextNode.delta?.length ?? 0),
       );
     }
+    await editorState.apply(transaction);
   } else {
     // if the selection is not collapsed, delete the selection
     await editorState.deleteSelection(selection);
-    transaction.afterSelection = Selection.collapsed(selection.start);
   }
-
-  await editorState.apply(transaction);
 }

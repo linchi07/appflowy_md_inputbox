@@ -393,7 +393,10 @@ void main() {
         'whole-table selection uses cell colors and Cmd+C copies the table',
         (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      addTearDown(() {
+        debugDefaultTargetPlatformOverride = null;
+        copyCommand.updateCommand(command: 'ctrl+c', macOSCommand: 'cmd+c');
+      });
       copyCommand.updateCommand(command: 'ctrl+c', macOSCommand: 'cmd+c');
       String? clipboardText;
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -497,9 +500,6 @@ void main() {
       await tester.pump();
       expect(clipboardText, startsWith('| A | B |\n| --- | --- |\n| 1 | 2 |\n'));
 
-      debugDefaultTargetPlatformOverride = null;
-      copyCommand.updateCommand(command: 'ctrl+c', macOSCommand: 'cmd+c');
-
       state.selection = Selection(
         start: Position(path: [0], offset: 2),
         end: Position(path: [2], offset: 5),
@@ -527,6 +527,8 @@ void main() {
 
       await tester.pumpWidget(const SizedBox.shrink());
       state.dispose();
+      debugDefaultTargetPlatformOverride = null;
+      copyCommand.updateCommand(command: 'ctrl+c', macOSCommand: 'cmd+c');
     });
 
     test('cell-internal text selection is preserved without atomic expansion',
@@ -864,6 +866,95 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       state.dispose();
       debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets(
+        'cmd+c copies active table selection and cmd+x cuts and clears cell contents',
+        (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      addTearDown(() {
+        debugDefaultTargetPlatformOverride = null;
+        copyCommand.updateCommand(command: 'ctrl+c', macOSCommand: 'cmd+c');
+        cutCommand.updateCommand(command: 'ctrl+x', macOSCommand: 'cmd+x');
+      });
+      copyCommand.updateCommand(command: 'ctrl+c', macOSCommand: 'cmd+c');
+      cutCommand.updateCommand(command: 'ctrl+x', macOSCommand: 'cmd+x');
+
+      String? clipboardText;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            clipboardText = (call.arguments as Map)['text'] as String?;
+          }
+          return null;
+        },
+      );
+
+      final state = createMultiBlockState();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 700,
+            height: 500,
+            child: AppFlowyEditor(
+              editorState: state,
+              editorStyle: EditorStyle.desktop(padding: EdgeInsets.zero),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final tableFinder = find.byType(TableView);
+      final tableTopLeft = tester.getTopLeft(tableFinder);
+
+      // 拖拽框选整表单元格
+      final drag = await tester.startGesture(tableTopLeft + const Offset(50, 40));
+      await tester.pump();
+      await drag.moveTo(tableTopLeft + const Offset(200, 70));
+      await tester.pump();
+      await drag.up();
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('table-selection-border')),
+        findsOneWidget,
+      );
+
+      // 测试 Cmd + C
+      clipboardText = null;
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
+      await tester.pump();
+
+      expect(clipboardText, '| A | B |\n| --- | --- |\n| 1 | 2 |');
+
+      // 测试 Cmd + X
+      clipboardText = null;
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyX);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
+      await tester.pump();
+
+      expect(clipboardText, '| A | B |\n| --- | --- |\n| 1 | 2 |');
+
+      // 验证剪切后单元格内容已被清空
+      final tableNode = TableNode(node: state.document.root.children[1]);
+      for (var r = 0; r < tableNode.rowsLen; r++) {
+        for (var c = 0; c < tableNode.colsLen; c++) {
+          final text = tableNode.getCell(c, r).children.firstOrNull?.delta?.toPlainText() ?? '';
+          expect(text, '');
+        }
+      }
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      state.dispose();
+      await tester.pump(const Duration(milliseconds: 600));
+      debugDefaultTargetPlatformOverride = null;
+      copyCommand.updateCommand(command: 'ctrl+c', macOSCommand: 'cmd+c');
+      cutCommand.updateCommand(command: 'ctrl+x', macOSCommand: 'cmd+x');
     });
   });
 }

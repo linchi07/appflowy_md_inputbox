@@ -25,7 +25,7 @@ class TableView extends StatefulWidget {
   State<TableView> createState() => _TableViewState();
 }
 
-class _TableViewState extends State<TableView> {
+class _TableViewState extends State<TableView> implements TableSelectionHandler {
   static const double SIDE_HEADER_WIDTH = 26.0;
   static const double TOP_HEADER_HEIGHT = 26.0;
   static const double ADD_COL_WIDTH = 20.0;
@@ -51,6 +51,82 @@ class _TableViewState extends State<TableView> {
   Offset? _lastGlobalPointerPosition;
   bool _wholeTableWasSelected = false;
 
+  void _setTableSelection(TableSelection? selection) {
+    if (_tableSelection != selection) {
+      setState(() {
+        _tableSelection = selection;
+      });
+    }
+    if (selection != null) {
+      widget.editorState.activeTableSelectionHandler = this;
+    } else if (widget.editorState.activeTableSelectionHandler == this) {
+      widget.editorState.activeTableSelectionHandler = null;
+    }
+  }
+
+  @override
+  String? getSelectedText() {
+    final sel = _tableSelection;
+    if (sel == null) {
+      return null;
+    }
+    if (sel.minCol == sel.maxCol && sel.minRow == sel.maxRow) {
+      final cell = widget.tableNode.getCell(sel.minCol, sel.minRow);
+      return cell.children.firstOrNull?.delta?.toPlainText() ?? '';
+    }
+    return widget.tableNode.toMarkdown(
+      minCol: sel.minCol,
+      minRow: sel.minRow,
+      maxCol: sel.maxCol,
+      maxRow: sel.maxRow,
+    );
+  }
+
+  @override
+  Future<void> clearSelectedCells() async {
+    final sel = _tableSelection;
+    if (sel == null || !widget.editorState.editable) {
+      return;
+    }
+    final transaction = widget.editorState.transaction;
+    final table = widget.tableNode;
+    for (var r = sel.minRow; r <= sel.maxRow; r++) {
+      for (var c = sel.minCol; c <= sel.maxCol; c++) {
+        final cell = table.getCell(c, r);
+        final paragraph = cell.children.firstOrNull;
+        if (paragraph != null) {
+          final length = paragraph.delta?.length ?? 0;
+          if (length > 0) {
+            transaction.replaceText(paragraph, 0, length, '');
+          }
+        }
+      }
+    }
+    if (transaction.operations.isNotEmpty) {
+      await widget.editorState.apply(transaction);
+    }
+  }
+
+  @override
+  void cancelSelection() {
+    _setTableSelection(null);
+  }
+
+  Future<void> _cutSelectedCells() async {
+    final text = getSelectedText();
+    if (text != null && text.isNotEmpty) {
+      await AppFlowyClipboard.setData(text: text);
+      await clearSelectedCells();
+    }
+  }
+
+  Future<void> _copySelectedCells() async {
+    final text = getSelectedText();
+    if (text != null && text.isNotEmpty) {
+      await AppFlowyClipboard.setData(text: text);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -71,6 +147,9 @@ class _TableViewState extends State<TableView> {
       widget.tableNode.node.addListener(_onTableNodeChanged);
     }
     if (oldWidget.editorState != widget.editorState) {
+      if (oldWidget.editorState.activeTableSelectionHandler == this) {
+        oldWidget.editorState.activeTableSelectionHandler = null;
+      }
       oldWidget.editorState.selectionNotifier
           .removeListener(_onGlobalSelectionChanged);
       oldWidget.editorState
@@ -79,11 +158,17 @@ class _TableViewState extends State<TableView> {
           .addListener(_onGlobalSelectionChanged);
       widget.editorState
           .addScrollViewScrolledListener(_handleAutoScrollWhileDragging);
+      if (_tableSelection != null) {
+        widget.editorState.activeTableSelectionHandler = this;
+      }
     }
   }
 
   @override
   void dispose() {
+    if (widget.editorState.activeTableSelectionHandler == this) {
+      widget.editorState.activeTableSelectionHandler = null;
+    }
     if (_dragStartCell != null) {
       widget.editorState.autoScroller?.stopAutoScroll();
     }
@@ -114,8 +199,10 @@ class _TableViewState extends State<TableView> {
                 widget.tableNode.node.path.firstOrNull ||
             sel.end.path.firstOrNull != widget.tableNode.node.path.firstOrNull);
     if (shouldClearLocal || wholeTableSelected != _wholeTableWasSelected) {
+      if (shouldClearLocal) {
+        _setTableSelection(null);
+      }
       setState(() {
-        if (shouldClearLocal) _tableSelection = null;
         _wholeTableWasSelected = wholeTableSelected;
       });
     }
@@ -279,7 +366,7 @@ class _TableViewState extends State<TableView> {
     return TapRegion(
       onTapOutside: (_) {
         if (_tableSelection != null) {
-          setState(() => _tableSelection = null);
+          _setTableSelection(null);
         }
       },
       child: focus,
@@ -324,7 +411,7 @@ class _TableViewState extends State<TableView> {
   void _handlePointerDown(PointerDownEvent event, _TableLayoutGeometry geo) {
     final hit = _hitTestCell(event.localPosition, geo);
     if (_tableSelection != null) {
-      setState(() => _tableSelection = null);
+      _setTableSelection(null);
     }
     _dragStartCell = hit;
     _lastGlobalPointerPosition = event.position;
@@ -353,7 +440,7 @@ class _TableViewState extends State<TableView> {
 
     if (!isWithinTableBounds) {
       if (_tableSelection != null) {
-        setState(() => _tableSelection = null);
+        _setTableSelection(null);
       }
       return;
     }
@@ -367,9 +454,7 @@ class _TableViewState extends State<TableView> {
         endRow: hit.$2,
       );
       if (_tableSelection != newSelection) {
-        setState(() {
-          _tableSelection = newSelection;
-        });
+        _setTableSelection(newSelection);
         widget.editorState.updateSelectionWithReason(null);
       }
     }
@@ -406,9 +491,7 @@ class _TableViewState extends State<TableView> {
         endRow: hit.$2,
       );
       if (_tableSelection != newSelection) {
-        setState(() {
-          _tableSelection = newSelection;
-        });
+        _setTableSelection(newSelection);
         widget.editorState.updateSelectionWithReason(null);
       }
     }
@@ -495,70 +578,30 @@ class _TableViewState extends State<TableView> {
     if (_tableSelection != null) {
       if (event.logicalKey == LogicalKeyboardKey.delete ||
           event.logicalKey == LogicalKeyboardKey.backspace) {
-        _clearSelectedCells();
+        clearSelectedCells();
         return KeyEventResult.handled;
       }
 
       if (event.logicalKey == LogicalKeyboardKey.escape) {
-        setState(() {
-          _tableSelection = null;
-        });
+        cancelSelection();
         return KeyEventResult.handled;
       }
 
-      if (event.logicalKey == LogicalKeyboardKey.keyC &&
-          (HardwareKeyboard.instance.isMetaPressed ||
-              HardwareKeyboard.instance.isControlPressed)) {
+      final isMetaOrControl = HardwareKeyboard.instance.isMetaPressed ||
+          HardwareKeyboard.instance.isControlPressed;
+
+      if (event.logicalKey == LogicalKeyboardKey.keyC && isMetaOrControl) {
         _copySelectedCells();
+        return KeyEventResult.handled;
+      }
+
+      if (event.logicalKey == LogicalKeyboardKey.keyX && isMetaOrControl) {
+        _cutSelectedCells();
         return KeyEventResult.handled;
       }
     }
 
     return KeyEventResult.ignored;
-  }
-
-  Future<void> _clearSelectedCells() async {
-    final sel = _tableSelection;
-    if (sel == null || !widget.editorState.editable) {
-      return;
-    }
-    final transaction = widget.editorState.transaction;
-    final table = widget.tableNode;
-    for (var r = sel.minRow; r <= sel.maxRow; r++) {
-      for (var c = sel.minCol; c <= sel.maxCol; c++) {
-        final cell = table.getCell(c, r);
-        final paragraph = cell.children.firstOrNull;
-        if (paragraph != null) {
-          final length = paragraph.delta?.length ?? 0;
-          if (length > 0) {
-            transaction.replaceText(paragraph, 0, length, '');
-          }
-        }
-      }
-    }
-    if (transaction.operations.isNotEmpty) {
-      await widget.editorState.apply(transaction);
-    }
-  }
-
-  Future<void> _copySelectedCells() async {
-    final sel = _tableSelection;
-    if (sel == null) {
-      return;
-    }
-    final String text;
-    if (sel.minCol == sel.maxCol && sel.minRow == sel.maxRow) {
-      final cell = widget.tableNode.getCell(sel.minCol, sel.minRow);
-      text = cell.children.firstOrNull?.delta?.toPlainText() ?? '';
-    } else {
-      text = widget.tableNode.toMarkdown(
-        minCol: sel.minCol,
-        minRow: sel.minRow,
-        maxCol: sel.maxCol,
-        maxRow: sel.maxRow,
-      );
-    }
-    await Clipboard.setData(ClipboardData(text: text));
   }
 
   Widget _buildStyleButton(TableNode table) {
@@ -599,14 +642,12 @@ class _TableViewState extends State<TableView> {
       child: GestureDetector(
         onTap: () {
           _keyboardFocusNode.requestFocus();
-          setState(() {
-            _tableSelection = TableSelection(
-              startCol: colIdx,
-              startRow: 0,
-              endCol: colIdx,
-              endRow: widget.tableNode.rowsLen - 1,
-            );
-          });
+          _setTableSelection(TableSelection(
+            startCol: colIdx,
+            startRow: 0,
+            endCol: colIdx,
+            endRow: widget.tableNode.rowsLen - 1,
+          ));
           widget.editorState.updateSelectionWithReason(null);
         },
         onSecondaryTap: () {
@@ -638,14 +679,12 @@ class _TableViewState extends State<TableView> {
       child: GestureDetector(
         onTap: () {
           _keyboardFocusNode.requestFocus();
-          setState(() {
-            _tableSelection = TableSelection(
-              startCol: 0,
-              startRow: rowIdx,
-              endCol: widget.tableNode.colsLen - 1,
-              endRow: rowIdx,
-            );
-          });
+          _setTableSelection(TableSelection(
+            startCol: 0,
+            startRow: rowIdx,
+            endCol: widget.tableNode.colsLen - 1,
+            endRow: rowIdx,
+          ));
           widget.editorState.updateSelectionWithReason(null);
         },
         onSecondaryTap: () {

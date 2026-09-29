@@ -30,6 +30,12 @@ abstract class SelectionCoordinator {
   bool suppressSelectionPaint(Node node, Selection selection) => false;
 }
 
+abstract class TableSelectionHandler {
+  String? getSelectedText();
+  Future<void> clearSelectedCells();
+  void cancelSelection();
+}
+
 class EditorStateDebugInfo {
   EditorStateDebugInfo({
     this.debugPaintSizeEnabled = false,
@@ -218,6 +224,9 @@ class EditorState {
   /// Remote selection is the selection from other users.
   final PropertyValueNotifier<List<RemoteSelection>> remoteSelections =
       IndexedPropertyValueNotifier<List<RemoteSelection>>([]);
+
+  /// Active table cell range selection handler.
+  TableSelectionHandler? activeTableSelectionHandler;
 
   final List<SelectionCoordinator> _selectionCoordinators = [];
   final Map<SelectionCoordinator, int> _selectionCoordinatorReferences = {};

@@ -16,9 +16,24 @@ final CommandShortcutEvent cutCommand = CommandShortcutEvent(
 );
 
 CommandShortcutEventHandler _cutCommandHandler = (editorState) {
-  if (editorState.selection == null) {
+  final tableHandler = editorState.activeTableSelectionHandler;
+  if (tableHandler != null) {
+    final text = tableHandler.getSelectedText();
+    if (text != null && text.isNotEmpty) {
+      () async {
+        await AppFlowyClipboard.setData(text: text);
+        await tableHandler.clearSelectedCells();
+      }();
+
+      return KeyEventResult.handled;
+    }
+  }
+
+  final selection = editorState.selection?.normalized;
+  if (selection == null || selection.isCollapsed) {
     return KeyEventResult.ignored;
   }
+
   // plain text.
   handleCut(editorState);
 
