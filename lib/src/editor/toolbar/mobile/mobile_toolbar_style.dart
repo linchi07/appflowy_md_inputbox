@@ -60,6 +60,7 @@ class MobileToolbarTheme extends InheritedWidget {
   bool updateShouldNotify(covariant MobileToolbarTheme oldWidget) {
     return backgroundColor != oldWidget.backgroundColor ||
         foregroundColor != oldWidget.foregroundColor ||
+        iconColor != oldWidget.iconColor ||
         clearDiagonalLineColor != oldWidget.clearDiagonalLineColor ||
         itemHighlightColor != oldWidget.itemHighlightColor ||
         itemOutlineColor != oldWidget.itemOutlineColor ||

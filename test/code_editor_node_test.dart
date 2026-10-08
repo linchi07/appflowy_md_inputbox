@@ -622,10 +622,12 @@ void main() {
         .pumpWidget(MaterialApp(home: MDEditor(controller: controller)));
     await tester.tap(find.byKey(const ValueKey('code-language-picker')));
     await tester.pumpAndSettle();
+    expect(find.byType(EditorMenuSurface), findsOneWidget);
+    expect(find.byType(ListTile), findsNothing);
     await tester.enterText(find.byType(TextField), 'rust');
     await tester.pumpAndSettle();
-    expect(find.byType(ListTile), findsOneWidget);
-    await tester.tap(find.byType(ListTile));
+    expect(find.byType(EditorMenuItem), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('editor-menu-item-rust')));
     await tester.pumpAndSettle();
     expect(
       controller.editorState.document.root.children.single

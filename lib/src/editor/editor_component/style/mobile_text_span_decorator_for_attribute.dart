@@ -169,7 +169,7 @@ class _LinkEditFormState extends State<LinkEditForm> {
               TextButton(
                 child: Text(
                   AppFlowyEditorL10n.current.removeLink,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  style: TextStyle(color: EditorTheme.of(context).error),
                 ),
                 onPressed: () async {
                   final transaction = widget.editorState.transaction

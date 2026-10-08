@@ -118,16 +118,17 @@ class _TableCeBlockWidgetState extends State<TableCelBlockWidget> {
     final tableNode = widget.node.parent!;
     final tableSelection = TableSelectionScope.of(context);
     final isSelected = tableSelection?.contains(col, row) ?? false;
+    final colors = EditorTheme.of(context);
     final baseColor = explicitColor ??
         tableStyleCellColor(
           tableNode,
           widget.node,
-          Theme.of(context).colorScheme,
+          colors,
         );
     final effectiveColor = isSelected
         ? Color.alphaBlend(
-            Theme.of(context).colorScheme.primary.withValues(alpha: 0.18),
-            baseColor ?? Theme.of(context).colorScheme.surface,
+            colors.selection,
+            baseColor ?? colors.background,
           )
         : baseColor;
 
@@ -154,25 +155,23 @@ class _TableCeBlockWidgetState extends State<TableCelBlockWidget> {
   }
 }
 
-Color? tableStyleCellColor(Node table, Node cell, ColorScheme colorScheme) {
+Color? tableStyleCellColor(
+  Node table,
+  Node cell,
+  EditorColorScheme colors,
+) {
   final row = cell.attributes[TableCellBlockKeys.rowPosition];
   final col = cell.attributes[TableCellBlockKeys.colPosition];
   final isHeader = (row == 0 &&
           table.attributes[TableBlockKeys.shadeFirstRow] == true) ||
       (col == 0 && table.attributes[TableBlockKeys.shadeFirstColumn] == true);
   if (isHeader) {
-    return Color.alphaBlend(
-      Colors.grey.withValues(alpha: 0.12),
-      colorScheme.surface,
-    );
+    return colors.subtleSurface;
   }
   if (row is int &&
       row.isOdd &&
       table.attributes[TableBlockKeys.stripeRows] == true) {
-    return Color.alphaBlend(
-      Colors.grey.withValues(alpha: 0.05),
-      colorScheme.surface,
-    );
+    return colors.tableStripeBackground;
   }
   return null;
 }

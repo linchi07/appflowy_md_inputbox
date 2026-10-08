@@ -106,7 +106,7 @@ Future<bool> _showSlashMenu(
       singleColumn: singleColumn,
       style: style ??
           editorState.editorStyle.selectionMenuStyle ??
-          SelectionMenuStyle.light,
+          SelectionMenuStyle.fromScheme(editorState.editorStyle.colorScheme),
     );
     if (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST')) {
       _selectionMenuService?.show();

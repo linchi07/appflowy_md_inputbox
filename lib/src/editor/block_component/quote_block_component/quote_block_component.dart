@@ -204,7 +204,7 @@ class _QuoteIcon extends StatelessWidget {
       padding: const EdgeInsets.only(right: 4.0),
       child: Container(
         width: 4 * textScaleFactor,
-        color: '#00BCF0'.tryToColor(),
+        color: EditorTheme.of(context).primary,
       ),
     );
   }

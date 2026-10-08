@@ -24,12 +24,12 @@ typedef DividerBlockWrapper = Widget Function(
 class DividerBlockComponentBuilder extends BlockComponentBuilder {
   DividerBlockComponentBuilder({
     super.configuration,
-    this.lineColor = Colors.grey,
+    this.lineColor,
     this.height = 10,
     this.wrapper,
   });
 
-  final Color lineColor;
+  final Color? lineColor;
   final double height;
   final DividerBlockWrapper? wrapper;
 
@@ -68,12 +68,12 @@ class DividerBlockComponentWidget extends BlockComponentStatefulWidget {
     super.actionBuilder,
     super.actionTrailingBuilder,
     super.configuration = const BlockComponentConfiguration(),
-    this.lineColor = Colors.grey,
+    this.lineColor,
     this.height = 10,
     this.wrapper,
   });
 
-  final Color lineColor;
+  final Color? lineColor;
   final double height;
   final DividerBlockWrapper? wrapper;
 
@@ -101,7 +101,7 @@ class _DividerBlockComponentWidgetState
       height: widget.height,
       alignment: Alignment.center,
       child: Divider(
-        color: widget.lineColor,
+        color: widget.lineColor ?? EditorTheme.of(context).border,
         thickness: 1,
       ),
     );

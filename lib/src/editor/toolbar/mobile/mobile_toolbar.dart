@@ -7,16 +7,16 @@ class MobileToolbar extends StatelessWidget {
     required this.editorState,
     required this.toolbarItems,
     // default MobileToolbarStyle parameters
-    this.backgroundColor = Colors.white,
-    this.foregroundColor = const Color(0xff676666),
-    this.clearDiagonalLineColor = const Color(0xffB3261E),
-    this.itemHighlightColor = const Color(0xff1F71AC),
-    this.itemOutlineColor = const Color(0xFFE3E3E3),
-    this.tabbarSelectedBackgroundColor = const Color(0x23808080),
-    this.tabbarSelectedForegroundColor = Colors.black,
-    this.primaryColor = const Color(0xff1F71AC),
-    this.onPrimaryColor = Colors.white,
-    this.outlineColor = const Color(0xFFE3E3E3),
+    this.backgroundColor,
+    this.foregroundColor,
+    this.clearDiagonalLineColor,
+    this.itemHighlightColor,
+    this.itemOutlineColor,
+    this.tabbarSelectedBackgroundColor,
+    this.tabbarSelectedForegroundColor,
+    this.primaryColor,
+    this.onPrimaryColor,
+    this.outlineColor,
     this.toolbarHeight = 50.0,
     this.borderRadius = 6.0,
     this.buttonHeight = 40.0,
@@ -27,16 +27,16 @@ class MobileToolbar extends StatelessWidget {
   final EditorState editorState;
   final List<MobileToolbarItem> toolbarItems;
   // MobileToolbarStyle parameters
-  final Color backgroundColor;
-  final Color foregroundColor;
-  final Color clearDiagonalLineColor;
-  final Color itemHighlightColor;
-  final Color itemOutlineColor;
-  final Color tabbarSelectedBackgroundColor;
-  final Color tabbarSelectedForegroundColor;
-  final Color primaryColor;
-  final Color onPrimaryColor;
-  final Color outlineColor;
+  final Color? backgroundColor;
+  final Color? foregroundColor;
+  final Color? clearDiagonalLineColor;
+  final Color? itemHighlightColor;
+  final Color? itemOutlineColor;
+  final Color? tabbarSelectedBackgroundColor;
+  final Color? tabbarSelectedForegroundColor;
+  final Color? primaryColor;
+  final Color? onPrimaryColor;
+  final Color? outlineColor;
   final double toolbarHeight;
   final double borderRadius;
   final double buttonHeight;
@@ -46,6 +46,8 @@ class MobileToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        EditorTheme.maybeOf(context) ?? editorState.editorStyle.colorScheme;
     return ValueListenableBuilder<Selection?>(
       valueListenable: editorState.selectionNotifier,
       builder: (_, Selection? selection, __) {
@@ -55,16 +57,19 @@ class MobileToolbar extends StatelessWidget {
 
         return RepaintBoundary(
           child: MobileToolbarTheme(
-            backgroundColor: backgroundColor,
-            foregroundColor: foregroundColor,
-            clearDiagonalLineColor: clearDiagonalLineColor,
-            itemHighlightColor: itemHighlightColor,
-            itemOutlineColor: itemOutlineColor,
-            tabBarSelectedBackgroundColor: tabbarSelectedBackgroundColor,
-            tabBarSelectedForegroundColor: tabbarSelectedForegroundColor,
-            primaryColor: primaryColor,
-            onPrimaryColor: onPrimaryColor,
-            outlineColor: outlineColor,
+            backgroundColor: backgroundColor ?? colors.surface,
+            foregroundColor: foregroundColor ?? colors.onSurface,
+            iconColor: colors.onSurface,
+            clearDiagonalLineColor: clearDiagonalLineColor ?? colors.error,
+            itemHighlightColor: itemHighlightColor ?? colors.primary,
+            itemOutlineColor: itemOutlineColor ?? colors.border,
+            tabBarSelectedBackgroundColor: tabbarSelectedBackgroundColor ??
+                Color.alphaBlend(colors.selection, colors.surface),
+            tabBarSelectedForegroundColor:
+                tabbarSelectedForegroundColor ?? colors.onSurface,
+            primaryColor: primaryColor ?? colors.primary,
+            onPrimaryColor: onPrimaryColor ?? colors.onPrimary,
+            outlineColor: outlineColor ?? colors.border,
             toolbarHeight: toolbarHeight,
             borderRadius: borderRadius,
             buttonHeight: buttonHeight,

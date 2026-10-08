@@ -227,7 +227,7 @@ class _FindMenuState extends State<FindMenu> {
         SizedBox(
           width: 200,
           height: 30,
-          child: TextField(
+          child: EditorMenuTextField(
             key: const Key('findTextField'),
             focusNode: findTextFieldFocusNode,
             controller: findTextEditingController,
@@ -245,9 +245,8 @@ class _FindMenuState extends State<FindMenu> {
                 }
               });
             },
-            decoration: _buildInputDecoration(
-              widget.localizations?.find ?? AppFlowyEditorL10n.current.find,
-            ),
+            hintText:
+                widget.localizations?.find ?? AppFlowyEditorL10n.current.find,
           ),
         ),
         // the count of matches
@@ -315,7 +314,9 @@ class _FindMenuState extends State<FindMenu> {
               name: 'regex',
               width: 20,
               height: 20,
-              color: widget.searchService.regex ? Colors.black : Colors.grey,
+              color: widget.searchService.regex
+                  ? EditorTheme.of(context).onSurface
+                  : EditorTheme.of(context).mutedForeground,
             ),
             tooltip: AppFlowyEditorL10n.current.regex,
           ),
@@ -335,8 +336,8 @@ class _FindMenuState extends State<FindMenu> {
               width: 20,
               height: 20,
               color: widget.searchService.caseSensitive
-                  ? Colors.black
-                  : Colors.grey,
+                  ? EditorTheme.of(context).onSurface
+                  : EditorTheme.of(context).mutedForeground,
             ),
             tooltip: AppFlowyEditorL10n.current.caseSensitive,
           ),
@@ -414,7 +415,7 @@ class _ReplaceMenuState extends State<ReplaceMenu> {
         SizedBox(
           width: 200,
           height: 30,
-          child: TextField(
+          child: EditorMenuTextField(
             key: const Key('replaceTextField'),
             focusNode: replaceTextFieldFocusNode,
             autofocus: false,
@@ -430,10 +431,8 @@ class _ReplaceMenuState extends State<ReplaceMenu> {
                 }
               });
             },
-            decoration: _buildInputDecoration(
-              widget.localizations?.replace ??
-                  AppFlowyEditorL10n.current.replace,
-            ),
+            hintText: widget.localizations?.replace ??
+                AppFlowyEditorL10n.current.replace,
           ),
         ),
         FindAndReplaceMenuIconButton(
@@ -459,12 +458,4 @@ class _ReplaceMenuState extends State<ReplaceMenu> {
   void _replaceSelectedWord() {
     widget.searchService.replaceSelectedWord(replaceTextEditingController.text);
   }
-}
-
-InputDecoration _buildInputDecoration(String hintText) {
-  return InputDecoration(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-    border: const OutlineInputBorder(),
-    hintText: hintText,
-  );
 }

@@ -16,7 +16,7 @@ class AppFlowyEditor extends StatefulWidget {
     List<CharacterShortcutEvent>? characterShortcutEvents,
     List<CommandShortcutEvent>? commandShortcutEvents,
     this.nodeBehaviors,
-    this.contextMenuBuilder,
+    this.contextMenuBuilder = defaultContextMenuBuilder,
     this.contentInsertionConfiguration,
     this.editable = true,
     this.autoFocus = false,
@@ -123,6 +123,7 @@ class AppFlowyEditor extends StatefulWidget {
   /// It will be shown when the user right click on the editor.
   ///
   /// See the built-in [ContextMenu] implementation.
+  /// Pass null to disable the built-in desktop context menu.
   ///
   final ContextMenuWidgetBuilder? contextMenuBuilder;
 
@@ -243,7 +244,13 @@ class AppFlowyEditor extends StatefulWidget {
 }
 
 class _AppFlowyEditorState extends State<AppFlowyEditor> {
-  Widget? services;
+  late final OverlayEntry _contentEntry = OverlayEntry(
+    builder: (context) {
+      // Register a dependency so the mounted content follows palette changes.
+      EditorTheme.of(context);
+      return _buildServices(context);
+    },
+  );
 
   EditorState get editorState => widget.editorState;
 
@@ -275,6 +282,8 @@ class _AppFlowyEditorState extends State<AppFlowyEditor> {
   @override
   void dispose() {
     _unregisterSelectionCoordinators(widget);
+    _contentEntry.remove();
+    _contentEntry.dispose();
     // dispose the scroll controller if it's created by the editor
     if (widget.editorScrollController == null) {
       editorScrollController.dispose();
@@ -312,23 +321,23 @@ class _AppFlowyEditorState extends State<AppFlowyEditor> {
           );
     }
 
-    services = null;
+    _contentEntry.markNeedsBuild();
   }
 
   @override
   Widget build(BuildContext context) {
-    services ??= _buildServices(context);
+    final colors = widget.editorStyle.colorScheme;
+    editorState.editorStyle = widget.editorStyle.resolvedWith(colors);
 
-    return Provider.value(
-      value: editorState,
-      child: FocusScope(
-        child: Overlay(
-          clipBehavior: Clip.none,
-          initialEntries: [
-            OverlayEntry(
-              builder: (context) => services!,
-            ),
-          ],
+    return EditorTheme(
+      colors: colors,
+      child: Provider.value(
+        value: editorState,
+        child: FocusScope(
+          child: Overlay(
+            clipBehavior: Clip.none,
+            initialEntries: [_contentEntry],
+          ),
         ),
       ),
     );
@@ -360,8 +369,8 @@ class _AppFlowyEditorState extends State<AppFlowyEditor> {
     if (!widget.disableSelectionService) {
       child = SelectionServiceWidget(
         key: editorState.service.selectionServiceKey,
-        cursorColor: widget.editorStyle.cursorColor,
-        selectionColor: widget.editorStyle.selectionColor,
+        cursorColor: editorState.editorStyle.cursorColor,
+        selectionColor: editorState.editorStyle.selectionColor,
         showMagnifier: widget.showMagnifier,
         contextMenuBuilder: widget.contextMenuBuilder,
         dropTargetStyle: widget.dropTargetStyle,

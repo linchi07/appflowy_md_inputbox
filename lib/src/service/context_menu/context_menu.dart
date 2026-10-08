@@ -1,3 +1,7 @@
+import 'dart:math' as math;
+
+import 'package:appflowy_editor/src/editor/editor_component/style/editor_color_scheme.dart';
+import 'package:appflowy_editor/src/editor/selection_menu/editor_popover_menu.dart';
 import 'package:appflowy_editor/src/editor_state.dart';
 import 'package:flutter/material.dart';
 
@@ -13,11 +17,16 @@ class ContextMenuItem {
     required String Function() getName,
     required this.onPressed,
     this.isApplicable,
+    this.icon,
+    this.shortcut,
   }) : _getName = getName;
 
   final String Function() _getName;
   final void Function(EditorState editorState) onPressed;
   final bool Function(EditorState editorState)? isApplicable;
+
+  final IconData? icon;
+  final String? shortcut;
 
   String get name => _getName();
 }
@@ -38,72 +47,51 @@ class ContextMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final children = <Widget>[];
-    for (var i = 0; i < items.length; i++) {
-      for (var j = 0; j < items[i].length; j++) {
-        if (items[i][j].isApplicable != null &&
-            !items[i][j].isApplicable!(editorState)) {
-          continue;
-        }
-
-        if (j == 0 && i != 0) {
-          children.add(const Divider());
-        }
-
-        children.add(
-          StatefulBuilder(
-            builder: (BuildContext context, setState) {
-              return Material(
-                child: InkWell(
-                  customBorder: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  onTap: () {
-                    items[i][j].onPressed(editorState);
-                    onPressed();
-                  },
-                  onHover: (value) => setState(() {}),
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(
-                      items[i][j].name,
-                      textAlign: TextAlign.start,
-                      style: const TextStyle(
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
+    final entries = <EditorMenuEntry>[];
+    for (final group in items) {
+      final applicable = group.where(
+        (item) => item.isApplicable?.call(editorState) ?? true,
+      );
+      var firstInGroup = true;
+      for (final item in applicable) {
+        entries.add(
+          EditorMenuEntry(
+            label: item.name,
+            icon: item.icon,
+            shortcut: item.shortcut,
+            dividerBefore: firstInGroup && entries.isNotEmpty,
+            onSelected: () => item.onPressed(editorState),
           ),
         );
+        firstInGroup = false;
       }
     }
-
+    final box =
+        Overlay.of(context, rootOverlay: true).context.findRenderObject();
+    final viewport = box is RenderBox ? box.size : MediaQuery.sizeOf(context);
+    final localPosition =
+        box is RenderBox ? box.globalToLocal(position) : position;
+    final width = math.min(220.0, math.max(0.0, viewport.width - 16));
+    final height = math.min(
+      EditorMenuList.contentHeight(entries),
+      math.min(320.0, math.max(0.0, viewport.height - 16)),
+    );
     return Positioned(
-      top: position.dy,
-      left: position.dx,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        constraints: const BoxConstraints(
-          minWidth: 140,
-        ),
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              blurRadius: 5,
-              spreadRadius: 1,
-              color: Colors.black.withValues(alpha: 0.1),
-            ),
-          ],
-          borderRadius: BorderRadius.circular(6.0),
-        ),
-        child: IntrinsicWidth(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: children,
+      left: localPosition.dx
+          .clamp(8.0, math.max(8.0, viewport.width - width - 8)),
+      top: localPosition.dy
+          .clamp(8.0, math.max(8.0, viewport.height - height - 8)),
+      width: width,
+      height: height,
+      child: EditorTheme(
+        colors: editorState.editorStyle.colorScheme,
+        child: Material(
+          type: MaterialType.transparency,
+          child: EditorMenuList(
+            surfaceKey: const ValueKey('editor-context-menu'),
+            entries: entries,
+            style: editorState.editorStyle.selectionMenuStyle,
+            dismiss: onPressed,
           ),
         ),
       ),

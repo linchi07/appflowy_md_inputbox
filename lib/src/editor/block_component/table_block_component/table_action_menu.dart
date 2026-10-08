@@ -11,6 +11,7 @@ void showTableStyleMenu(BuildContext context, Node node, EditorState state) {
   EditorPopoverMenu.show(
     context: context,
     anchor: anchor,
+    colors: state.editorStyle.colorScheme,
     style: _menuStyle(state),
     entries: [
       for (final (key, label) in [
@@ -62,6 +63,7 @@ void _showColorAt(
     context: context,
     anchor: anchor,
     overlayState: overlayState,
+    colors: state.editorStyle.colorScheme,
     width: 238,
     maxHeight: 400,
     footerHeight: 52,
@@ -80,7 +82,7 @@ void _showColorAt(
             decoration: BoxDecoration(
               color: option.colorHex.tryToColor(),
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+              border: Border.all(color: state.editorStyle.colorScheme.border),
             ),
             child: const SizedBox(width: 15, height: 15),
           ),
@@ -167,6 +169,7 @@ void showActionMenu(
   EditorPopoverMenu.show(
     context: context,
     anchor: anchor,
+    colors: state.editorStyle.colorScheme,
     style: _menuStyle(state),
     entries:
         menuEntriesBuilder?.call(node, state, position, dir) ?? defaultEntries,
@@ -203,7 +206,7 @@ class _CustomColorInputState extends State<_CustomColorInput> {
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.onSurface;
+    final color = EditorTheme.of(context).onSurface;
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 7, 8, 0),
       child: Row(
@@ -211,27 +214,10 @@ class _CustomColorInputState extends State<_CustomColorInput> {
           Expanded(
             child: SizedBox(
               height: 32,
-              child: TextField(
+              child: EditorMenuTextField(
                 controller: _controller,
                 onSubmitted: (_) => _submit(),
-                style: TextStyle(fontSize: 12, color: color),
-                decoration: InputDecoration(
-                  hintText: '#RRGGBB / #AARRGGBB',
-                  isDense: true,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(4),
-                    borderSide:
-                        BorderSide(color: color.withValues(alpha: 0.25)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(4),
-                    borderSide: BorderSide(
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                ),
+                hintText: '#RRGGBB / #AARRGGBB',
               ),
             ),
           ),

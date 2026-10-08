@@ -44,37 +44,40 @@ void showColorMenu(
     left: left,
     dismissCallback: editorState.keepEditorFocusNotifier.decrease,
     builder: (context) {
-      return ColorPicker(
-        title: isTextColor
-            ? AppFlowyEditorL10n.current.textColor
-            : AppFlowyEditorL10n.current.highlightColor,
-        showClearButton: showClearButton,
-        selectedColorHex: currentColorHex,
-        colorOptions: isTextColor
-            ? textColorOptions ?? generateTextColorOptions()
-            : highlightColorOptions ?? generateHighlightColorOptions(),
-        onSubmittedColorHex: (color, _) {
-          isTextColor
-              ? formatFontColor(
-                  editorState,
-                  editorState.selection,
-                  color,
-                  withUpdateSelection: true,
-                )
-              : formatHighlightColor(
-                  editorState,
-                  editorState.selection,
-                  color,
-                  withUpdateSelection: true,
-                );
-          dismissOverlay();
-          editorState.keepEditorFocusNotifier.decrease();
-        },
-        resetText: isTextColor
-            ? AppFlowyEditorL10n.current.resetToDefaultColor
-            : AppFlowyEditorL10n.current.clearHighlightColor,
-        resetIconName:
-            isTextColor ? 'reset_text_color' : 'clear_highlight_color',
+      return EditorTheme(
+        colors: editorState.editorStyle.colorScheme,
+        child: ColorPicker(
+          title: isTextColor
+              ? AppFlowyEditorL10n.current.textColor
+              : AppFlowyEditorL10n.current.highlightColor,
+          showClearButton: showClearButton,
+          selectedColorHex: currentColorHex,
+          colorOptions: isTextColor
+              ? textColorOptions ?? generateTextColorOptions()
+              : highlightColorOptions ?? generateHighlightColorOptions(),
+          onSubmittedColorHex: (color, _) {
+            isTextColor
+                ? formatFontColor(
+                    editorState,
+                    editorState.selection,
+                    color,
+                    withUpdateSelection: true,
+                  )
+                : formatHighlightColor(
+                    editorState,
+                    editorState.selection,
+                    color,
+                    withUpdateSelection: true,
+                  );
+            dismissOverlay();
+            editorState.keepEditorFocusNotifier.decrease();
+          },
+          resetText: isTextColor
+              ? AppFlowyEditorL10n.current.resetToDefaultColor
+              : AppFlowyEditorL10n.current.clearHighlightColor,
+          resetIconName:
+              isTextColor ? 'reset_text_color' : 'clear_highlight_color',
+        ),
       );
     },
   ).build();

@@ -88,36 +88,39 @@ void showLinkMenu(
     right: right,
     dismissCallback: () => editorState.keepEditorFocusNotifier.decrease(),
     builder: (context) {
-      return LinkMenu(
-        linkText: linkText,
-        editorState: editorState,
-        onOpenLink: () async {
-          await editorLaunchUrl(linkText);
-        },
-        onSubmitted: (text) async {
-          if (isUri(text)) {
-            await editorState.formatDelta(selection, {
-              BuiltInAttributeKey.href: text,
-            });
+      return EditorTheme(
+        colors: editorState.editorStyle.colorScheme,
+        child: LinkMenu(
+          linkText: linkText,
+          editorState: editorState,
+          onOpenLink: () async {
+            await editorLaunchUrl(linkText);
+          },
+          onSubmitted: (text) async {
+            if (isUri(text)) {
+              await editorState.formatDelta(selection, {
+                BuiltInAttributeKey.href: text,
+              });
+              dismissOverlay();
+            }
+          },
+          onCopyLink: () {
+            AppFlowyClipboard.setData(text: linkText);
             dismissOverlay();
-          }
-        },
-        onCopyLink: () {
-          AppFlowyClipboard.setData(text: linkText);
-          dismissOverlay();
-        },
-        onRemoveLink: () {
-          final transaction = editorState.transaction
-            ..formatText(
-              node,
-              index,
-              length,
-              {BuiltInAttributeKey.href: null},
-            );
-          editorState.apply(transaction);
-          dismissOverlay();
-        },
-        onDismiss: dismissOverlay,
+          },
+          onRemoveLink: () {
+            final transaction = editorState.transaction
+              ..formatText(
+                node,
+                index,
+                length,
+                {BuiltInAttributeKey.href: null},
+              );
+            editorState.apply(transaction);
+            dismissOverlay();
+          },
+          onDismiss: dismissOverlay,
+        ),
       );
     },
   ).build();

@@ -726,9 +726,10 @@ void main() {
       for (final cell in cells.evaluate()) {
         expect(TableSelectionScope.of(cell), isNotNull);
       }
+      final editorColors = state.editorStyle.colorScheme;
       final expectedColor = Color.alphaBlend(
-        primary.withValues(alpha: 0.18),
-        Theme.of(tester.element(cells.first)).colorScheme.surface,
+        editorColors.selection,
+        editorColors.background,
       );
       expect(
         find.descendant(

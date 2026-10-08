@@ -36,10 +36,6 @@ class _TableViewState extends State<TableView>
   static const double SPACING = 4.0;
   static const double HIT_DIVIDER_THRESHOLD = 8.0;
 
-  static const Color DEFAULT_INDICATOR_COLOR = Color(0xFF9E9E9E);
-  static const Color DEFAULT_INDICATOR_HOVER_COLOR = Color(0xFF616161);
-  static const Color DEFAULT_ADD_BUTTON_HOVER_BG = Color(0xFFF3F4F6);
-
   final FocusNode _keyboardFocusNode = FocusNode();
 
   int? _hoveredCol;
@@ -402,7 +398,7 @@ class _TableViewState extends State<TableView>
         child: DecoratedBox(
           decoration: BoxDecoration(
             border: Border.all(
-              color: Theme.of(context).colorScheme.primary,
+              color: EditorTheme.of(context).primary,
               width: 1.5,
             ),
           ),
@@ -704,8 +700,9 @@ class _TableViewState extends State<TableView>
               key: ValueKey('table-col-delete-$colIdx'),
               icon: Icons.close,
               tooltip: '删除此列',
-              hoverBgColor: const Color(0xFFFFEBEE),
-              hoverIconColor: const Color(0xFFE53935),
+              hoverBgColor:
+                  EditorTheme.of(context).error.withValues(alpha: 0.1),
+              hoverIconColor: EditorTheme.of(context).error,
               onTap: () => _deleteCol(colIdx),
               onSecondaryTap: () => showActionMenu(
                 btnContext,
@@ -766,8 +763,9 @@ class _TableViewState extends State<TableView>
               key: ValueKey('table-row-delete-$rowIdx'),
               icon: Icons.close,
               tooltip: '删除此行',
-              hoverBgColor: const Color(0xFFFFEBEE),
-              hoverIconColor: const Color(0xFFE53935),
+              hoverBgColor:
+                  EditorTheme.of(context).error.withValues(alpha: 0.1),
+              hoverIconColor: EditorTheme.of(context).error,
               onTap: () => _deleteRow(rowIdx),
               onSecondaryTap: () => showActionMenu(
                 btnContext,
@@ -796,13 +794,13 @@ class _TableViewState extends State<TableView>
             TableDirection.col,
           );
         },
-        child: const Tooltip(
+        child: Tooltip(
           message: '在此处插入列',
           child: Center(
             child: Icon(
               Icons.arrow_drop_down,
               size: 18,
-              color: DEFAULT_INDICATOR_HOVER_COLOR,
+              color: EditorTheme.of(context).primary,
             ),
           ),
         ),
@@ -822,13 +820,13 @@ class _TableViewState extends State<TableView>
             TableDirection.row,
           );
         },
-        child: const Tooltip(
+        child: Tooltip(
           message: '在此处插入行',
           child: Center(
             child: Icon(
               Icons.arrow_right,
               size: 18,
-              color: DEFAULT_INDICATOR_HOVER_COLOR,
+              color: EditorTheme.of(context).primary,
             ),
           ),
         ),
@@ -855,12 +853,15 @@ class _TableViewState extends State<TableView>
           height: height,
           decoration: BoxDecoration(
             color: _hoveringAddCol
-                ? DEFAULT_ADD_BUTTON_HOVER_BG
+                ? EditorTheme.of(context).hover
                 : Colors.transparent,
             border: Border.all(
               color: _hoveringAddCol
-                  ? widget.tableStyle.borderHoverColor
-                  : widget.tableStyle.borderColor.withValues(alpha: 0.6),
+                  ? (widget.tableStyle.borderHoverColor ??
+                      EditorTheme.of(context).primary)
+                  : (widget.tableStyle.borderColor ??
+                          EditorTheme.of(context).border)
+                      .withValues(alpha: 0.6),
               width: widget.tableStyle.borderWidth,
             ),
             borderRadius: BorderRadius.circular(2),
@@ -870,7 +871,7 @@ class _TableViewState extends State<TableView>
               Icons.add,
               size: 14,
               color: _hoveringAddCol
-                  ? DEFAULT_INDICATOR_HOVER_COLOR
+                  ? EditorTheme.of(context).primary
                   : Colors.transparent,
             ),
           ),
@@ -898,12 +899,15 @@ class _TableViewState extends State<TableView>
           height: ADD_ROW_HEIGHT,
           decoration: BoxDecoration(
             color: _hoveringAddRow
-                ? DEFAULT_ADD_BUTTON_HOVER_BG
+                ? EditorTheme.of(context).hover
                 : Colors.transparent,
             border: Border.all(
               color: _hoveringAddRow
-                  ? widget.tableStyle.borderHoverColor
-                  : widget.tableStyle.borderColor.withValues(alpha: 0.6),
+                  ? (widget.tableStyle.borderHoverColor ??
+                      EditorTheme.of(context).primary)
+                  : (widget.tableStyle.borderColor ??
+                          EditorTheme.of(context).border)
+                      .withValues(alpha: 0.6),
               width: widget.tableStyle.borderWidth,
             ),
             borderRadius: BorderRadius.circular(2),
@@ -913,7 +917,7 @@ class _TableViewState extends State<TableView>
               Icons.add,
               size: 14,
               color: _hoveringAddRow
-                  ? DEFAULT_INDICATOR_HOVER_COLOR
+                  ? EditorTheme.of(context).primary
                   : Colors.transparent,
             ),
           ),
@@ -1132,7 +1136,7 @@ class _TableActionButtonState extends State<_TableActionButton> {
               height: 18,
               decoration: BoxDecoration(
                 color: _isHovered
-                    ? (widget.hoverBgColor ?? const Color(0xFFEEEEEE))
+                    ? (widget.hoverBgColor ?? EditorTheme.of(context).hover)
                     : Colors.transparent,
                 shape: BoxShape.circle,
               ),
@@ -1141,8 +1145,9 @@ class _TableActionButtonState extends State<_TableActionButton> {
                   widget.icon,
                   size: 13,
                   color: _isHovered
-                      ? (widget.hoverIconColor ?? const Color(0xFF424242))
-                      : _TableViewState.DEFAULT_INDICATOR_COLOR,
+                      ? (widget.hoverIconColor ??
+                          EditorTheme.of(context).primary)
+                      : EditorTheme.of(context).mutedForeground,
                 ),
               ),
             ),

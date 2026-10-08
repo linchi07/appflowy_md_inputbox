@@ -20,11 +20,15 @@ List<CommandShortcutEvent> toggleColorCommands({
     ];
 
 class ToggleColorsStyle {
-  ToggleColorsStyle({
-    this.highlightColor = const Color(0x60FFCE00),
-  });
+  ToggleColorsStyle({Color? highlightColor}) : _highlightColor = highlightColor;
 
-  final Color highlightColor;
+  final Color? _highlightColor;
+
+  Color get highlightColor =>
+      _highlightColor ?? const EditorColorScheme.light().highlight;
+
+  Color resolveHighlightColor(EditorColorScheme colors) =>
+      _highlightColor ?? colors.highlight;
 }
 
 final CommandShortcutEvent toggleHighlightCommand = CommandShortcutEvent(
@@ -75,8 +79,11 @@ KeyEventResult _toggleHighlight(
   editorState.formatDelta(
     selection,
     {
-      AppFlowyRichTextKeys.backgroundColor:
-          isHighlighted ? null : style.highlightColor.toHex(),
+      AppFlowyRichTextKeys.backgroundColor: isHighlighted
+          ? null
+          : style
+              .resolveHighlightColor(editorState.editorStyle.colorScheme)
+              .toHex(),
     },
   );
 

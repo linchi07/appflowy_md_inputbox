@@ -64,6 +64,10 @@ class _TableColState extends State<TableCol> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = EditorTheme.of(context);
+    final borderColor = widget.tableStyle.borderColor ?? colors.border;
+    final borderHoverColor =
+        widget.tableStyle.borderHoverColor ?? colors.primary;
     List<Widget> children = [];
     if (widget.colIdx == 0) {
       children.add(
@@ -72,8 +76,8 @@ class _TableColState extends State<TableCol> {
           tableNode: widget.tableNode,
           editorState: widget.editorState,
           colIdx: widget.colIdx,
-          borderColor: widget.tableStyle.borderColor,
-          borderHoverColor: widget.tableStyle.borderHoverColor,
+          borderColor: borderColor,
+          borderHoverColor: borderHoverColor,
         ),
       );
     }
@@ -90,8 +94,8 @@ class _TableColState extends State<TableCol> {
         tableNode: widget.tableNode,
         editorState: widget.editorState,
         colIdx: widget.colIdx,
-        borderColor: widget.tableStyle.borderColor,
-        borderHoverColor: widget.tableStyle.borderHoverColor,
+        borderColor: borderColor,
+        borderHoverColor: borderHoverColor,
       ),
     ]);
 
@@ -104,7 +108,7 @@ class _TableColState extends State<TableCol> {
     final activeNodes = <Node>{};
     final Widget cellBorder = Container(
       height: widget.tableNode.config.borderWidth,
-      color: widget.tableStyle.borderColor,
+      color: widget.tableStyle.borderColor ?? EditorTheme.of(context).border,
     );
 
     for (var i = 0; i < rowsLen; i++) {

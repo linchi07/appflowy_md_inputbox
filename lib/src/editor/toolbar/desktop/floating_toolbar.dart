@@ -5,16 +5,16 @@ import 'package:flutter/material.dart';
 
 class FloatingToolbarStyle {
   const FloatingToolbarStyle({
-    this.backgroundColor = Colors.black,
-    this.toolbarActiveColor = Colors.lightBlue,
-    this.toolbarIconColor = Colors.white,
+    this.backgroundColor,
+    this.toolbarActiveColor,
+    this.toolbarIconColor,
     this.toolbarShadowColor,
     this.toolbarElevation = 0,
   });
 
-  final Color backgroundColor;
-  final Color toolbarActiveColor;
-  final Color toolbarIconColor;
+  final Color? backgroundColor;
+  final Color? toolbarActiveColor;
+  final Color? toolbarIconColor;
   final Color? toolbarShadowColor;
   final double toolbarElevation;
 }
@@ -72,7 +72,7 @@ class _FloatingToolbarState extends State<FloatingToolbar>
 
   double get floatingToolbarHeight => widget.floatingToolbarHeight;
 
-  late Brightness brightness = Theme.of(context).brightness;
+  EditorColorScheme? _toolbarColors;
 
   bool hasMetricsChanged = false;
   Selection? lastSelection;
@@ -95,6 +95,10 @@ class _FloatingToolbarState extends State<FloatingToolbar>
 
     if (widget.editorState != oldWidget.editorState) {
       editorState.selectionNotifier.addListener(_onSelectionChanged);
+    }
+    if (widget.style != oldWidget.style || widget.items != oldWidget.items) {
+      _toolbarWidget = null;
+      _toolbarContainer?.markNeedsBuild();
     }
   }
 
@@ -238,7 +242,11 @@ class _FloatingToolbarState extends State<FloatingToolbar>
     }
     _toolbarContainer = OverlayEntry(
       builder: (context) {
-        final child = _buildToolbar(context);
+        final colors = editorState.editorStyle.colorScheme;
+        final child = EditorTheme(
+          colors: colors,
+          child: _buildToolbar(context),
+        );
 
         return widget.toolbarBuilder
                 ?.call(context, child, _clear, isMetricsChanged) ??
@@ -254,18 +262,15 @@ class _FloatingToolbarState extends State<FloatingToolbar>
   }
 
   Widget _buildToolbar(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    bool needRefreshToolbar = brightness != this.brightness;
-    if (needRefreshToolbar) {
-      this.brightness = brightness;
-    }
-    if (needRefreshToolbar || _toolbarWidget == null) {
+    final colors = editorState.editorStyle.colorScheme;
+    if (_toolbarWidget == null || _toolbarColors != colors) {
+      _toolbarColors = colors;
       _toolbarWidget = FloatingToolbarWidget(
         items: widget.items,
         editorState: editorState,
-        backgroundColor: widget.style.backgroundColor,
-        toolbarActiveColor: widget.style.toolbarActiveColor,
-        toolbarIconColor: widget.style.toolbarIconColor,
+        backgroundColor: widget.style.backgroundColor ?? colors.surface,
+        toolbarActiveColor: widget.style.toolbarActiveColor ?? colors.primary,
+        toolbarIconColor: widget.style.toolbarIconColor ?? colors.onSurface,
         toolbarElevation: widget.style.toolbarElevation,
         toolbarShadowColor: widget.style.toolbarShadowColor,
         textDirection: widget.textDirection ?? Directionality.of(context),

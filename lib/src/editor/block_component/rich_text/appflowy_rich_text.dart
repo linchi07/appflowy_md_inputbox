@@ -146,8 +146,13 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
     final themeStyle = Theme.of(context).textTheme.bodyMedium;
     return themeStyle?.merge(textStyleConfiguration.text).copyWith(
               fontFamilyFallback: themeStyle.fontFamilyFallback,
+              color: textStyleConfiguration.text.color ??
+                  EditorTheme.of(context).foreground,
             ) ??
-        textStyleConfiguration.text;
+        textStyleConfiguration.text.copyWith(
+          color: textStyleConfiguration.text.color ??
+              EditorTheme.of(context).foreground,
+        );
   }
 
   @override
@@ -648,10 +653,22 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
           textStyle = textStyle.combine(textStyleConfiguration.strikethrough);
         }
         if (attributes.href != null) {
-          textStyle = textStyle.combine(textStyleConfiguration.href);
+          textStyle = textStyle.combine(
+            textStyleConfiguration.href.copyWith(
+              color: textStyleConfiguration.href.color ??
+                  EditorTheme.of(context).primary,
+            ),
+          );
         }
         if (attributes.code == true) {
-          textStyle = textStyle.combine(textStyleConfiguration.code);
+          textStyle = textStyle.combine(
+            textStyleConfiguration.code.copyWith(
+              color: textStyleConfiguration.code.color ??
+                  EditorTheme.of(context).foreground,
+              backgroundColor: textStyleConfiguration.code.backgroundColor ??
+                  EditorTheme.of(context).subtleSurface,
+            ),
+          );
         }
         if (attributes.backgroundColor != null) {
           textStyle = textStyle.combine(
@@ -679,7 +696,12 @@ class _AppFlowyRichTextState extends State<AppFlowyRichText>
           );
         }
         if (attributes.autoComplete == true) {
-          textStyle = textStyle.combine(textStyleConfiguration.autoComplete);
+          textStyle = textStyle.combine(
+            textStyleConfiguration.autoComplete.copyWith(
+              color: textStyleConfiguration.autoComplete.color ??
+                  EditorTheme.of(context).mutedForeground,
+            ),
+          );
         }
         if (attributes.transparent == true) {
           textStyle = textStyle.combine(

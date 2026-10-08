@@ -1,11 +1,13 @@
 import 'dart:math' as math;
 
-import 'package:appflowy_editor/src/editor/selection_menu/selection_menu_widget.dart';
+import 'package:appflowy_editor/src/editor/editor_component/style/editor_color_scheme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// A compact menu shared by editor controls. It uses the same colors and
-/// surface treatment as the slash menu, without Material popup widgets.
+import 'editor_menu_style.dart';
+import 'editor_menu_widgets.dart';
+
+/// An action shared by dropdowns, searchable pickers, and context menus.
 class EditorMenuEntry {
   const EditorMenuEntry({
     required this.label,
@@ -13,6 +15,10 @@ class EditorMenuEntry {
     this.icon,
     this.leading,
     this.selected = false,
+    this.enabled = true,
+    this.dividerBefore = false,
+    this.shortcut,
+    this.searchKeywords = const [],
   });
 
   final String label;
@@ -20,14 +26,25 @@ class EditorMenuEntry {
   final IconData? icon;
   final Widget? leading;
   final bool selected;
+  final bool enabled;
+  final bool dividerBefore;
+  final String? shortcut;
+  final List<String> searchKeywords;
+
+  bool matches(String query) =>
+      label.toLowerCase().contains(query) ||
+      searchKeywords.any((keyword) => keyword.toLowerCase().contains(query));
 }
 
+/// Anchored editor menus with one surface, item style, and keyboard behavior.
 class EditorPopoverMenu {
-  EditorPopoverMenu._(this._overlay);
+  EditorPopoverMenu._(this._overlay, this._previousFocus, this._onDismiss);
 
   static final Expando<EditorPopoverMenu> _active = Expando();
 
   final OverlayState _overlay;
+  final FocusNode? _previousFocus;
+  final VoidCallback? _onDismiss;
   OverlayEntry? _entry;
 
   static Rect? anchorRect(BuildContext context) {
@@ -42,17 +59,23 @@ class EditorPopoverMenu {
     required List<EditorMenuEntry> entries,
     OverlayState? overlayState,
     SelectionMenuStyle? style,
+    EditorColorScheme? colors,
     double width = 220,
     double maxHeight = 320,
+    String? searchHint,
+    String emptyLabel = 'No results',
     double footerHeight = 0,
     Widget Function(BuildContext, VoidCallback)? footerBuilder,
+    VoidCallback? onDismiss,
   }) {
     final overlay = overlayState ?? Overlay.maybeOf(context, rootOverlay: true);
     if (overlay == null) return null;
-    _active[overlay]?.dismiss();
-    final menu = EditorPopoverMenu._(overlay);
     final box = overlay.context.findRenderObject();
     if (box is! RenderBox) return null;
+    final previousFocus =
+        _active[overlay]?._previousFocus ?? FocusManager.instance.primaryFocus;
+    _active[overlay]?.dismiss();
+    final menu = EditorPopoverMenu._(overlay, previousFocus, onDismiss);
     _active[overlay] = menu;
     final viewport = box.size;
     final localAnchor = Rect.fromPoints(
@@ -62,7 +85,8 @@ class EditorPopoverMenu {
     final double menuWidth =
         math.min(width, math.max(0.0, viewport.width - 16));
     final double menuHeight = math.min(
-      entries.length * 38.0 + 12 + footerHeight,
+      EditorMenuList.contentHeight(entries, searchable: searchHint != null) +
+          footerHeight,
       math.min(maxHeight, math.max(0.0, viewport.height - 16)),
     );
     final left = localAnchor.left
@@ -79,35 +103,43 @@ class EditorPopoverMenu {
                 ? above
                 : fallbackTop)
         .toDouble();
-    final effectiveStyle = style ??
-        (Theme.of(context).brightness == Brightness.dark
-            ? SelectionMenuStyle.dark
-            : SelectionMenuStyle.light);
+    final effectiveColors = colors ??
+        EditorTheme.maybeOf(context) ??
+        const EditorColorScheme.light();
+    final capturedThemes =
+        InheritedTheme.capture(from: context, to: overlay.context);
 
     menu._entry = OverlayEntry(
-      builder: (overlayContext) => Positioned.fill(
-        child: Material(
-          type: MaterialType.transparency,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: menu.dismiss,
-            onSecondaryTap: menu.dismiss,
-            child: Stack(
-              children: [
-                Positioned(
-                  left: left.toDouble(),
-                  top: top,
-                  width: menuWidth,
-                  height: menuHeight,
-                  child: _EditorMenuList(
-                    entries: entries,
-                    style: effectiveStyle,
-                    dismiss: menu.dismiss,
-                    footerBuilder: footerBuilder,
-                    footerHeight: footerHeight,
-                  ),
+      builder: (overlayContext) => capturedThemes.wrap(
+        EditorTheme(
+          colors: effectiveColors,
+          child: Positioned.fill(
+            child: Material(
+              type: MaterialType.transparency,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: menu.dismiss,
+                onSecondaryTap: menu.dismiss,
+                child: Stack(
+                  children: [
+                    Positioned(
+                      left: left.toDouble(),
+                      top: top,
+                      width: menuWidth,
+                      height: menuHeight,
+                      child: EditorMenuList(
+                        entries: entries,
+                        style: style,
+                        dismiss: menu.dismiss,
+                        searchHint: searchHint,
+                        emptyLabel: emptyLabel,
+                        footerBuilder: footerBuilder,
+                        footerHeight: footerHeight,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -119,59 +151,149 @@ class EditorPopoverMenu {
 
   void dismiss() {
     final entry = _entry;
+    if (entry == null) return;
     _entry = null;
-    if (entry != null) {
-      entry.remove();
-      entry.dispose();
-    }
+    entry.remove();
+    entry.dispose();
     if (identical(_active[_overlay], this)) _active[_overlay] = null;
+    _onDismiss?.call();
+    final previousFocus = _previousFocus;
+    if (previousFocus?.context != null && previousFocus!.canRequestFocus) {
+      previousFocus.requestFocus();
+    }
   }
 }
 
-class _EditorMenuList extends StatefulWidget {
-  const _EditorMenuList({
+/// Menu contents usable by both anchored popovers and pointer context menus.
+class EditorMenuList extends StatefulWidget {
+  const EditorMenuList({
+    super.key,
     required this.entries,
-    required this.style,
     required this.dismiss,
-    required this.footerBuilder,
-    required this.footerHeight,
+    this.style,
+    this.searchHint,
+    this.emptyLabel = 'No results',
+    this.footerBuilder,
+    this.footerHeight = 0,
+    this.surfaceKey = const ValueKey('editor-popover-menu'),
   });
 
   final List<EditorMenuEntry> entries;
-  final SelectionMenuStyle style;
+  final SelectionMenuStyle? style;
   final VoidCallback dismiss;
+  final String? searchHint;
+  final String emptyLabel;
   final Widget Function(BuildContext, VoidCallback)? footerBuilder;
   final double footerHeight;
+  final Key surfaceKey;
+
+  static double contentHeight(
+    List<EditorMenuEntry> entries, {
+    bool searchable = false,
+  }) =>
+      math.max(1, entries.length) * editorMenuItemHeight +
+      entries.skip(1).where((entry) => entry.dividerBefore).length *
+          editorMenuDividerHeight +
+      12 +
+      (searchable ? editorMenuSearchHeight : 0);
 
   @override
-  State<_EditorMenuList> createState() => _EditorMenuListState();
+  State<EditorMenuList> createState() => _EditorMenuListState();
 }
 
-class _EditorMenuListState extends State<_EditorMenuList> {
+class _EditorMenuListState extends State<EditorMenuList> {
+  final _scrollController = ScrollController();
+  final _focusNode = FocusNode(debugLabel: 'editor_menu');
+  final _searchFocusNode = FocusNode(debugLabel: 'editor_menu_search');
+  String _query = '';
   int _activeIndex = 0;
 
+  List<EditorMenuEntry> get _entries => widget.entries
+      .where((entry) => entry.matches(_query))
+      .toList(growable: false);
+
+  @override
+  void initState() {
+    super.initState();
+    final selected =
+        widget.entries.indexWhere((entry) => entry.selected && entry.enabled);
+    _activeIndex = selected >= 0
+        ? selected
+        : widget.entries.indexWhere((entry) => entry.enabled);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.searchHint == null) _focusNode.requestFocus();
+    });
+    _scrollToActive();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _focusNode.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
+
   void _select(int index) {
+    final entries = _entries;
+    if (index < 0 || index >= entries.length || !entries[index].enabled) return;
+    final action = entries[index].onSelected;
     widget.dismiss();
-    widget.entries[index].onSelected();
+    action();
+  }
+
+  void _move(int direction) {
+    final entries = _entries;
+    if (entries.isEmpty) return;
+    for (var step = 1; step <= entries.length; step++) {
+      final index = (_activeIndex + step * direction) % entries.length;
+      if (entries[index].enabled) {
+        setState(() => _activeIndex = index);
+        _scrollToActive();
+        return;
+      }
+    }
+  }
+
+  void _scrollToActive() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients || _activeIndex < 0) return;
+      final entries = _entries;
+      final rowTop = _activeIndex * editorMenuItemHeight +
+          entries
+                  .take(_activeIndex + 1)
+                  .skip(1)
+                  .where((entry) => entry.dividerBefore)
+                  .length *
+              editorMenuDividerHeight;
+      final position = _scrollController.position;
+      final offset = rowTop < position.pixels
+          ? rowTop
+          : rowTop + editorMenuItemHeight >
+                  position.pixels + position.viewportDimension
+              ? rowTop + editorMenuItemHeight - position.viewportDimension
+              : position.pixels;
+      _scrollController.jumpTo(offset.clamp(0.0, position.maxScrollExtent));
+    });
   }
 
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent || widget.entries.isEmpty) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
     if (event.logicalKey == LogicalKeyboardKey.escape) {
       widget.dismiss();
       return KeyEventResult.handled;
     }
+    if (!_focusNode.hasPrimaryFocus && !_searchFocusNode.hasFocus) {
+      return KeyEventResult.ignored;
+    }
     if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-      setState(() => _activeIndex = (_activeIndex + 1) % widget.entries.length);
+      _move(1);
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-      setState(() {
-        _activeIndex =
-            (_activeIndex + widget.entries.length - 1) % widget.entries.length;
-      });
+      _move(-1);
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.enter) {
@@ -183,111 +305,101 @@ class _EditorMenuListState extends State<_EditorMenuList> {
 
   @override
   Widget build(BuildContext context) {
-    final style = widget.style;
+    final entries = _entries;
+    final colors = EditorTheme.of(context);
     return Focus(
-      autofocus: true,
+      focusNode: _focusNode,
       onKeyEvent: _onKeyEvent,
-      child: DefaultTextStyle(
-        style: TextStyle(color: style.selectionMenuItemTextColor, fontSize: 12),
-        child: DecoratedBox(
-          key: const ValueKey('editor-popover-menu'),
-          decoration: BoxDecoration(
-            color: style.selectionMenuBackgroundColor,
-            borderRadius: BorderRadius.circular(6),
-            boxShadow: [
-              BoxShadow(
-                blurRadius: 5,
-                spreadRadius: 1,
-                color: Colors.black.withValues(alpha: 0.1),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-            child: Column(
-              children: [
-                Expanded(
-                  child: ListView.builder(
-                    padding: EdgeInsets.zero,
-                    itemCount: widget.entries.length,
-                    itemBuilder: (context, index) {
-                      final entry = widget.entries[index];
-                      return MouseRegion(
-                        onEnter: (_) => setState(() => _activeIndex = index),
-                        child: Semantics(
-                          button: true,
-                          selected: entry.selected,
-                          label: entry.label,
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () => _select(index),
-                            child: Container(
-                              height: 38,
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 8),
-                              decoration: BoxDecoration(
-                                color: _activeIndex == index
-                                    ? style.selectionMenuItemSelectedColor
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Row(
-                                children: [
-                                  SizedBox(
-                                    width: 20,
-                                    child: entry.leading ??
-                                        (entry.icon == null
-                                            ? null
-                                            : Icon(
-                                                entry.icon,
-                                                size: 17,
-                                                color: _activeIndex == index
-                                                    ? style
-                                                        .selectionMenuItemSelectedIconColor
-                                                    : style
-                                                        .selectionMenuItemIconColor,
-                                              )),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      entry.label,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: _activeIndex == index
-                                            ? style
-                                                .selectionMenuItemSelectedTextColor
-                                            : style.selectionMenuItemTextColor,
-                                      ),
-                                    ),
-                                  ),
-                                  if (entry.selected)
-                                    Icon(
-                                      Icons.check,
-                                      size: 15,
-                                      color: _activeIndex == index
-                                          ? style
-                                              .selectionMenuItemSelectedIconColor
-                                          : style.selectionMenuItemIconColor,
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
+      child: EditorMenuSurface(
+        key: widget.surfaceKey,
+        style: widget.style,
+        child: Column(
+          children: [
+            if (widget.searchHint != null)
+              SizedBox(
+                height: editorMenuSearchHeight,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 2, 4, 10),
+                  child: EditorMenuTextField(
+                    key: const ValueKey('editor-menu-search'),
+                    focusNode: _searchFocusNode,
+                    autofocus: true,
+                    hintText: widget.searchHint,
+                    leading: const Icon(Icons.search, size: 15),
+                    onChanged: (query) {
+                      setState(() {
+                        _query = query.toLowerCase().trim();
+                        _activeIndex =
+                            _entries.indexWhere((entry) => entry.enabled);
+                      });
+                      _scrollToActive();
                     },
+                    onSubmitted: (_) => _select(_activeIndex),
                   ),
                 ),
-                if (widget.footerBuilder case final footerBuilder?)
-                  SizedBox(
-                    height: widget.footerHeight,
-                    child: footerBuilder(context, widget.dismiss),
-                  ),
-              ],
+              ),
+            Expanded(
+              child: entries.isEmpty
+                  ? Center(
+                      child: Text(
+                        widget.emptyLabel,
+                        style: TextStyle(color: colors.mutedForeground),
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: _scrollController,
+                      padding: EdgeInsets.zero,
+                      itemCount: entries.length,
+                      itemExtentBuilder: (index, dimensions) =>
+                          editorMenuItemHeight +
+                          (index > 0 && entries[index].dividerBefore
+                              ? editorMenuDividerHeight
+                              : 0),
+                      itemBuilder: (context, index) {
+                        final entry = entries[index];
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (index > 0 && entry.dividerBefore)
+                              EditorMenuDivider(style: widget.style),
+                            EditorMenuItem(
+                              key: ValueKey('editor-menu-item-${entry.label}'),
+                              style: widget.style,
+                              active: _activeIndex == index,
+                              selected: entry.selected,
+                              enabled: entry.enabled,
+                              semanticLabel: entry.label,
+                              leading: entry.leading ??
+                                  (entry.icon == null
+                                      ? null
+                                      : Icon(entry.icon, size: 17)),
+                              trailing: entry.shortcut == null
+                                  ? null
+                                  : Text(
+                                      entry.shortcut!,
+                                      style: TextStyle(
+                                        color: colors.mutedForeground,
+                                      ),
+                                    ),
+                              onHover: (hovered) {
+                                if (hovered && entry.enabled) {
+                                  setState(() => _activeIndex = index);
+                                }
+                              },
+                              onPressed: () => _select(index),
+                              child: Text(entry.label),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
             ),
-          ),
+            if (widget.footerBuilder case final footerBuilder?)
+              SizedBox(
+                height: widget.footerHeight,
+                child: footerBuilder(context, widget.dismiss),
+              ),
+          ],
         ),
       ),
     );

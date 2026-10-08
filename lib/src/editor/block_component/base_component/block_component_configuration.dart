@@ -82,8 +82,12 @@ mixin BlockComponentConfigurable<T extends StatefulWidget> on State<T> {
   TextStyle textStyleWithTextSpan({TextSpan? textSpan}) =>
       configuration.textStyle(node, textSpan: textSpan);
 
-  TextStyle placeholderTextStyleWithTextSpan({TextSpan? textSpan}) =>
-      configuration.placeholderTextStyle(node, textSpan: textSpan);
+  TextStyle placeholderTextStyleWithTextSpan({TextSpan? textSpan}) {
+    final style = configuration.placeholderTextStyle(node, textSpan: textSpan);
+    return style.copyWith(
+      color: style.color ?? EditorTheme.of(context).mutedForeground,
+    );
+  }
 
   String get placeholderText => configuration.placeholderText(node);
 
@@ -113,9 +117,7 @@ String _placeholderText(Node node) {
 }
 
 TextStyle _placeholderTextStyle(Node node, {TextSpan? textSpan}) {
-  return const TextStyle(
-    color: Colors.grey,
-  );
+  return const TextStyle();
 }
 
 EdgeInsets _blockSelectionAreaPadding(Node node) {

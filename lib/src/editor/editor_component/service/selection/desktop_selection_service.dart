@@ -166,7 +166,10 @@ class _DesktopSelectionServiceWidgetState
     }
 
     _contextMenuAreas
-      ..forEach((overlay) => overlay.remove())
+      ..forEach((overlay) {
+        overlay.remove();
+        overlay.dispose();
+      })
       ..clear();
 
     if (_keyboardInterceptor != null) {
@@ -527,18 +530,30 @@ class _DesktopSelectionServiceWidgetState
     _contextMenuAreas.add(mask);
     Overlay.of(context, rootOverlay: true).insert(mask);
 
-    final baseOffset =
-        editorState.renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
-    final offset = details.localPosition + const Offset(10, 10) + baseOffset;
+    final offset = details.globalPosition + const Offset(10, 10);
+    final capturedThemes = InheritedTheme.capture(
+      from: context,
+      to: Overlay.of(context, rootOverlay: true).context,
+    );
     final contextMenu = OverlayEntry(
-      builder: (_) =>
-          widget.contextMenuBuilder?.call(
-            context,
-            offset,
-            editorState,
-            () => _clearContextMenu(),
-          ) ??
-          SizedBox.shrink(),
+      builder: (_) => capturedThemes.wrap(
+        EditorTheme(
+          colors: editorState.editorStyle.colorScheme,
+          child: Provider.value(
+            value: editorState,
+            child: Builder(
+              builder: (menuContext) =>
+                  widget.contextMenuBuilder?.call(
+                    menuContext,
+                    offset,
+                    editorState,
+                    _clearContextMenu,
+                  ) ??
+                  const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      ),
     );
 
     _contextMenuAreas.add(contextMenu);
@@ -641,7 +656,8 @@ class _DesktopSelectionServiceWidgetState
             decoration: BoxDecoration(
               borderRadius:
                   BorderRadius.circular(widget.dropTargetStyle.borderRadius),
-              color: widget.dropTargetStyle.color,
+              color: widget.dropTargetStyle.color ??
+                  EditorTheme.of(context).primary,
             ),
           ),
         );

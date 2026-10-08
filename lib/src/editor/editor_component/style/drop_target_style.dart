@@ -26,7 +26,7 @@ class AppFlowyDropTargetStyle {
 
   /// The color of the drop target (horizontal line)
   ///
-  /// Defaults to [ThemeData.colorScheme.primary]
+  /// Defaults to the editor color scheme's primary color.
   ///
   final Color? color;
 

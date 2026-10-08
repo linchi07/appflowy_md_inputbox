@@ -169,7 +169,11 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
       final resolvedTextStyle = Theme.of(context)
           .textTheme
           .bodyMedium
-          ?.merge(style.textStyleConfiguration.text);
+          ?.merge(style.textStyleConfiguration.text)
+          .copyWith(
+            color: style.textStyleConfiguration.text.color ??
+                editorState.editorStyle.colorScheme.foreground,
+          );
 
       return IndexedDocumentScrollbar(
         itemIds: itemIds,

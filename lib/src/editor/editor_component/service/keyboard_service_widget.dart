@@ -270,7 +270,7 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
           inputType: TextInputType.multiline,
           textCapitalization: TextCapitalization.sentences,
           inputAction: TextInputAction.newline,
-          keyboardAppearance: Theme.of(context).brightness,
+          keyboardAppearance: EditorTheme.of(context).brightness,
           allowedMimeTypes:
               widget.contentInsertionConfiguration?.allowedMimeTypes ?? [],
         ),

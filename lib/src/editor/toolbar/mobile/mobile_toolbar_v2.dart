@@ -10,17 +10,17 @@ const String selectionExtraInfoDisableMobileToolbarKey = 'disableMobileToolbar';
 class MobileToolbarV2 extends StatefulWidget {
   const MobileToolbarV2({
     super.key,
-    this.backgroundColor = Colors.white,
-    this.foregroundColor = const Color(0xff676666),
-    this.iconColor = Colors.black,
-    this.clearDiagonalLineColor = const Color(0xffB3261E),
-    this.itemHighlightColor = const Color(0xff1F71AC),
-    this.itemOutlineColor = const Color(0xFFE3E3E3),
-    this.tabBarSelectedBackgroundColor = const Color(0x23808080),
-    this.tabBarSelectedForegroundColor = Colors.black,
-    this.primaryColor = const Color(0xff1F71AC),
-    this.onPrimaryColor = Colors.white,
-    this.outlineColor = const Color(0xFFE3E3E3),
+    this.backgroundColor,
+    this.foregroundColor,
+    this.iconColor,
+    this.clearDiagonalLineColor,
+    this.itemHighlightColor,
+    this.itemOutlineColor,
+    this.tabBarSelectedBackgroundColor,
+    this.tabBarSelectedForegroundColor,
+    this.primaryColor,
+    this.onPrimaryColor,
+    this.outlineColor,
     this.toolbarHeight = 50.0,
     this.borderRadius = 6.0,
     this.buttonHeight = 40.0,
@@ -37,17 +37,17 @@ class MobileToolbarV2 extends StatefulWidget {
   final Widget child;
 
   // style
-  final Color backgroundColor;
-  final Color foregroundColor;
-  final Color iconColor;
-  final Color clearDiagonalLineColor;
-  final Color itemHighlightColor;
-  final Color itemOutlineColor;
-  final Color tabBarSelectedBackgroundColor;
-  final Color tabBarSelectedForegroundColor;
-  final Color primaryColor;
-  final Color onPrimaryColor;
-  final Color outlineColor;
+  final Color? backgroundColor;
+  final Color? foregroundColor;
+  final Color? iconColor;
+  final Color? clearDiagonalLineColor;
+  final Color? itemHighlightColor;
+  final Color? itemOutlineColor;
+  final Color? tabBarSelectedBackgroundColor;
+  final Color? tabBarSelectedForegroundColor;
+  final Color? primaryColor;
+  final Color? onPrimaryColor;
+  final Color? outlineColor;
   final double toolbarHeight;
   final double borderRadius;
   final double buttonHeight;
@@ -68,7 +68,9 @@ class _MobileToolbarV2State extends State<MobileToolbarV2> {
   void initState() {
     super.initState();
 
-    _insertKeyboardToolbar();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _insertKeyboardToolbar();
+    });
     KeyboardHeightObserver.instance.addListener(_onKeyboardHeightChanged);
   }
 
@@ -114,6 +116,7 @@ class _MobileToolbarV2State extends State<MobileToolbarV2> {
   }
 
   void _insertKeyboardToolbar() {
+    final colors = widget.editorState.editorStyle.colorScheme;
     _removeKeyboardToolbar();
 
     Widget child = ValueListenableBuilder<Selection?>(
@@ -129,17 +132,21 @@ class _MobileToolbarV2State extends State<MobileToolbarV2> {
 
         return RepaintBoundary(
           child: MobileToolbarTheme(
-            backgroundColor: widget.backgroundColor,
-            foregroundColor: widget.foregroundColor,
-            iconColor: widget.iconColor,
-            clearDiagonalLineColor: widget.clearDiagonalLineColor,
-            itemHighlightColor: widget.itemHighlightColor,
-            itemOutlineColor: widget.itemOutlineColor,
-            tabBarSelectedBackgroundColor: widget.tabBarSelectedBackgroundColor,
-            tabBarSelectedForegroundColor: widget.tabBarSelectedForegroundColor,
-            primaryColor: widget.primaryColor,
-            onPrimaryColor: widget.onPrimaryColor,
-            outlineColor: widget.outlineColor,
+            backgroundColor: widget.backgroundColor ?? colors.surface,
+            foregroundColor: widget.foregroundColor ?? colors.onSurface,
+            iconColor: widget.iconColor ?? colors.onSurface,
+            clearDiagonalLineColor:
+                widget.clearDiagonalLineColor ?? colors.error,
+            itemHighlightColor: widget.itemHighlightColor ?? colors.primary,
+            itemOutlineColor: widget.itemOutlineColor ?? colors.border,
+            tabBarSelectedBackgroundColor:
+                widget.tabBarSelectedBackgroundColor ??
+                    Color.alphaBlend(colors.selection, colors.surface),
+            tabBarSelectedForegroundColor:
+                widget.tabBarSelectedForegroundColor ?? colors.onSurface,
+            primaryColor: widget.primaryColor ?? colors.primary,
+            onPrimaryColor: widget.onPrimaryColor ?? colors.onPrimary,
+            outlineColor: widget.outlineColor ?? colors.border,
             toolbarHeight: widget.toolbarHeight,
             borderRadius: widget.borderRadius,
             buttonHeight: widget.buttonHeight,

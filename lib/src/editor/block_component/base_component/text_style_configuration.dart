@@ -13,16 +13,10 @@ class TextStyleConfiguration {
       decoration: TextDecoration.lineThrough,
     ),
     this.href = const TextStyle(
-      color: Colors.lightBlue,
       decoration: TextDecoration.underline,
     ),
-    this.code = const TextStyle(
-      color: Colors.red,
-      backgroundColor: Color.fromARGB(98, 0, 195, 255),
-    ),
-    this.autoComplete = const TextStyle(
-      color: Colors.grey,
-    ),
+    this.code = const TextStyle(),
+    this.autoComplete = const TextStyle(),
     this.applyHeightToFirstAscent = false,
     this.applyHeightToLastDescent = false,
     this.lineHeight = 1.5,

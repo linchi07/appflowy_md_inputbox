@@ -43,7 +43,7 @@ void main() {
     expect(node.attributes[TableBlockKeys.shadeFirstRow], true);
     TableActions.toggleStyle(node, state, TableBlockKeys.shadeFirstColumn);
     TableActions.toggleStyle(node, state, TableBlockKeys.stripeRows);
-    final colors = ColorScheme.fromSeed(seedColor: Colors.blue);
+    const colors = EditorColorScheme.light();
     final table = TableNode(node: node);
     expect(tableStyleCellColor(node, table.getCell(1, 0), colors), isNotNull);
     expect(tableStyleCellColor(node, table.getCell(0, 1), colors), isNotNull);

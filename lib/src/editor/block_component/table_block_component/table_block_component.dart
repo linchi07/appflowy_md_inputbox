@@ -38,8 +38,10 @@ class TableStyle {
   final double borderWidth;
   final Widget addIcon;
   final Widget handlerIcon;
-  final Color borderColor;
-  final Color borderHoverColor;
+
+  /// Explicit overrides; otherwise the editor color scheme is used.
+  final Color? borderColor;
+  final Color? borderHoverColor;
 
   const TableStyle({
     this.colWidth = 160,
@@ -48,8 +50,8 @@ class TableStyle {
     this.borderWidth = 1.0,
     this.addIcon = TableDefaults.DEFAULT_ADD_ICON,
     this.handlerIcon = TableDefaults.DEFAULT_HANDLER_ICON,
-    this.borderColor = TableDefaults.DEFAULT_BORDER_COLOR,
-    this.borderHoverColor = TableDefaults.DEFAULT_BORDER_HOVER_COLOR,
+    this.borderColor,
+    this.borderHoverColor,
   });
 }
 

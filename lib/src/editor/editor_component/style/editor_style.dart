@@ -3,60 +3,90 @@ import 'package:flutter/material.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import '../../block_component/rich_text/markdown_decorator.dart';
 
-/// Colors used by the Markdown editor and its inline preview widgets.
-///
-/// Keeping these colors together avoids individual Markdown decorations
-/// silently choosing unrelated Material swatches.
-class MDEditorColorScheme {
+/// Compatibility wrapper for the former Markdown-only color scheme.
+class MDEditorColorScheme extends EditorColorScheme {
   const MDEditorColorScheme({
-    required this.foreground,
-    required this.background,
-    required this.primary,
-    required this.selection,
-    required this.mutedForeground,
-    required this.border,
-    required this.subtleBackground,
-    required this.tagBackground,
-    required this.tagBorder,
-    this.highlightBackground = const Color(0x80FFEB3B),
-  });
+    required Color foreground,
+    required Color background,
+    required Color primary,
+    required Color selection,
+    required Color mutedForeground,
+    required Color border,
+    required Color subtleBackground,
+    required Color tagBackground,
+    required Color tagBorder,
+    Color highlightBackground = const Color(0x80FFEB3B),
+  }) : super(
+          brightness: Brightness.light,
+          foreground: foreground,
+          background: background,
+          surface: background,
+          onSurface: foreground,
+          subtleSurface: subtleBackground,
+          mutedForeground: mutedForeground,
+          primary: primary,
+          onPrimary: Colors.white,
+          selection: selection,
+          border: border,
+          error: const Color(0xFFE53935),
+          highlight: highlightBackground,
+          tagBackground: tagBackground,
+          tagBorder: tagBorder,
+        );
 
   const MDEditorColorScheme.light({
-    this.foreground = const Color(0xFF202124),
-    this.background = const Color(0xFFFFFFFF),
-    this.primary = const Color(0xFF5B5BD6),
-    this.selection = const Color(0x245B5BD6),
-    this.mutedForeground = const Color(0xFF7A7D85),
-    this.border = const Color(0xFFD7D9E0),
-    this.subtleBackground = const Color(0xFFF1F2F5),
-    this.tagBackground = const Color(0x145B5BD6),
-    this.tagBorder = const Color(0x335B5BD6),
-    this.highlightBackground = const Color(0x80FFEB3B),
-  });
+    Color foreground = const Color(0xFF202124),
+    Color background = const Color(0xFFFFFFFF),
+    Color primary = const Color(0xFF5B5BD6),
+    Color selection = const Color(0x245B5BD6),
+    Color mutedForeground = const Color(0xFF7A7D85),
+    Color border = const Color(0xFFD7D9E0),
+    Color subtleBackground = const Color(0xFFF1F2F5),
+    Color tagBackground = const Color(0x145B5BD6),
+    Color tagBorder = const Color(0x335B5BD6),
+    Color highlightBackground = const Color(0x80FFEB3B),
+  }) : super.light(
+          foreground: foreground,
+          background: background,
+          surface: background,
+          onSurface: foreground,
+          subtleSurface: subtleBackground,
+          mutedForeground: mutedForeground,
+          primary: primary,
+          onPrimary: Colors.white,
+          selection: selection,
+          border: border,
+          highlight: highlightBackground,
+          tagBackground: tagBackground,
+          tagBorder: tagBorder,
+        );
 
   const MDEditorColorScheme.dark({
-    this.foreground = const Color(0xFFE7E7EA),
-    this.background = const Color(0xFF1E1F22),
-    this.primary = const Color(0xFFA8A7FF),
-    this.selection = const Color(0x38A8A7FF),
-    this.mutedForeground = const Color(0xFF9A9CA5),
-    this.border = const Color(0xFF44464E),
-    this.subtleBackground = const Color(0xFF2A2B30),
-    this.tagBackground = const Color(0x20A8A7FF),
-    this.tagBorder = const Color(0x55A8A7FF),
-    this.highlightBackground = const Color(0x99FFD54F),
-  });
-
-  final Color foreground;
-  final Color background;
-  final Color primary;
-  final Color selection;
-  final Color mutedForeground;
-  final Color border;
-  final Color subtleBackground;
-  final Color tagBackground;
-  final Color tagBorder;
-  final Color highlightBackground;
+    Color foreground = const Color(0xFFE7E7EA),
+    Color background = const Color(0xFF1E1F22),
+    Color primary = const Color(0xFFA8A7FF),
+    Color selection = const Color(0x38A8A7FF),
+    Color mutedForeground = const Color(0xFF9A9CA5),
+    Color border = const Color(0xFF44464E),
+    Color subtleBackground = const Color(0xFF2A2B30),
+    Color tagBackground = const Color(0x20A8A7FF),
+    Color tagBorder = const Color(0x55A8A7FF),
+    Color highlightBackground = const Color(0x99FFD54F),
+  }) : super.dark(
+          foreground: foreground,
+          background: background,
+          surface: background,
+          onSurface: foreground,
+          subtleSurface: subtleBackground,
+          mutedForeground: mutedForeground,
+          primary: primary,
+          onPrimary: Colors.black,
+          selection: selection,
+          border: border,
+          highlight: highlightBackground,
+          tagBackground: tagBackground,
+          tagBorder: tagBorder,
+        );
 }
 
 /// The style of the editor.
@@ -73,6 +103,9 @@ class EditorStyle {
     required this.textStyleConfiguration,
     required this.textSpanDecorator,
     required this.colorScheme,
+    bool? cursorColorIsExplicit,
+    bool? selectionColorIsExplicit,
+    bool? dragHandleColorIsExplicit,
     this.textSpanOverlayBuilder,
     this.magnifierSize = const Size(72, 48),
     this.mobileDragHandleBallSize = const Size(8, 8),
@@ -89,7 +122,9 @@ class EditorStyle {
     this.selectionMenuStyle,
     this.autoDismissCollapsedHandleDuration = const Duration(seconds: 3),
     this.maxMarkdownDecorationCharacters = 64 * 1024,
-  });
+  })  : _cursorColorIsExplicit = cursorColorIsExplicit ?? true,
+        _selectionColorIsExplicit = selectionColorIsExplicit ?? true,
+        _dragHandleColorIsExplicit = dragHandleColorIsExplicit ?? true;
 
   // The padding of the editor.
   final EdgeInsets padding;
@@ -112,7 +147,23 @@ class EditorStyle {
   final Color selectionColor;
 
   /// Unified colors for Markdown decorations and editor chrome.
-  final MDEditorColorScheme colorScheme;
+  final EditorColorScheme colorScheme;
+  final bool _cursorColorIsExplicit;
+  final bool _selectionColorIsExplicit;
+  final bool _dragHandleColorIsExplicit;
+
+  /// Resolve default editor chrome colors from the effective palette.
+  EditorStyle resolvedWith(EditorColorScheme colors) => copyWith(
+        colorScheme: colors,
+        cursorColor: _cursorColorIsExplicit ? cursorColor : colors.primary,
+        selectionColor:
+            _selectionColorIsExplicit ? selectionColor : colors.selection,
+        dragHandleColor:
+            _dragHandleColorIsExplicit ? dragHandleColor : colors.primary,
+        cursorColorIsExplicit: _cursorColorIsExplicit,
+        selectionColorIsExplicit: _selectionColorIsExplicit,
+        dragHandleColorIsExplicit: _dragHandleColorIsExplicit,
+      );
 
   // Customize the text style of the editor.
   //
@@ -191,16 +242,19 @@ class EditorStyle {
     this.textScaleFactor = 1.0,
     this.maxWidth,
     this.selectionMenuStyle,
-    MDEditorColorScheme? colorScheme,
+    EditorColorScheme? colorScheme,
     this.maxMarkdownDecorationCharacters = 64 * 1024,
-  })  : padding = padding ?? const EdgeInsets.symmetric(horizontal: 100),
-        colorScheme = colorScheme ?? const MDEditorColorScheme.light(),
+  })  : _cursorColorIsExplicit = cursorColor != null,
+        _selectionColorIsExplicit = selectionColor != null,
+        _dragHandleColorIsExplicit = false,
+        padding = padding ?? const EdgeInsets.symmetric(horizontal: 100),
+        colorScheme = colorScheme ?? const EditorColorScheme.light(),
         cursorColor = cursorColor ??
             colorScheme?.primary ??
-            const MDEditorColorScheme.light().primary,
+            const EditorColorScheme.light().primary,
         selectionColor = selectionColor ??
             colorScheme?.selection ??
-            const MDEditorColorScheme.light().selection,
+            const EditorColorScheme.light().selection,
         textStyleConfiguration = textStyleConfiguration ??
             const TextStyleConfiguration(
               text: TextStyle(fontSize: 16),
@@ -239,19 +293,22 @@ class EditorStyle {
     this.mobileDragHandleHeightExtend,
     this.autoDismissCollapsedHandleDuration = const Duration(seconds: 3),
     this.selectionMenuStyle,
-    MDEditorColorScheme? colorScheme,
+    EditorColorScheme? colorScheme,
     this.maxMarkdownDecorationCharacters = 64 * 1024,
-  })  : padding = padding ?? const EdgeInsets.symmetric(horizontal: 20),
-        colorScheme = colorScheme ?? const MDEditorColorScheme.light(),
+  })  : _cursorColorIsExplicit = cursorColor != null,
+        _selectionColorIsExplicit = selectionColor != null,
+        _dragHandleColorIsExplicit = dragHandleColor != null,
+        padding = padding ?? const EdgeInsets.symmetric(horizontal: 20),
+        colorScheme = colorScheme ?? const EditorColorScheme.light(),
         cursorColor = cursorColor ??
             colorScheme?.primary ??
-            const MDEditorColorScheme.light().primary,
+            const EditorColorScheme.light().primary,
         dragHandleColor = dragHandleColor ??
             colorScheme?.primary ??
-            const MDEditorColorScheme.light().primary,
+            const EditorColorScheme.light().primary,
         selectionColor = selectionColor ??
             colorScheme?.selection ??
-            const MDEditorColorScheme.light().selection,
+            const EditorColorScheme.light().selection,
         textStyleConfiguration = textStyleConfiguration ??
             const TextStyleConfiguration(
               text: TextStyle(fontSize: 16),
@@ -280,8 +337,11 @@ class EditorStyle {
     double? mobileDragHandleHeightExtend,
     Duration? autoDismissCollapsedHandleDuration,
     SelectionMenuStyle? selectionMenuStyle,
-    MDEditorColorScheme? colorScheme,
+    EditorColorScheme? colorScheme,
     int? maxMarkdownDecorationCharacters,
+    bool? cursorColorIsExplicit,
+    bool? selectionColorIsExplicit,
+    bool? dragHandleColorIsExplicit,
   }) {
     return EditorStyle(
       padding: padding ?? this.padding,
@@ -289,6 +349,12 @@ class EditorStyle {
       dragHandleColor: dragHandleColor ?? this.dragHandleColor,
       selectionColor: selectionColor ?? this.selectionColor,
       colorScheme: colorScheme ?? this.colorScheme,
+      cursorColorIsExplicit: cursorColorIsExplicit ??
+          (cursorColor != null || _cursorColorIsExplicit),
+      selectionColorIsExplicit: selectionColorIsExplicit ??
+          (selectionColor != null || _selectionColorIsExplicit),
+      dragHandleColorIsExplicit: dragHandleColorIsExplicit ??
+          (dragHandleColor != null || _dragHandleColorIsExplicit),
       textStyleConfiguration:
           textStyleConfiguration ?? this.textStyleConfiguration,
       textSpanDecorator: textSpanDecorator ?? this.textSpanDecorator,

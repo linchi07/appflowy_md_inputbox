@@ -161,7 +161,7 @@ class _MarkdownBlockComponentWidgetState
         decoration: BoxDecoration(
           border: Border(
             left: BorderSide(
-              color: Colors.blue.withValues(alpha: 0.5),
+              color: EditorTheme.of(context).primary.withValues(alpha: 0.5),
               width: 4,
             ),
           ),

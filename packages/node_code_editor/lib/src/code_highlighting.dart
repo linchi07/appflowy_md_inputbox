@@ -116,6 +116,7 @@ class CodeHighlighter {
     required String segment,
     required TextStyle style,
     required bool dark,
+    Color Function(CodeTokenKind kind)? tokenColor,
   }) {
     final end = start + segment.length;
     final children = <InlineSpan>[];
@@ -131,7 +132,9 @@ class CodeHighlighter {
       children.add(
         TextSpan(
           text: source.substring(tokenStart, tokenEnd),
-          style: TextStyle(color: _color(token.kind, dark)),
+          style: TextStyle(
+            color: tokenColor?.call(token.kind) ?? _color(token.kind, dark),
+          ),
         ),
       );
       position = tokenEnd;

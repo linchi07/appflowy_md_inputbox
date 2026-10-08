@@ -97,6 +97,7 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
   @override
   void dispose() {
     _copyFeedbackTimer?.cancel();
+    _languageMenu?.dismiss();
     super.dispose();
   }
 
@@ -110,16 +111,50 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
     });
   }
 
-  Future<void> _chooseLanguage() async {
-    final language = await showSearch<String>(
-      context: context,
-      delegate: _CodeLanguageSearch(),
-    );
-    if (!mounted ||
-        language == null ||
-        editorState.getNodeAtPath(node.path) != node) {
+  EditorPopoverMenu? _languageMenu;
+
+  void _chooseLanguage(BuildContext buttonContext) {
+    if (_languageMenu != null) {
+      _languageMenu!.dismiss();
       return;
     }
+    final anchor = EditorPopoverMenu.anchorRect(buttonContext);
+    if (anchor == null) return;
+    final currentLanguage =
+        node.attributes[CodeBlockKeys.language] as String? ?? '';
+    editorState.keepEditorFocusNotifier.increase();
+    _languageMenu = EditorPopoverMenu.show(
+      context: buttonContext,
+      anchor: anchor,
+      colors: editorState.editorStyle.colorScheme,
+      style: editorState.editorStyle.selectionMenuStyle,
+      width: 240,
+      maxHeight: 360,
+      searchHint: 'Code language',
+      entries: [
+        EditorMenuEntry(
+          label: 'Plain text',
+          searchKeywords: const ['plaintext', 'text'],
+          selected: currentLanguage.isEmpty,
+          onSelected: () => _setLanguage(''),
+        ),
+        for (final language in CodeHighlighter.supportedLanguages)
+          EditorMenuEntry(
+            label: language,
+            selected: currentLanguage == language,
+            onSelected: () => _setLanguage(language),
+          ),
+      ],
+      onDismiss: () {
+        _languageMenu = null;
+        editorState.keepEditorFocusNotifier.decrease();
+      },
+    );
+    if (_languageMenu == null) editorState.keepEditorFocusNotifier.decrease();
+  }
+
+  void _setLanguage(String language) {
+    if (!mounted || editorState.getNodeAtPath(node.path) != node) return;
     final opening = node.attributes[CodeBlockKeys.openingFence] as String? ??
         '```${node.attributes[CodeBlockKeys.language] ?? ''}';
     final indent = RegExp(r'^[ \t]*').stringMatch(opening) ?? '';
@@ -138,7 +173,7 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
     final language = node.attributes[CodeBlockKeys.language] as String? ?? '';
     final source = node.delta?.toPlainText() ?? '';
     final copied = _copiedSource == source;
-    final dark = Theme.of(context).brightness == Brightness.dark;
+    final dark = colors.brightness == Brightness.dark;
     final codeStyle = TextStyle(
       fontFamily: 'monospace',
       height: 1.45,
@@ -164,19 +199,25 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
                 Expanded(
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: TextButton(
-                      key: const ValueKey('code-language-picker'),
-                      onPressed: editorState.editable ? _chooseLanguage : null,
-                      style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: const Size(28, 24),
-                        alignment: Alignment.centerLeft,
-                      ),
-                      child: Text(
-                        language.isEmpty ? 'Plain text' : language,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: colors.foreground.withValues(alpha: 0.6),
+                    child: Builder(
+                      builder: (buttonContext) => TextButton(
+                        key: const ValueKey('code-language-picker'),
+                        onPressed: editorState.editable
+                            ? () => _chooseLanguage(buttonContext)
+                            : null,
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(28, 24),
+                          alignment: Alignment.centerLeft,
+                          foregroundColor: colors.mutedForeground,
+                          overlayColor: colors.hover,
+                        ),
+                        child: Text(
+                          language.isEmpty ? 'Plain text' : language,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: colors.foreground.withValues(alpha: 0.6),
+                          ),
                         ),
                       ),
                     ),
@@ -186,6 +227,9 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
                   key: const ValueKey('copy-code-block'),
                   tooltip: copied ? 'Copied' : 'Copy code',
                   icon: Icon(copied ? Icons.check : Icons.copy, size: 15),
+                  color: copied ? colors.primary : colors.mutedForeground,
+                  hoverColor: colors.hover,
+                  highlightColor: colors.selection,
                   iconSize: 15,
                   constraints:
                       const BoxConstraints.tightFor(width: 28, height: 28),
@@ -222,6 +266,13 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
                     .merge(codeStyle)
                     .copyWith(color: colors.foreground),
                 dark: dark,
+                tokenColor: (kind) => switch (kind) {
+                  CodeTokenKind.keyword => colors.syntaxColors.keyword,
+                  CodeTokenKind.string => colors.syntaxColors.string,
+                  CodeTokenKind.number => colors.syntaxColors.number,
+                  CodeTokenKind.comment => colors.syntaxColors.comment,
+                  CodeTokenKind.key => colors.syntaxColors.key,
+                },
               );
             },
             cursorColor: editorState.editorStyle.cursorColor,
@@ -270,50 +321,5 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
       );
     }
     return child;
-  }
-}
-
-class _CodeLanguageSearch extends SearchDelegate<String> {
-  @override
-  String get searchFieldLabel => 'Code language';
-
-  @override
-  List<Widget> buildActions(BuildContext context) => [
-        IconButton(
-          icon: const Icon(Icons.clear),
-          onPressed: () => query = '',
-        ),
-      ];
-
-  @override
-  Widget buildLeading(BuildContext context) => IconButton(
-        icon: const Icon(Icons.arrow_back),
-        onPressed: () => Navigator.of(context).pop(),
-      );
-
-  @override
-  Widget buildResults(BuildContext context) => buildSuggestions(context);
-
-  @override
-  Widget buildSuggestions(BuildContext context) {
-    final filtered = CodeHighlighter.supportedLanguages
-        .where((name) => name.contains(query.toLowerCase().trim()))
-        .toList();
-    return ListView.builder(
-      itemCount: filtered.length + (query.isEmpty ? 1 : 0),
-      itemBuilder: (context, index) {
-        if (query.isEmpty && index == 0) {
-          return ListTile(
-            title: const Text('Plain text'),
-            onTap: () => close(context, ''),
-          );
-        }
-        final name = filtered[index - (query.isEmpty ? 1 : 0)];
-        return ListTile(
-          title: Text(name),
-          onTap: () => close(context, name),
-        );
-      },
-    );
   }
 }

@@ -123,9 +123,10 @@ class MDEditor extends StatefulWidget {
     this.hintText,
     this.onSend,
     this.focusNode,
-    this.frontGroundColor = Colors.black,
-    this.backgroundColor = Colors.white,
+    this.frontGroundColor,
+    this.backgroundColor,
     this.colorScheme,
+    this.contextMenuBuilder = defaultContextMenuBuilder,
     this.decoration,
     this.padding = const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
     this.onPaste,
@@ -145,9 +146,10 @@ class MDEditor extends StatefulWidget {
   final FocusNode? focusNode;
   final void Function(String)? onSend;
   final FutureOr<bool> Function()? onPaste;
-  final Color frontGroundColor;
-  final Color backgroundColor;
-  final MDEditorColorScheme? colorScheme;
+  final Color? frontGroundColor;
+  final Color? backgroundColor;
+  final EditorColorScheme? colorScheme;
+  final ContextMenuWidgetBuilder? contextMenuBuilder;
   final Decoration? decoration;
   final EdgeInsets padding;
   final bool showMagnifier;
@@ -166,16 +168,16 @@ class _MDEditorState extends State<MDEditor> {
   @override
   Widget build(BuildContext context) {
     final colors = widget.colorScheme ??
-        MDEditorColorScheme.light(
+        const EditorColorScheme.light().copyWith(
           foreground: widget.frontGroundColor,
           background: widget.backgroundColor,
+          surface: widget.backgroundColor,
+          onSurface: widget.frontGroundColor,
+          // Preserve the old foreground-as-cursor behavior for this API.
           primary: widget.frontGroundColor,
-          selection: widget.frontGroundColor.withValues(alpha: 0.15),
+          selection: widget.frontGroundColor?.withValues(alpha: 0.15),
         );
-    final selectionMenuStyle = SelectionMenuStyle.fromColors(
-      backgroundColor: colors.background,
-      foregroundColor: colors.foreground,
-    );
+    final selectionMenuStyle = SelectionMenuStyle.fromScheme(colors);
     final textStyleConfiguration = TextStyleConfiguration(
       text: TextStyle(fontSize: 16, color: colors.foreground),
     );
@@ -226,6 +228,7 @@ class _MDEditorState extends State<MDEditor> {
         ),
       },
       editorStyle: editorStyle,
+      contextMenuBuilder: widget.contextMenuBuilder,
       nodeBehaviors: {
         ParagraphBlockKeys.type: codeFenceDraftParagraphBehavior,
         CodeBlockKeys.type: codeNodeBehavior,

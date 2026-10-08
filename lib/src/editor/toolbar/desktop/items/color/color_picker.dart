@@ -98,41 +98,19 @@ class _ColorPickerState extends State<ColorPicker> {
   }
 
   Widget _buildColorItem(ColorOption option, bool isChecked) {
-    return SizedBox(
-      height: 36,
-      child: TextButton.icon(
-        onPressed: () {
-          widget.onSubmittedColorHex(option.colorHex, false);
-        },
-        icon: SizedBox.square(
-          dimension: 12,
-          child: Container(
-            decoration: BoxDecoration(
-              color: option.colorHex.tryToColor(),
-              shape: BoxShape.circle,
-            ),
+    return EditorMenuItem(
+      leading: SizedBox.square(
+        dimension: 12,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: option.colorHex.tryToColor(),
+            shape: BoxShape.circle,
           ),
         ),
-        style: buildOverlayButtonStyle(context),
-        label: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Text(
-                option.name,
-                softWrap: false,
-                maxLines: 1,
-                overflow: TextOverflow.fade,
-                style: TextStyle(
-                  color: Theme.of(context).textTheme.labelLarge?.color,
-                ),
-              ),
-            ),
-            // checkbox
-            if (isChecked) const EditorSvg(name: 'checkmark'),
-          ],
-        ),
       ),
+      selected: isChecked,
+      onPressed: () => widget.onSubmittedColorHex(option.colorHex, false),
+      child: Text(option.name),
     );
   }
 
@@ -164,40 +142,16 @@ class ResetColorButton extends StatelessWidget {
   final String resetIconName;
 
   @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 32,
-      child: TextButton.icon(
+  Widget build(BuildContext context) => EditorMenuItem(
         onPressed: () => onPressed(null),
-        icon: EditorSvg(
+        leading: EditorSvg(
           name: resetIconName,
           width: 13,
           height: 13,
-          color: Theme.of(context).iconTheme.color,
+          color: EditorTheme.of(context).onSurface,
         ),
-        label: Text(
-          resetText,
-          style: TextStyle(
-            color: Theme.of(context).hintColor,
-          ),
-          textAlign: TextAlign.left,
-        ),
-        style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.resolveWith<Color>(
-            (Set<WidgetState> states) {
-              if (states.contains(WidgetState.hovered)) {
-                return Theme.of(context).hoverColor;
-              }
-
-              return Colors.transparent;
-            },
-          ),
-          alignment: Alignment.centerLeft,
-        ),
-      ),
-    );
-  }
+        child: Text(resetText),
+      );
 }
 
 class CustomColorItem extends StatefulWidget {
@@ -217,19 +171,17 @@ class CustomColorItem extends StatefulWidget {
 }
 
 class _CustomColorItemState extends State<CustomColorItem> {
+  bool _expanded = false;
+
   @override
   Widget build(BuildContext context) {
-    return ExpansionTile(
-      tilePadding: const EdgeInsets.only(left: 8),
-      shape: Border.all(
-        color: Colors.transparent,
-      ), // remove the default border when it is expanded
-      title: Row(
-        children: [
-          // color sample box
-          SizedBox.square(
+    return Column(
+      children: [
+        EditorMenuItem(
+          onPressed: () => setState(() => _expanded = !_expanded),
+          leading: SizedBox.square(
             dimension: 12,
-            child: Container(
+            child: DecoratedBox(
               decoration: BoxDecoration(
                 color: Color(
                   int.tryParse(
@@ -244,34 +196,27 @@ class _CustomColorItemState extends State<CustomColorItem> {
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              AppFlowyEditorL10n.current.customColor,
-              style: Theme.of(context).textTheme.labelLarge,
-              // same style as TextButton.icon
-            ),
+          trailing:
+              Icon(_expanded ? Icons.expand_less : Icons.expand_more, size: 16),
+          child: Text(AppFlowyEditorL10n.current.customColor),
+        ),
+        if (_expanded) ...[
+          const SizedBox(height: 6),
+          _customColorDetailsTextField(
+            labelText: AppFlowyEditorL10n.current.hexValue,
+            controller: widget.colorController,
+            onChanged: (_) => setState(() {}),
+            onSubmitted: _submitCustomColorHex,
           ),
+          const SizedBox(height: 10),
+          _customColorDetailsTextField(
+            labelText: AppFlowyEditorL10n.current.opacity,
+            controller: widget.opacityController,
+            onChanged: (_) => setState(() {}),
+            onSubmitted: _submitCustomColorHex,
+          ),
+          const SizedBox(height: 6),
         ],
-      ),
-      children: [
-        const SizedBox(height: 6),
-        _customColorDetailsTextField(
-          labelText: AppFlowyEditorL10n.current.hexValue,
-          controller: widget.colorController,
-          // update the color sample box when the text changes
-          onChanged: (_) => setState(() {}),
-          onSubmitted: _submitCustomColorHex,
-        ),
-        const SizedBox(height: 10),
-        _customColorDetailsTextField(
-          labelText: AppFlowyEditorL10n.current.opacity,
-          controller: widget.opacityController,
-          // update the color sample box when the text changes
-          onChanged: (_) => setState(() {}),
-          onSubmitted: _submitCustomColorHex,
-        ),
-        const SizedBox(height: 6),
       ],
     );
   }
@@ -284,17 +229,9 @@ class _CustomColorItemState extends State<CustomColorItem> {
   }) {
     return Padding(
       padding: const EdgeInsets.only(right: 3),
-      child: TextField(
+      child: EditorMenuTextField(
         controller: controller,
-        decoration: InputDecoration(
-          labelText: labelText,
-          border: OutlineInputBorder(
-            borderSide: BorderSide(
-              color: Theme.of(context).colorScheme.outline,
-            ),
-          ),
-        ),
-        style: Theme.of(context).textTheme.bodyMedium,
+        labelText: labelText,
         onChanged: onChanged,
         onSubmitted: onSubmitted,
       ),

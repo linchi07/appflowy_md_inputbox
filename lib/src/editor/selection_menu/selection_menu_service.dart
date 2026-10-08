@@ -36,7 +36,7 @@ class SelectionMenu extends SelectionMenuService {
     this.menuWidth = 300,
   }) : style = style ??
             editorState.editorStyle.selectionMenuStyle ??
-            SelectionMenuStyle.light;
+            SelectionMenuStyle.fromScheme(editorState.editorStyle.colorScheme);
 
   final BuildContext context;
   final EditorState editorState;
@@ -103,49 +103,52 @@ class SelectionMenu extends SelectionMenuService {
     final (left, top, right, bottom) = getPosition();
     _selectionMenuEntry = OverlayEntry(
       builder: (context) {
-        return Material(
-          type: MaterialType.transparency,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              dismiss();
-            },
-            child: Stack(
-              children: [
-                Positioned(
-                  top: top,
-                  bottom: bottom,
-                  left: left,
-                  right: right,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: SelectionMenuWidget(
-                      reverse: showAbove,
-                      selectionMenuStyle: style,
-                      singleColumn: singleColumn,
-                      items: selectionMenuItems
-                        ..forEach((element) {
-                          element.deleteSlash = deleteSlashByDefault;
-                          element.deleteKeywords = deleteKeywordsByDefault;
-                          element.onSelected = () {
-                            dismiss();
-                          };
-                        }),
-                      maxItemInRow: 5,
-                      editorState: editorState,
-                      itemCountFilter: itemCountFilter,
-                      menuService: this,
-                      onExit: () {
-                        dismiss();
-                      },
-                      onSelectionUpdate: () {
-                        _selectionUpdateByInner = true;
-                      },
-                      deleteSlashByDefault: deleteSlashByDefault,
+        return EditorTheme(
+          colors: editorState.editorStyle.colorScheme,
+          child: Material(
+            type: MaterialType.transparency,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                dismiss();
+              },
+              child: Stack(
+                children: [
+                  Positioned(
+                    top: top,
+                    bottom: bottom,
+                    left: left,
+                    right: right,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SelectionMenuWidget(
+                        reverse: showAbove,
+                        selectionMenuStyle: style,
+                        singleColumn: singleColumn,
+                        items: selectionMenuItems
+                          ..forEach((element) {
+                            element.deleteSlash = deleteSlashByDefault;
+                            element.deleteKeywords = deleteKeywordsByDefault;
+                            element.onSelected = () {
+                              dismiss();
+                            };
+                          }),
+                        maxItemInRow: 5,
+                        editorState: editorState,
+                        itemCountFilter: itemCountFilter,
+                        menuService: this,
+                        onExit: () {
+                          dismiss();
+                        },
+                        onSelectionUpdate: () {
+                          _selectionUpdateByInner = true;
+                        },
+                        deleteSlashByDefault: deleteSlashByDefault,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );

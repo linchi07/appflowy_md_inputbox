@@ -2,11 +2,12 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 
 ButtonStyle buildOverlayButtonStyle(BuildContext context) {
+  final colors = EditorTheme.of(context);
   return ButtonStyle(
     backgroundColor: WidgetStateProperty.resolveWith<Color>(
       (Set<WidgetState> states) {
         if (states.contains(WidgetState.hovered)) {
-          return Theme.of(context).hoverColor;
+          return colors.hover;
         }
 
         return Colors.transparent;
@@ -15,19 +16,8 @@ ButtonStyle buildOverlayButtonStyle(BuildContext context) {
   );
 }
 
-BoxDecoration buildOverlayDecoration(BuildContext context) {
-  return BoxDecoration(
-    color: Theme.of(context).cardColor,
-    borderRadius: BorderRadius.circular(6),
-    boxShadow: [
-      BoxShadow(
-        color: Colors.black.withValues(alpha: 0.2),
-        blurRadius: 10,
-        offset: const Offset(0, 2),
-      ),
-    ],
-  );
-}
+BoxDecoration buildOverlayDecoration(BuildContext context) =>
+    EditorMenuSurface.decoration(context);
 
 class EditorOverlayTitle extends StatelessWidget {
   const EditorOverlayTitle({super.key, required this.text});
@@ -41,7 +31,7 @@ class EditorOverlayTitle extends StatelessWidget {
         text,
         style: const TextStyle(
           fontWeight: FontWeight.bold,
-        ),
+        ).copyWith(color: EditorTheme.of(context).onSurface),
       ),
     );
   }
@@ -73,17 +63,17 @@ Widget basicOverlay(
   double? height,
   required List<Widget> children,
 }) {
-  return Container(
+  return SizedBox(
     width: width,
     height: height,
-    decoration: buildOverlayDecoration(context),
-    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-    child: ScrollConfiguration(
-      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: children,
+    child: EditorMenuSurface(
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: children,
+          ),
         ),
       ),
     ),

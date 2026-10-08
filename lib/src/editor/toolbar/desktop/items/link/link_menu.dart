@@ -48,81 +48,93 @@ class _LinkMenuState extends State<LinkMenu> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: 300,
-      decoration: buildOverlayDecoration(context),
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 5),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          EditorOverlayTitle(
-            text: AppFlowyEditorL10n.current.addYourLink,
-          ),
-          const SizedBox(height: 16.0),
-          _buildInput(),
-          const SizedBox(height: 16.0),
-          if (widget.linkText != null) ...[
-            _buildIconButton(
-              iconName: 'link',
-              text: AppFlowyEditorL10n.current.openLink,
-              onPressed: widget.onOpenLink,
+      child: EditorMenuSurface(
+        padding: const EdgeInsets.fromLTRB(10, 10, 10, 5),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            EditorOverlayTitle(
+              text: AppFlowyEditorL10n.current.addYourLink,
             ),
-            _buildIconButton(
-              iconName: 'copy',
-              text: AppFlowyEditorL10n.current.copyLink,
-              onPressed: widget.onCopyLink,
-            ),
-            _buildIconButton(
-              iconName: 'delete',
-              text: AppFlowyEditorL10n.current.removeLink,
-              onPressed: widget.onRemoveLink,
-            ),
+            const SizedBox(height: 16.0),
+            _buildInput(),
+            const SizedBox(height: 16.0),
+            if (widget.linkText != null) ...[
+              _buildIconButton(
+                iconName: 'link',
+                text: AppFlowyEditorL10n.current.openLink,
+                onPressed: widget.onOpenLink,
+              ),
+              _buildIconButton(
+                iconName: 'copy',
+                text: AppFlowyEditorL10n.current.copyLink,
+                onPressed: widget.onCopyLink,
+              ),
+              _buildIconButton(
+                iconName: 'delete',
+                text: AppFlowyEditorL10n.current.removeLink,
+                onPressed: widget.onRemoveLink,
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildInput() {
-    return KeyboardListener(
-      focusNode: FocusNode(),
-      onKeyEvent: (key) {
+    return Focus(
+      onKeyEvent: (focus, key) {
         if (key is KeyDownEvent &&
             key.logicalKey == LogicalKeyboardKey.escape) {
           widget.onDismiss();
+          return KeyEventResult.handled;
         }
+        return KeyEventResult.ignored;
       },
-      child: TextFormField(
-        autovalidateMode: AutovalidateMode.onUserInteraction,
-        focusNode: _focusNode,
-        textAlign: TextAlign.left,
-        controller: _textEditingController,
-        onFieldSubmitted: widget.onSubmitted,
-        decoration: InputDecoration(
-          hintText: AppFlowyEditorL10n.current.urlHint,
-          contentPadding: const EdgeInsets.all(16.0),
-          isDense: true,
-          suffixIcon: IconButton(
-            padding: const EdgeInsets.all(4.0),
-            icon: const EditorSvg(
-              name: 'clear',
-              width: 24,
-              height: 24,
-            ),
-            onPressed: _textEditingController.clear,
-            splashRadius: 5,
-          ),
-          border: const OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(12.0)),
-          ),
+      child: TextSelectionTheme(
+        data: TextSelectionThemeData(
+          cursorColor: EditorTheme.of(context).primary,
+          selectionColor: EditorTheme.of(context).selection,
+          selectionHandleColor: EditorTheme.of(context).primary,
         ),
-        validator: (value) {
-          if (value == null || value.isEmpty || !isUri(value)) {
-            return AppFlowyEditorL10n.current.incorrectLink;
-          }
+        child: TextFormField(
+          style:
+              TextStyle(fontSize: 12, color: EditorTheme.of(context).onSurface),
+          cursorColor: EditorTheme.of(context).primary,
+          contextMenuBuilder: EditorMenuTextField.buildContextMenu,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          focusNode: _focusNode,
+          textAlign: TextAlign.left,
+          controller: _textEditingController,
+          onFieldSubmitted: widget.onSubmitted,
+          decoration: EditorMenuTextField.inputDecoration(
+            context,
+            hintText: AppFlowyEditorL10n.current.urlHint,
+            trailing: IconButton(
+              padding: const EdgeInsets.all(4),
+              color: EditorTheme.of(context).mutedForeground,
+              hoverColor: EditorTheme.of(context).hover,
+              icon: EditorSvg(
+                name: 'clear',
+                width: 18,
+                height: 18,
+                color: EditorTheme.of(context).mutedForeground,
+              ),
+              onPressed: _textEditingController.clear,
+            ),
+          ),
+          validator: (value) {
+            if (value == null || value.isEmpty || !isUri(value)) {
+              return AppFlowyEditorL10n.current.incorrectLink;
+            }
 
-          return null;
-        },
+            return null;
+          },
+        ),
       ),
     );
   }
@@ -132,27 +144,13 @@ class _LinkMenuState extends State<LinkMenu> {
     required String text,
     required VoidCallback onPressed,
   }) {
-    return SizedBox(
-      height: 36,
-      child: TextButton.icon(
-        icon: EditorSvg(
-          name: iconName,
-          color: Theme.of(context).textTheme.labelLarge?.color,
-        ),
-        label: Row(
-          // This row is used to align the text to the left
-          children: [
-            Text(
-              text,
-              style: TextStyle(
-                color: Theme.of(context).textTheme.labelLarge?.color,
-              ),
-            ),
-          ],
-        ),
-        style: buildOverlayButtonStyle(context),
-        onPressed: onPressed,
+    return EditorMenuItem(
+      leading: EditorSvg(
+        name: iconName,
+        color: EditorTheme.of(context).onSurface,
       ),
+      onPressed: onPressed,
+      child: Text(text),
     );
   }
 }
