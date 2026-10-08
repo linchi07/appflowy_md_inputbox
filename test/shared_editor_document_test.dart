@@ -7,14 +7,47 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('application-owned view identity is emitted as the commit origin',
+      () async {
+    final shared = fixture();
+    addTearDown(shared.dispose);
+    final state = shared.createEditorState(viewId: 'app-window:tab-1');
+    expect(state.viewId, 'app-window:tab-1');
+    expect(() => shared.createEditorState(viewId: state.viewId),
+        throwsArgumentError);
+    final committed = shared.changes.first;
+    await state.apply(state.transaction
+      ..insertText(state.document.root.children.last, 0, 'app'));
+    expect((await committed).origin, state.viewId);
+  });
+
+  test('public Markdown import creates a structured baseline with valid paths',
+      () {
+    final document =
+        Document.fromMarkdown('# title\n\n| a | b |\n| --- | --- |\n| c | d |');
+    final table = document.root.children
+        .firstWhere((node) => node.type == TableBlockKeys.type);
+    expect(table.parent, same(document.root));
+    final text = TableNode(node: table).getCell(1, 1).children.single;
+    expect(document.nodeAtPath(text.path), same(text));
+    final loaded = Document.fromJson(document.toJson());
+    expect(loaded.nodeAtPath(text.path)!.id, text.id);
+    document.dispose();
+    loaded.dispose();
+  });
+
   test('UUIDv7 identity survives JSON and view cloning but duplication is new',
       () {
     final node = paragraphNode(text: 'hello');
     final table = Node(type: 'group', children: [node]);
     expect(
-        node.id,
-        matches(RegExp(
-            r'^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',),),);
+      node.id,
+      matches(
+        RegExp(
+          r'^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+        ),
+      ),
+    );
     final restored = Node.fromJson(table.toJson());
     expect(restored.id, table.id);
     expect(restored.children.single.id, node.id);
@@ -41,20 +74,28 @@ void main() {
     expect(zoom.document.root.children.single, isNot(same(original)));
     full.selection = Selection.collapsed(Position(path: [1], offset: 2));
     zoom.selection = Selection.collapsed(Position(path: [0], offset: 3));
-    await zoom.apply(zoom.transaction
-      ..insertText(zoom.document.root.children.single, 0, '中😀'),);
+    await zoom.apply(
+      zoom.transaction
+        ..insertText(zoom.document.root.children.single, 0, '中😀'),
+    );
     expect(full.document.root.children[1].delta!.toPlainText(), '中😀focus');
     expect(full.selection!.start.offset, 5);
     expect(zoom.selection!.start.offset, 3);
     await full.apply(
-        full.transaction..insertText(full.document.root.children[1], 8, '!'),);
+      full.transaction..insertText(full.document.root.children[1], 8, '!'),
+    );
     expect(
-        zoom.document.root.children.single.delta!.toPlainText(), '中😀focus!',);
+      zoom.document.root.children.single.delta!.toPlainText(),
+      '中😀focus!',
+    );
     zoom.dispose();
     await full.apply(
-        full.transaction..insertText(full.document.root.children[1], 9, '?'),);
+      full.transaction..insertText(full.document.root.children[1], 9, '?'),
+    );
     expect(
-        shared.nodeSnapshot(original.id)!.delta!.toPlainText(), '中😀focus!?',);
+      shared.nodeSnapshot(original.id)!.delta!.toPlainText(),
+      '中😀focus!?',
+    );
   });
 
   test('insertions and moves do not redirect a live reference', () async {
@@ -66,8 +107,9 @@ void main() {
     zoom.selection = Selection.collapsed(Position(path: [0], offset: 2));
     await full
         .apply(full.transaction..insertNode([0], paragraphNode(text: 'new')));
-    await zoom.apply(zoom.transaction
-      ..insertText(zoom.document.root.children.single, 0, 'X'),);
+    await zoom.apply(
+      zoom.transaction..insertText(zoom.document.root.children.single, 0, 'X'),
+    );
     expect(full.document.root.children[2].id, id);
     expect(full.document.root.children[2].delta!.toPlainText(), 'Xfocus');
     final node = full.document.root.children[2];
@@ -75,8 +117,9 @@ void main() {
     expect(full.document.root.children.first.id, id);
     expect(zoom.document.root.children.single.id, id);
     expect(zoom.selection!.start.path, [0]);
-    await zoom.apply(zoom.transaction
-      ..insertText(zoom.document.root.children.single, 6, 'Y'),);
+    await zoom.apply(
+      zoom.transaction..insertText(zoom.document.root.children.single, 6, 'Y'),
+    );
     expect(full.document.root.children.first.delta!.toPlainText(), 'XfocusY');
   });
 
@@ -87,10 +130,13 @@ void main() {
       ['c', 'd'],
     ]).node;
     final shared = SharedEditorDocument(
-        document: Document(
-            root: Node(
-                type: 'page',
-                children: [paragraphNode(text: 'before'), table],),),);
+      document: Document(
+        root: Node(
+          type: 'page',
+          children: [paragraphNode(text: 'before'), table],
+        ),
+      ),
+    );
     addTearDown(shared.dispose);
     final full = shared.createEditorState();
     final zoom = full.createNodeView(table.id);
@@ -98,23 +144,31 @@ void main() {
     final text = localTable.getCell(1, 0).children.single;
     await zoom.apply(zoom.transaction..insertText(text, 1, '!'));
     expect(
-        TableNode(node: full.document.root.children[1])
-            .getCell(1, 0)
-            .children
-            .single
-            .delta!
-            .toPlainText(),
-        'c!',);
-    await full.apply(full.transaction
-      ..updateNode(full.document.root.children[1], {'rowDefaultHeight': 80.0}),);
-    expect(zoom.document.root.children.single.attributes['rowDefaultHeight'],
-        80.0,);
+      TableNode(node: full.document.root.children[1])
+          .getCell(1, 0)
+          .children
+          .single
+          .delta!
+          .toPlainText(),
+      'c!',
+    );
+    await full.apply(
+      full.transaction
+        ..updateNode(
+            full.document.root.children[1], {'rowDefaultHeight': 80.0}),
+    );
+    expect(
+      zoom.document.root.children.single.attributes['rowDefaultHeight'],
+      80.0,
+    );
     final newText = paragraphNode(text: 'nested');
     final cell = zoom.document.root.children.single.children.first;
     await zoom.apply(zoom.transaction..insertNode([...cell.path, 1], newText));
     expect(full.document.root.children[1].children.first.children.length, 2);
-    expect(zoom.document.root.children.single.children.first.children[1].id,
-        full.document.root.children[1].children.first.children[1].id,);
+    expect(
+      zoom.document.root.children.single.children.first.children[1].id,
+      full.document.root.children[1].children.first.children[1].id,
+    );
   });
 
   test('read-only views receive updates, but cannot send edits', () async {
@@ -122,13 +176,20 @@ void main() {
     addTearDown(shared.dispose);
     final full = shared.createEditorState();
     final readOnly = shared.createEditorState(
-        nodeId: full.document.root.children[1].id, editable: false,);
+      nodeId: full.document.root.children[1].id,
+      editable: false,
+    );
     await full.apply(
-        full.transaction..insertText(full.document.root.children[1], 0, 'A'),);
+      full.transaction..insertText(full.document.root.children[1], 0, 'A'),
+    );
     expect(
-        readOnly.document.root.children.single.delta!.toPlainText(), 'Afocus',);
-    await readOnly.apply(readOnly.transaction
-      ..insertText(readOnly.document.root.children.single, 0, 'B'),);
+      readOnly.document.root.children.single.delta!.toPlainText(),
+      'Afocus',
+    );
+    await readOnly.apply(
+      readOnly.transaction
+        ..insertText(readOnly.document.root.children.single, 0, 'B'),
+    );
     expect(full.document.root.children[1].delta!.toPlainText(), 'Afocus');
   });
 
@@ -157,10 +218,12 @@ void main() {
     final zoom = full.createNodeView(full.document.root.children[1].id);
     var callbacks = 0;
     zoom.onInput = (_) => callbacks++;
-    await zoom.apply(zoom.transaction
-      ..insertText(zoom.document.root.children.single, 0, 'A'),);
+    await zoom.apply(
+      zoom.transaction..insertText(zoom.document.root.children.single, 0, 'A'),
+    );
     await full.apply(
-        full.transaction..insertText(full.document.root.children[1], 0, 'B'),);
+      full.transaction..insertText(full.document.root.children[1], 0, 'B'),
+    );
     zoom.undoManager.undo();
     expect(callbacks, 2);
     expect(full.document.root.children[1].delta!.toPlainText(), 'Bfocus');
@@ -177,12 +240,15 @@ void main() {
     addTearDown(shared.dispose);
     final full = shared.createEditorState();
     final zoom = full.createNodeView(full.document.root.children[1].id);
-    await zoom.apply(zoom.transaction
-      ..insertText(zoom.document.root.children.single, 0, 'A'),);
-    await zoom.apply(zoom.transaction
-      ..insertText(zoom.document.root.children.single, 1, 'C'),);
+    await zoom.apply(
+      zoom.transaction..insertText(zoom.document.root.children.single, 0, 'A'),
+    );
+    await zoom.apply(
+      zoom.transaction..insertText(zoom.document.root.children.single, 1, 'C'),
+    );
     await full.apply(
-        full.transaction..insertText(full.document.root.children[1], 2, 'B'),);
+      full.transaction..insertText(full.document.root.children[1], 2, 'B'),
+    );
     zoom.undoManager.undo();
     expect(zoom.document.root.children.single.delta!.toPlainText(), 'ABfocus');
     zoom.undoManager.undo();
@@ -218,21 +284,29 @@ void main() {
     await zoom.pastePlainText('one\ntwo\n');
     await zoom.append('\nthree');
     expect(full.document.root.children[1].id, id);
-    expect(full.document.root.children[1].delta!.toPlainText(),
-        'one\ntwo\nfocus\nthree',);
+    expect(
+      full.document.root.children[1].delta!.toPlainText(),
+      'one\ntwo\nfocus\nthree',
+    );
     await zoom.setText('replacement\nparagraph');
     expect(full.document.root.children[1].id, id);
-    expect(full.document.root.children[1].delta!.toPlainText(),
-        'replacement\nparagraph',);
+    expect(
+      full.document.root.children[1].delta!.toPlainText(),
+      'replacement\nparagraph',
+    );
     expect(zoom.undoManager.canUndo, isFalse);
   });
 
   test('one-node Markdown promotion preserves the reference identity',
       () async {
     final shared = SharedEditorDocument(
-        document: Document(
-            root: Node(
-                type: 'page', children: [paragraphNode(text: '```dart')],),),);
+      document: Document(
+        root: Node(
+          type: 'page',
+          children: [paragraphNode(text: '```dart')],
+        ),
+      ),
+    );
     addTearDown(shared.dispose);
     final full = shared.createEditorState();
     final id = full.document.root.children.single.id;
@@ -245,10 +319,14 @@ void main() {
     expect(full.document.root.children.single.id, id);
     expect(full.document.root.children.single.type, CodeBlockKeys.type);
     expect(zoom.document.root.children.single.type, CodeBlockKeys.type);
-    await zoom.apply(zoom.transaction
-      ..insertText(zoom.document.root.children.single, 0, 'print(1);'),);
+    await zoom.apply(
+      zoom.transaction
+        ..insertText(zoom.document.root.children.single, 0, 'print(1);'),
+    );
     expect(
-        full.document.root.children.single.delta!.toPlainText(), 'print(1);',);
+      full.document.root.children.single.delta!.toPlainText(),
+      'print(1);',
+    );
   });
 
   test('structural undo cannot erase another view edit inside a new node',
@@ -259,12 +337,16 @@ void main() {
     await full
         .apply(full.transaction..insertNode([0], paragraphNode(text: 'new')));
     final zoom = full.createNodeView(full.document.root.children.first.id);
-    await zoom.apply(zoom.transaction
-      ..insertText(zoom.document.root.children.single, 3, ' edited'),);
+    await zoom.apply(
+      zoom.transaction
+        ..insertText(zoom.document.root.children.single, 3, ' edited'),
+    );
     expect(full.undoManager.canUndo, isFalse);
     full.undoManager.undo();
     expect(
-        full.document.root.children.first.delta!.toPlainText(), 'new edited',);
+      full.document.root.children.first.delta!.toPlainText(),
+      'new edited',
+    );
   });
 
   test('invalid incoming operations are atomic and cannot bypass the host',
@@ -274,23 +356,31 @@ void main() {
     final full = shared.createEditorState();
     final before = jsonEncode(shared.toJson());
     expect(
-        () => shared.applyChange(SharedDocumentChange(
-                documentId: shared.documentId,
-                origin: 'external',
-                baseRevision: shared.revision,
-                operations: [
-                  SharedOperation.text(full.document.root.children[1].id,
-                      Delta()..insert('valid'),),
-                  SharedOperation.text('missing', Delta()..insert('invalid')),
-                ],),),
-        throwsStateError,);
+      () => shared.applyChange(
+        SharedDocumentChange(
+          documentId: shared.documentId,
+          origin: 'external',
+          baseRevision: shared.revision,
+          operations: [
+            SharedOperation.text(
+              full.document.root.children[1].id,
+              Delta()..insert('valid'),
+            ),
+            SharedOperation.text('missing', Delta()..insert('invalid')),
+          ],
+        ),
+      ),
+      throwsStateError,
+    );
     expect(jsonEncode(shared.toJson()), before);
     await expectLater(
-        full.apply(
-            full.transaction
-              ..insertText(full.document.root.children[1], 0, 'bypass'),
-            isRemote: true,),
-        throwsStateError,);
+      full.apply(
+        full.transaction
+          ..insertText(full.document.root.children[1], 0, 'bypass'),
+        isRemote: true,
+      ),
+      throwsStateError,
+    );
     expect(jsonEncode(shared.toJson()), before);
   });
 
@@ -324,11 +414,15 @@ void main() {
     final full = source.createEditorState();
     final mirror = receiver.createEditorState();
     final changeFuture = source.changes.first;
-    await full.apply(full.transaction
-      ..insertText(full.document.root.children[1], 0, 'sync'),);
+    await full.apply(
+      full.transaction..insertText(full.document.root.children[1], 0, 'sync'),
+    );
     final change = await changeFuture;
-    receiver.applyChange(SharedDocumentChange.fromJson(
-        jsonDecode(jsonEncode(change.toJson())) as Map<String, dynamic>,),);
+    receiver.applyChange(
+      SharedDocumentChange.fromJson(
+        jsonDecode(jsonEncode(change.toJson())) as Map<String, dynamic>,
+      ),
+    );
     expect(mirror.document.root.children[1].delta!.toPlainText(), 'syncfocus');
     expect(receiver.toJson(), source.toJson());
     expect(() => receiver.applyChange(change), throwsStateError);
@@ -342,19 +436,34 @@ void main() {
     final zoom = full.createNodeView(full.document.root.children[1].id);
     final fullController = MDEditorController.fromEditorState(full);
     final zoomController = MDEditorController.fromEditorState(zoom);
-    await tester.pumpWidget(MaterialApp(
-        home: Row(children: [
-      Expanded(
-          child: MDEditor(
-              controller: fullController, multiLine: true, shrinkWrap: false,),),
-      Expanded(
-          child: MDEditor(
-              controller: zoomController, multiLine: true, shrinkWrap: false,),),
-    ],),),);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Row(
+          children: [
+            Expanded(
+              child: MDEditor(
+                controller: fullController,
+                multiLine: true,
+                shrinkWrap: false,
+              ),
+            ),
+            Expanded(
+              child: MDEditor(
+                controller: zoomController,
+                multiLine: true,
+                shrinkWrap: false,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    await zoom.apply(zoom.transaction
-      ..insertText(zoom.document.root.children.single, 0, 'live '),);
+    await zoom.apply(
+      zoom.transaction
+        ..insertText(zoom.document.root.children.single, 0, 'live '),
+    );
     await tester.pumpAndSettle();
     expect(full.document.root.children[1].delta!.toPlainText(), 'live focus');
     expect(tester.takeException(), isNull);
@@ -366,9 +475,14 @@ void main() {
 }
 
 SharedEditorDocument fixture() => SharedEditorDocument(
-        document: Document(
-            root: Node(type: 'page', children: [
-      paragraphNode(text: 'before'),
-      paragraphNode(text: 'focus'),
-      paragraphNode(text: 'after'),
-    ],),),);
+      document: Document(
+        root: Node(
+          type: 'page',
+          children: [
+            paragraphNode(text: 'before'),
+            paragraphNode(text: 'focus'),
+            paragraphNode(text: 'after'),
+          ],
+        ),
+      ),
+    );

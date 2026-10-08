@@ -14,6 +14,11 @@ final mainController = MDEditorController.fromEditorState(main);
 final enlargedController = MDEditorController.fromEditorState(enlarged);
 ```
 
+An application can supply `viewId` to `createEditorState`; that identity is also
+the origin in emitted changes. Omitting it generates a UUIDv7. A document cannot
+attach two live states with the same view ID. Window placement and the lifetime
+of those instances belong to the application, not to Flamingo.
+
 Use a separate `MDEditor` or `AppFlowyEditor` for each state. For large documents,
 give the editor a bounded viewport and use `shrinkWrap: false`.
 

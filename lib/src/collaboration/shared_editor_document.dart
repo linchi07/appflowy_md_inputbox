@@ -48,11 +48,18 @@ class SharedEditorDocument {
 
   /// A null nodeId opens the whole document. A node ID opens that live subtree.
   EditorState createEditorState({
+    String? viewId,
     String? nodeId,
     bool editable = true,
     int maxHistoryItemSize = 200,
   }) {
     _checkOpen();
+    if (viewId != null &&
+        (viewId.isEmpty ||
+            _views.values.any((view) => view.viewId == viewId))) {
+      throw ArgumentError.value(
+          viewId, 'viewId', 'View identity must be unique.');
+    }
     if (maxHistoryItemSize < 1) {
       throw ArgumentError.value(maxHistoryItemSize, 'maxHistoryItemSize');
     }
@@ -60,7 +67,7 @@ class SharedEditorDocument {
     if (nodeId != null && !_index.containsKey(nodeId)) {
       throw ArgumentError.value(nodeId, 'nodeId', 'Unknown node');
     }
-    final view = _View(this, nodeId, maxHistoryItemSize);
+    final view = _View(this, nodeId, maxHistoryItemSize, viewId: viewId);
     final state = EditorState(
       document: _projection(nodeId),
       transactionHost: view,
@@ -115,7 +122,7 @@ class SharedEditorDocument {
     _commit(
       SharedDocumentChange(
         documentId: documentId,
-        origin: view.id,
+        origin: view.viewId,
         baseRevision: revision,
         operations: operations,
       ),
@@ -348,11 +355,14 @@ class SharedEditorDocument {
             withUpdateSelection &&
             transaction != null) {
           final after = transaction.afterSelection;
-          view.state.updateSharedSelection(after != null &&
-                  view.state.document.nodeAtPath(after.start.path) != null &&
-                  view.state.document.nodeAtPath(after.end.path) != null
-              ? after
-              : null, localTransaction: transaction,);
+          view.state.updateSharedSelection(
+            after != null &&
+                    view.state.document.nodeAtPath(after.start.path) != null &&
+                    view.state.document.nodeAtPath(after.end.path) != null
+                ? after
+                : null,
+            localTransaction: transaction,
+          );
         } else {
           view.state.updateSharedSelection(selection);
         }
@@ -408,7 +418,7 @@ class SharedEditorDocument {
     final inverse = _commit(
       SharedDocumentChange(
         documentId: documentId,
-        origin: view.id,
+        origin: view.viewId,
         baseRevision: revision,
         operations: item.operations,
       ),
@@ -419,21 +429,23 @@ class SharedEditorDocument {
   }
 
   void _rebaseHistory(_View view, SharedDocumentChange change) {
-    if (change.origin != view.id) {
+    if (change.origin != view.viewId) {
       for (final stack in [view.undoHistory, view.redoHistory]) {
         // A local inverse must not erase a subtree another view has edited.
-        stack.removeWhere((history) => history.operations.any((pending) {
-              if (pending.kind != 'delete') return false;
-              final roots = pending.nodeIds.toSet();
-              for (final operation in change.operations) {
-                final id = operation.nodeId ??
-                    (operation.kind == 'insert' ? operation.parentId : null);
-                for (var node = _index[id]; node != null; node = node.parent) {
-                  if (roots.contains(node.id)) return true;
-                }
+        stack.removeWhere(
+          (history) => history.operations.any((pending) {
+            if (pending.kind != 'delete') return false;
+            final roots = pending.nodeIds.toSet();
+            for (final operation in change.operations) {
+              final id = operation.nodeId ??
+                  (operation.kind == 'insert' ? operation.parentId : null);
+              for (var node = _index[id]; node != null; node = node.parent) {
+                if (roots.contains(node.id)) return true;
               }
-              return false;
-            }),);
+            }
+            return false;
+          }),
+        );
         for (final operation in change.operations) {
           var applied = operation;
           for (final history in stack.reversed) {
@@ -475,14 +487,17 @@ class SharedEditorDocument {
     }
     for (final stack in [view.undoHistory, view.redoHistory]) {
       for (final history in stack) {
-        history.operations.removeWhere((operation) =>
-            (operation.kind == 'text' && operation.delta.isEmpty) ||
-            (operation.kind == 'update' && operation.attributes.isEmpty),);
+        history.operations.removeWhere(
+          (operation) =>
+              (operation.kind == 'text' && operation.delta.isEmpty) ||
+              (operation.kind == 'update' && operation.attributes.isEmpty),
+        );
       }
       stack.removeWhere((history) => history.operations.isEmpty);
     }
-    if (!change.operations.any((operation) =>
-        operation.kind == 'insert' || operation.kind == 'delete',)) {
+    if (!change.operations.any(
+      (operation) => operation.kind == 'insert' || operation.kind == 'delete',
+    )) {
       return;
     }
     // Structural undo cannot resurrect a subtree changed by another view.
@@ -496,7 +511,8 @@ class SharedEditorDocument {
         }
         if (operation.kind == 'delete' &&
             operation.nodeIds.any(
-                (id) => !_index.containsKey(id) && !restored.contains(id),)) {
+              (id) => !_index.containsKey(id) && !restored.contains(id),
+            )) {
           return false;
         }
         if (operation.kind == 'insert') {
@@ -532,12 +548,14 @@ class SharedEditorDocument {
 }
 
 class _View implements EditorTransactionHost {
-  _View(this.owner, this.referenceNodeId, this.historyLimit);
+  _View(this.owner, this.referenceNodeId, this.historyLimit, {String? viewId})
+      : viewId = viewId ?? const Uuid().v7();
   final SharedEditorDocument owner;
   @override
   final String? referenceNodeId;
   final int historyLimit;
-  final String id = const Uuid().v7();
+  @override
+  final String viewId;
   late EditorState state;
   late Map<String, Node> index;
   final List<_History> undoHistory = [];

@@ -178,6 +178,8 @@ class EditorState {
   /// Supplied by SharedEditorDocument; applications do not need a binding layer.
   final EditorTransactionHost? transactionHost;
 
+  String? get viewId => transactionHost?.viewId;
+
   String? get referenceNodeId => transactionHost?.referenceNodeId;
 
   bool get isNodeReference => referenceNodeId != null;
@@ -949,7 +951,8 @@ class EditorState {
   }
 
   @internal
-  void updateSharedSelection(Selection? value, {Transaction? localTransaction}) {
+  void updateSharedSelection(Selection? value,
+      {Transaction? localTransaction}) {
     _selectionUpdateReason = localTransaction?.reason ??
         (localTransaction == null
             ? SelectionUpdateReason.remote

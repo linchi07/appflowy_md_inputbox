@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:appflowy_editor/src/service/markdown_parser.dart';
 
 /// [Document] represents an AppFlowy Editor document structure.
 ///
@@ -12,6 +13,11 @@ class Document {
   Document({
     required this.root,
   });
+
+  /// Import source once, then create independent views of its persistent nodes.
+  factory Document.fromMarkdown(String markdown) => Document(
+        root: Node(type: 'page', children: parseMarkdownToNodes(markdown)),
+      );
 
   /// Constructs a [Document] from a JSON strcuture.
   ///
