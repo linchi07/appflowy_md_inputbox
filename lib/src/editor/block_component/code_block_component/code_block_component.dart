@@ -24,19 +24,19 @@ Node codeBlockNode({
   String language = '',
   String? openingFence,
   bool closed = true,
-}) =>
-    Node(
-      type: CodeBlockKeys.type,
-      attributes: {
-        blockComponentDelta: (Delta()..insert(code)).toJson(),
-        CodeBlockKeys.language: language,
-        CodeBlockKeys.openingFence: openingFence ?? '```$language',
-        CodeBlockKeys.closed: closed,
-      },
-    );
+}) => Node(
+  type: CodeBlockKeys.type,
+  attributes: {
+    blockComponentDelta: (Delta()..insert(code)).toJson(),
+    CodeBlockKeys.language: language,
+    CodeBlockKeys.openingFence: openingFence ?? '```$language',
+    CodeBlockKeys.closed: closed,
+  },
+);
 
 String codeBlockToMarkdown(Node node) {
-  final opening = node.attributes[CodeBlockKeys.openingFence] as String? ??
+  final opening =
+      node.attributes[CodeBlockKeys.openingFence] as String? ??
       '```${node.attributes[CodeBlockKeys.language] ?? ''}';
   final code = node.delta?.toPlainText() ?? '';
   final closed = node.attributes[CodeBlockKeys.closed] == true;
@@ -59,7 +59,8 @@ class CodeBlockComponentBuilder extends BlockComponentBuilder {
       );
 
   @override
-  BlockComponentValidate get validate => (node) => node.delta != null;
+  BlockComponentValidate get validate =>
+      (node) => node.delta != null;
 }
 
 class CodeBlockComponentWidget extends BlockComponentStatefulWidget {
@@ -155,15 +156,15 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
 
   void _setLanguage(String language) {
     if (!mounted || editorState.getNodeAtPath(node.path) != node) return;
-    final opening = node.attributes[CodeBlockKeys.openingFence] as String? ??
+    final opening =
+        node.attributes[CodeBlockKeys.openingFence] as String? ??
         '```${node.attributes[CodeBlockKeys.language] ?? ''}';
     final indent = RegExp(r'^[ \t]*').stringMatch(opening) ?? '';
     editorState.apply(
-      editorState.transaction
-        ..updateNode(node, {
-          CodeBlockKeys.language: language,
-          CodeBlockKeys.openingFence: '$indent```$language',
-        }),
+      editorState.transaction..updateNode(node, {
+        CodeBlockKeys.language: language,
+        CodeBlockKeys.openingFence: '$indent```$language',
+      }),
     );
   }
 
@@ -174,10 +175,7 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
     final source = node.delta?.toPlainText() ?? '';
     final copied = _copiedSource == source;
     final dark = colors.brightness == Brightness.dark;
-    final codeStyle = TextStyle(
-      fontFamily: 'monospace',
-      height: 1.45,
-    );
+    final codeStyle = TextStyle(fontFamily: 'monospace', height: 1.45);
     Widget child = Container(
       key: codeBlockContainerKey,
       width: double.infinity,
@@ -231,8 +229,10 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
                   hoverColor: colors.hover,
                   highlightColor: colors.selection,
                   iconSize: 15,
-                  constraints:
-                      const BoxConstraints.tightFor(width: 28, height: 28),
+                  constraints: const BoxConstraints.tightFor(
+                    width: 28,
+                    height: 28,
+                  ),
                   padding: EdgeInsets.zero,
                   visualDensity: VisualDensity.compact,
                   onPressed: () => _copyCode(source),
@@ -250,36 +250,36 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget>
             textSpanDecorator: (span) => span.updateTextStyle(codeStyle),
             textSpanDecoratorForCustomAttributes:
                 (context, node, offset, insert, before, after) {
-              // Completion inserts are display-only and extend past the
-              // document text. Keep their ghost/transparent styling intact.
-              if (insert.attributes?.autoComplete == true ||
-                  insert.attributes?.transparent == true ||
-                  offset + insert.text.length > source.length) {
-                return before;
-              }
-              return _highlighter.spanForSegment(
-                source: source,
-                language: language,
-                start: offset,
-                segment: insert.text,
-                style: (before.style ?? const TextStyle())
-                    .merge(codeStyle)
-                    .copyWith(color: colors.foreground),
-                dark: dark,
-                tokenColor: (kind) => switch (kind) {
-                  CodeTokenKind.keyword => colors.syntaxColors.keyword,
-                  CodeTokenKind.string => colors.syntaxColors.string,
-                  CodeTokenKind.number => colors.syntaxColors.number,
-                  CodeTokenKind.comment => colors.syntaxColors.comment,
-                  CodeTokenKind.key => colors.syntaxColors.key,
+                  // Completion inserts are display-only and extend past the
+                  // document text. Keep their ghost/transparent styling intact.
+                  if (insert.attributes?.autoComplete == true ||
+                      insert.attributes?.transparent == true ||
+                      offset + insert.text.length > source.length) {
+                    return before;
+                  }
+                  return _highlighter.spanForSegment(
+                    source: source,
+                    language: language,
+                    start: offset,
+                    segment: insert.text,
+                    style: (before.style ?? const TextStyle())
+                        .merge(codeStyle)
+                        .copyWith(color: colors.foreground),
+                    dark: dark,
+                    tokenColor: (kind) => switch (kind) {
+                      CodeTokenKind.keyword => colors.syntaxColors.keyword,
+                      CodeTokenKind.string => colors.syntaxColors.string,
+                      CodeTokenKind.number => colors.syntaxColors.number,
+                      CodeTokenKind.comment => colors.syntaxColors.comment,
+                      CodeTokenKind.key => colors.syntaxColors.key,
+                    },
+                  );
                 },
-              );
-            },
             cursorColor: editorState.editorStyle.cursorColor,
             selectionColor: editorState.editorStyle.selectionColor,
             cursorWidth: editorState.editorStyle.cursorWidth,
           ),
-          if (editorState.editable)
+          if (editorState.editable && editorState.referenceNodeId != node.id)
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(

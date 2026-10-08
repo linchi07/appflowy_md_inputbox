@@ -120,28 +120,21 @@ class _TableColState extends State<TableCol> {
       final rowHeight = widget.tableNode.getRowHeight(i);
       cells.addAll([
         Container(
-          constraints: BoxConstraints(
-            minHeight: rowHeight,
-          ),
-          child: widget.editorState.renderer.build(
-            context,
-            node,
-          ),
+          constraints: BoxConstraints(minHeight: rowHeight),
+          child: widget.editorState.renderer.build(context, node),
         ),
         cellBorder,
       ]);
     }
 
-    for (final staleNode in _listeners.keys
-        .where((node) => !activeNodes.contains(node))
-        .toList()) {
+    for (final staleNode
+        in _listeners.keys
+            .where((node) => !activeNodes.contains(node))
+            .toList()) {
       staleNode.removeListener(_listeners.remove(staleNode)!.$2);
     }
 
-    return [
-      cellBorder,
-      ...cells,
-    ];
+    return [cellBorder, ...cells];
   }
 
   void addListener(Node node, int row) {
@@ -168,11 +161,15 @@ class _TableColState extends State<TableCol> {
         widget.tableNode.updateRowHeight(
           row,
           editorState: widget.editorState,
-          transaction: transaction,
+          // Measured height belongs to this view's layout, not shared content.
+          transaction: widget.editorState.viewId == null ? transaction : null,
         );
         if (transaction.operations.isNotEmpty) {
           transaction.afterSelection = transaction.beforeSelection;
-          widget.editorState.apply(transaction);
+          widget.editorState.apply(
+            transaction,
+            options: const ApplyOptions(source: TransactionSource.none),
+          );
         }
       });
 }

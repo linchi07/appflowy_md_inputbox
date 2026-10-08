@@ -5,13 +5,15 @@ version: 6.1.0
 homepage: "https://github.com/AppFlowy-IO/appflowy-editor"
 
 environment:
-  sdk: ">=3.6.0 <4.0.0"
-  flutter: ">=3.32.0"
+  sdk: ">=3.11.0 <4.0.0"
+  flutter: ">=3.41.0"
 
 description: A highly customizable rich-text editor for Flutter. The AppFlowy
   Editor project for AppFlowy and beyond.
 
 dependencies:
+  flamingo_yffi:
+    path: packages/flamingo_yffi
   node_code_editor:
     path: packages/node_code_editor
   collection: "^1.18.0"

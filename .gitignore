@@ -132,3 +132,6 @@ app.*.symbols
 !/dev/ci/**/Gemfile.lock
 
 .fvm/
+
+**/target/
+!packages/flamingo_yffi/native/Cargo.lock

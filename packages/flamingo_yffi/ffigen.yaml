@@ -1,0 +1,23 @@
+name: YffiBindings
+description: Generated from the pinned official yffi C header.
+output: lib/src/bindings.g.dart
+headers:
+  entry-points:
+    - vendor/y-crdt/tests-ffi/include/libyrs.h
+ffi-native:
+  asset-id: package:flamingo_yffi/src/bindings.g.dart
+functions:
+  include:
+    - 'y.*'
+structs:
+  include: ['Y.*', 'Branch', 'Transaction.*', 'StickyIndex', 'LinkSource', 'Unquote']
+unions:
+  include: ['Y.*']
+typedefs:
+  include: ['Y.*', 'Weak']
+macros:
+  include: ['Y.*', 'ERR.*']
+globals:
+  exclude: ['.*']
+preamble: |
+  // ignore_for_file: camel_case_types, non_constant_identifier_names

@@ -1,0 +1,3 @@
+[submodule "packages/flamingo_yffi/vendor/y-crdt"]
+	path = packages/flamingo_yffi/vendor/y-crdt
+	url = https://github.com/y-crdt/y-crdt.git

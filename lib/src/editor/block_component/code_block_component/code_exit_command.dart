@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 bool insertParagraphAfterCode(EditorState editorState, Node node) {
   if (!editorState.editable ||
       node.type != CodeBlockKeys.type ||
+      (editorState.isNodeReference && editorState.referenceNodeId == node.id) ||
       editorState.getNodeAtPath(node.path) != node) {
     return false;
   }
