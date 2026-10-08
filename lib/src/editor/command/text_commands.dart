@@ -28,6 +28,11 @@ extension TextTransforms on EditorState {
       return;
     }
 
+    if (node.id == referenceNodeId && node.delta != null) {
+      await apply(this.transaction..insertText(node, position.offset, '\n'));
+      return;
+    }
+
     // Get the transaction and the path of the next node.
     final transaction = this.transaction;
     final next = position.path.next;

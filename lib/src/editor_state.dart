@@ -149,6 +149,7 @@ final RegExp _phoneRegex = RegExp(r'^\+?' // Optional '+' at start
 class EditorState {
   EditorState({
     required this.document,
+    this.transactionHost,
     this.minHistoryItemDuration = const Duration(milliseconds: 50),
     int? maxHistoryItemSize,
   }) {
@@ -173,6 +174,27 @@ class EditorState {
         );
 
   final Document document;
+
+  /// Supplied by SharedEditorDocument; applications do not need a binding layer.
+  final EditorTransactionHost? transactionHost;
+
+  String? get referenceNodeId => transactionHost?.referenceNodeId;
+
+  bool get isNodeReference => referenceNodeId != null;
+
+  bool get isReferenceMissing =>
+      isNodeReference && document.root.children.isEmpty;
+
+  /// Opens the same content with independent selection, focus and render nodes.
+  EditorState createNodeView(String nodeId) {
+    final host = transactionHost;
+    if (host == null) {
+      throw StateError(
+        'Create this editor through SharedEditorDocument first.',
+      );
+    }
+    return host.createNodeView(nodeId);
+  }
 
   // the minimum duration for saving the history item.
   final Duration minHistoryItemDuration;
@@ -400,6 +422,21 @@ class EditorState {
   /// Replaces the document and completes after parsing and applying it.
   Future<void> setText(String value) async {
     if (isDisposed) return;
+    if (isNodeReference) {
+      final node = document.root.children.firstOrNull;
+      if (node == null || node.delta == null) {
+        throw StateError('This reference has no replaceable text.');
+      }
+      await apply(
+        this.transaction
+          ..replaceText(node, 0, node.delta!.length, value)
+          ..afterSelection = Selection.collapsed(
+            Position(path: node.path, offset: value.length),
+          ),
+      );
+      transactionHost?.clearHistory();
+      return;
+    }
     final revision = ++_textRevision;
     final documentRevision = _documentRevision;
 
@@ -441,11 +478,13 @@ class EditorState {
     // Clear undo history.
     undoManager.undoStack.clear();
     undoManager.redoStack.clear();
+    transactionHost?.clearHistory();
   }
 
   /// Appends markdown text to the end of the document.
   Future<void> append(String value) async {
     if (isDisposed || value.isEmpty) return;
+    if (isReferenceMissing) return;
 
     // Move cursor to the end
     final lastNode = document.root.children.last;
@@ -462,7 +501,7 @@ class EditorState {
 
   /// Pastes plain text (parsed as markdown) into the document.
   Future<void> pastePlainText(String plainText) async {
-    if (isDisposed) return;
+    if (isDisposed || isReferenceMissing) return;
     // Optional nodes may own the literal paste behavior for their contents.
     final literalSelection = selection;
     final literalNode = literalSelection == null || !literalSelection.isSingle
@@ -473,7 +512,12 @@ class EditorState {
         ? pasteBehavior?.literalPaste
             ?.call(this, literalNode, literalSelection, plainText)
         : null;
-    if (pasteBehavior?.pasteAsPlainText == true || literalText != null) {
+    final liveParagraph = literalNode?.id == referenceNodeId &&
+        referenceNodeId != null &&
+        literalNode?.delta != null;
+    if (pasteBehavior?.pasteAsPlainText == true ||
+        literalText != null ||
+        liveParagraph) {
       final collapsed = await deleteSelectionIfNeeded();
       final currentNode =
           collapsed == null ? null : getNodeAtPath(collapsed.start.path);
@@ -608,7 +652,10 @@ class EditorState {
   late final UndoManager undoManager;
 
   Transaction get transaction {
-    final transaction = Transaction(document: document);
+    final transaction = Transaction(
+      document: document,
+      baseRevision: transactionHost?.revision,
+    );
     transaction.beforeSelection = selection;
 
     return transaction;
@@ -664,6 +711,13 @@ class EditorState {
 
     _subscription?.cancel();
     _subscription = _asyncObserver.stream.listen((value) async {
+      if (isDisposed || isReferenceMissing) return;
+      final base = value.$2.baseRevision;
+      if (base != null &&
+          transactionHost != null &&
+          base + 1 < transactionHost!.revision) {
+        return;
+      }
       for (final rule in _documentRules) {
         if (rule.shouldApply(editorState: this, value: value)) {
           await rule.apply(editorState: this, value: value);
@@ -767,6 +821,7 @@ class EditorState {
   void dispose() {
     if (isDisposed) return;
     isDisposed = true;
+    transactionHost?.detach();
     _textRevision++;
     _observer.close();
     _asyncObserver.close();
@@ -806,7 +861,20 @@ class EditorState {
     bool withUpdateSelection = true,
     bool skipHistoryDebounce = false,
   }) async {
-    if (!editable || isDisposed) {
+    if ((!editable && !isRemote) || isDisposed) {
+      return;
+    }
+
+    final host = transactionHost;
+    if (host != null) {
+      if (isRemote) {
+        throw StateError('Apply ID changes through SharedEditorDocument.');
+      }
+      await host.apply(
+        transaction,
+        options: options,
+        withUpdateSelection: withUpdateSelection,
+      );
       return;
     }
 
@@ -869,6 +937,45 @@ class EditorState {
   /// Force rebuild the editor.
   void reload() {
     document.root.notify();
+  }
+
+  /// Applies a host-prepared projection without history or outgoing callbacks.
+  @internal
+  void applySharedProjection(Transaction transaction) {
+    if (isDisposed) return;
+    if (transaction.operations.isNotEmpty) _documentRevision++;
+    _applyTransactionInLocal(transaction);
+    if (characterCounter != null) characterCounter!.value = textLength;
+  }
+
+  @internal
+  void updateSharedSelection(Selection? value, {Transaction? localTransaction}) {
+    _selectionUpdateReason = localTransaction?.reason ??
+        (localTransaction == null
+            ? SelectionUpdateReason.remote
+            : SelectionUpdateReason.transaction);
+    if (localTransaction != null) {
+      _selectionType = localTransaction.customSelectionType;
+      if (localTransaction.selectionExtraInfo != null) {
+        selectionExtraInfo = localTransaction.selectionExtraInfo;
+      }
+    }
+    selection = value;
+  }
+
+  /// Publishes only the originating edit after every attached view is current.
+  @internal
+  void publishSharedTransaction(
+    TransactionTime time,
+    Transaction transaction,
+    ApplyOptions options,
+  ) {
+    if (isDisposed) return;
+    if (!_observer.isClosed) _observer.add((time, transaction, options));
+    if (!_asyncObserver.isClosed) {
+      _asyncObserver.add((time, transaction, options));
+    }
+    if (time == TransactionTime.after) onInput?.call(this);
   }
 
   /// get nodes in selection

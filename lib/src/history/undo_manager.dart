@@ -109,6 +109,9 @@ class UndoManager {
   final FixedSizeStack redoStack;
   EditorState? state;
 
+  bool get canUndo => state?.transactionHost?.canUndo ?? undoStack.isNonEmpty;
+  bool get canRedo => state?.transactionHost?.canRedo ?? redoStack.isNonEmpty;
+
   UndoManager([int stackSize = 20])
       : undoStack = FixedSizeStack(stackSize),
         redoStack = FixedSizeStack(stackSize);
@@ -214,6 +217,11 @@ class UndoManager {
     if (s == null) {
       return;
     }
+    final host = s.transactionHost;
+    if (host != null) {
+      host.undo();
+      return;
+    }
     final historyItem = undoStack.pop();
     if (historyItem == null) {
       return;
@@ -229,6 +237,11 @@ class UndoManager {
     AppFlowyEditorLog.editor.debug('redo');
     final s = state;
     if (s == null) {
+      return;
+    }
+    final host = s.transactionHost;
+    if (host != null) {
+      host.redo();
       return;
     }
     final historyItem = redoStack.pop();

@@ -8,6 +8,11 @@ void handlePastePlainText(EditorState editorState, String plainText) {
   if (selection == null) {
     return;
   }
+  final node = editorState.getNodeAtPath(selection.start.path);
+  if (node?.id == editorState.referenceNodeId && node?.delta != null) {
+    editorState.pastePlainText(plainText);
+    return;
+  }
 
   // Simplified: treat entire text as lines and insert them.
   final lines = plainText.split('\n');

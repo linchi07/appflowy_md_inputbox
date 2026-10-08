@@ -83,10 +83,24 @@ class TextNodePromotionRule extends DocumentRule {
         promotion.caretNodeIndexForOffset?.call(selection.start.offset) ??
             promotion.caretNodeIndex;
     if (caretNodeIndex < 0 || caretNodeIndex >= promotion.nodes.length) return;
+    if (node.id == editorState.referenceNodeId && promotion.nodes.length != 1) {
+      return;
+    }
     await editorState.apply(
       editorState.transaction
-        ..insertNodes(path, promotion.nodes)
-        ..deleteNode(node)
+        ..operations = [
+          DeleteOperation(path, [node]),
+          InsertOperation(path, [
+            for (var i = 0; i < promotion.nodes.length; i++)
+              Node(
+                type: promotion.nodes[i].type,
+                id: i == caretNodeIndex ? node.id : promotion.nodes[i].id,
+                attributes: promotion.nodes[i].cloneForView().attributes,
+                children: promotion.nodes[i].children
+                    .map((child) => child.cloneForView()),
+              ),
+          ]),
+        ]
         ..afterSelection = Selection.collapsed(
           Position(
             path: [

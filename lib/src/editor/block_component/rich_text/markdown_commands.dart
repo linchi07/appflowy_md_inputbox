@@ -85,6 +85,13 @@ bool insertMarkdownNewLine(
     }
   }
 
+  if (node.id == editorState.referenceNodeId) {
+    editorState.apply(
+      editorState.transaction..insertText(node, offset, '\n$nextPrefix'),
+    );
+    return true;
+  }
+
   // Split into a new node so Flutter does not inherit a multiline caret.
   final transaction = editorState.transaction;
   final nextPath = selection.start.path.next;

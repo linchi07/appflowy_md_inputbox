@@ -9,9 +9,13 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 class Transaction {
   Transaction({
     required this.document,
+    this.baseRevision,
   });
 
   final Document document;
+
+  /// Shared-document version at construction, used to reject stale paths.
+  final int? baseRevision;
 
   /// The operations to be applied.
   final List<Operation> _operations = [];
@@ -433,13 +437,14 @@ extension TextTransaction on Transaction {
       }
       final deltaQueue = entry.value;
       final composed = deltaQueue.fold<Delta>(
-        node.delta!,
+        Delta(),
         (p, e) => p.compose(e),
       );
-      assert(composed.every((element) => element is TextInsert));
-      updateNode(node, {
-        blockComponentDelta: composed.toJson(),
-      });
+      add(UpdateTextOperation(
+        node.path,
+        composed,
+        composed.invert(node.delta!),
+      ),);
     }
     markNeedsComposing = false;
     _composeMap.clear();

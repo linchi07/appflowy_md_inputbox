@@ -75,6 +75,9 @@ You can also create an editor from a JSON object in order to configure your init
 For this fork's compact-input and large-document configurations, see
 [the performance profiles](documentation/performance.md).
 
+For synchronized full-document and enlarged paragraph/table views, see
+[shared documents and live node views](documentation/shared_node_views.md).
+
 ```dart
 final json = jsonDecode('YOUR INPUT JSON STRING');
 final editorState = EditorState(document: Document.fromJson(json));

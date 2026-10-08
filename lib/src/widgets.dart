@@ -48,6 +48,23 @@ class MDEditorController {
         maxHistoryItemSize: maxHistoryItemSize,
       );
 
+  /// Owns one view supplied by SharedEditorDocument, including its disposal.
+  MDEditorController.fromEditorState(
+    EditorState state, {
+    this.onInput,
+    this.characterCounter,
+    this.inputDebounce = Duration.zero,
+    this.maxHistoryItemSize = 200,
+  }) {
+    editorState = state;
+    editorState.nodeBehaviors = {
+      ParagraphBlockKeys.type: codeFenceDraftParagraphBehavior,
+      CodeBlockKeys.type: codeNodeBehavior,
+    };
+    editorState.documentRules = _markdownDocumentRules;
+    editorState.onInput = _handleInput;
+  }
+
   late final EditorState editorState;
 
   /// 输入变动的回调
