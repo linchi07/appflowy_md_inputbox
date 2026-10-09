@@ -208,16 +208,22 @@ class SharedEditorDocument {
       return Future.value();
     }
     _validateBatch(operations);
-    final origin = options.resolvedSource == TransactionSource.userEdit
-        ? view.viewId
-        : 'binding:programmatic';
+    final userEdit = options.resolvedSource == TransactionSource.userEdit;
+    final origin = userEdit ? view.viewId : 'binding:programmatic';
     // The runtime contract exposes whole-stack clear, so bound retained history
     // by clearing at the configured session limit.
-    if (view.undoScope.canUndo && view.undoLength >= view.historyLimit) {
-      view.undoScope.clear();
+    if (userEdit && (!view.undoGroupActive || !view.undoGroupHasEdit)) {
+      view.undoScope.stopCapturing();
+      if (view.undoScope.canUndo && view.undoLength >= view.historyLimit) {
+        view.undoScope.clear();
+      }
     }
     _commit(
-      () => _backend.apply(operations, origin),
+      () {
+        _backend.apply(operations, origin);
+        // Mark before publication: callbacks may edit within the same session.
+        if (userEdit && view.undoGroupActive) view.undoGroupHasEdit = true;
+      },
       origin: view.viewId,
       source: view,
       transaction: transaction,
@@ -618,6 +624,8 @@ class _View implements EditorTransactionHost {
   @override
   final String viewId;
   late final CrdtUndoManager undoScope;
+  bool undoGroupActive = false;
+  bool undoGroupHasEdit = false;
   late EditorState state;
   late Map<String, Node> index;
   void reindex() => index = _indexNodes(state.document.root);
@@ -629,7 +637,27 @@ class _View implements EditorTransactionHost {
   @override
   bool get canRedo => undoScope.canRedo;
   @override
-  void clearHistory() => undoScope.clear();
+  void clearHistory() {
+    undoScope.clear();
+    undoGroupHasEdit = false;
+  }
+
+  @override
+  void beginUndoGroup() {
+    if (undoGroupActive) return;
+    undoScope.stopCapturing();
+    undoGroupActive = true;
+    undoGroupHasEdit = false;
+  }
+
+  @override
+  void endUndoGroup() {
+    if (!undoGroupActive) return;
+    undoScope.stopCapturing();
+    undoGroupActive = false;
+    undoGroupHasEdit = false;
+  }
+
   @override
   EditorState createNodeView(String nodeId) => owner.createEditorState(
         nodeId: nodeId,

@@ -10,6 +10,8 @@ abstract class TextInputService {
     required this.onPerformAction,
     this.onFloatingCursor,
     this.contentInsertionConfiguration,
+    this.onCompositionStart,
+    this.onCompositionEnd,
   });
 
   Future<bool> Function(TextEditingDeltaInsertion insertion) onInsert;
@@ -21,6 +23,35 @@ abstract class TextInputService {
   Future<void> Function(RawFloatingCursorPoint point)? onFloatingCursor;
 
   final ContentInsertionConfiguration? contentInsertionConfiguration;
+  final VoidCallback? onCompositionStart;
+  final VoidCallback? onCompositionEnd;
+  bool _composingSessionActive = false;
+
+  /// Start before the first preedit; finish after the committed replacement.
+  Future<bool> dispatchDelta(TextEditingDelta delta) async {
+    final composing = delta.composing.isValid && !delta.composing.isCollapsed;
+    if (composing && !_composingSessionActive) {
+      _composingSessionActive = true;
+      onCompositionStart?.call();
+    }
+    try {
+      if (delta is TextEditingDeltaInsertion) return await onInsert(delta);
+      if (delta is TextEditingDeltaDeletion) return await onDelete(delta);
+      if (delta is TextEditingDeltaReplacement) return await onReplace(delta);
+      if (delta is TextEditingDeltaNonTextUpdate) {
+        return await onNonTextUpdate(delta);
+      }
+      return false;
+    } finally {
+      if (!composing) finishCompositionSession();
+    }
+  }
+
+  void finishCompositionSession() {
+    if (!_composingSessionActive) return;
+    _composingSessionActive = false;
+    onCompositionEnd?.call();
+  }
 
   TextRange? get composingTextRange;
 

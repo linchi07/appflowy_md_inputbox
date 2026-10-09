@@ -20,6 +20,8 @@ class NonDeltaTextInputService extends TextInputService with TextInputClient {
     super.contentInsertionConfiguration,
     super.onFloatingCursor,
     this.keepEditorFocusNotifier,
+    super.onCompositionStart,
+    super.onCompositionEnd,
   });
 
   final KeepEditorFocusNotifier? keepEditorFocusNotifier;
@@ -55,15 +57,7 @@ class NonDeltaTextInputService extends TextInputService with TextInputClient {
     bool willApply = true;
     for (final delta in formattedDeltas) {
       _updateComposing(delta);
-      if (delta is TextEditingDeltaInsertion) {
-        if (!(await onInsert(delta))) willApply = false;
-      } else if (delta is TextEditingDeltaDeletion) {
-        if (!(await onDelete(delta))) willApply = false;
-      } else if (delta is TextEditingDeltaReplacement) {
-        if (!(await onReplace(delta))) willApply = false;
-      } else if (delta is TextEditingDeltaNonTextUpdate) {
-        if (!(await onNonTextUpdate(delta))) willApply = false;
-      }
+      if (!(await dispatchDelta(delta))) willApply = false;
     }
 
     return willApply;
@@ -148,6 +142,7 @@ class NonDeltaTextInputService extends TextInputService with TextInputClient {
 
   @override
   void close() {
+    finishCompositionSession();
     keepEditorFocusNotifier?.reset();
     _editingValueTimer?.cancel();
     _editingValueTimer = null;
@@ -173,10 +168,11 @@ class NonDeltaTextInputService extends TextInputService with TextInputClient {
   @override
   void clearComposingTextRange() {
     composingTextRange = TextRange.empty;
+    finishCompositionSession();
   }
 
   @override
-  void connectionClosed() {}
+  void connectionClosed() => close();
 
   @override
   void insertTextPlaceholder(Size size) {}

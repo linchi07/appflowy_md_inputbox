@@ -18,5 +18,7 @@ abstract class EditorTransactionHost {
   void undo();
   void redo();
   void clearHistory();
+  void beginUndoGroup();
+  void endUndoGroup();
   void detach();
 }

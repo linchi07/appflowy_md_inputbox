@@ -15,7 +15,11 @@ abstract interface class CrdtDocument {
   List<Uint8List> get pendingPackets;
   List<Uint8List> takeUpdates();
   List<CrdtChange> takeChanges();
-  CrdtUndoManager undoManager(String origin, Iterable<CrdtMap> scopes);
+  CrdtUndoManager undoManager(
+    String origin,
+    Iterable<CrdtMap> scopes, {
+    Duration captureTimeout = Duration.zero,
+  });
   void dispose();
 }
 
@@ -49,6 +53,9 @@ abstract interface class CrdtUndoManager {
   bool get canRedo;
   int get undoLength;
   void clear();
+
+  /// End the current capture item without clearing native history.
+  void stopCapturing();
   bool undo();
   bool redo();
   void dispose();

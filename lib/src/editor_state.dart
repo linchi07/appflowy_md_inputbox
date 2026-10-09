@@ -813,6 +813,31 @@ class EditorState {
   }
 
   Timer? _debouncedSealHistoryItemTimer;
+  bool _imeUndoGroupActive = false;
+
+  /// The whole IME preedit -> committed text sequence is one user intention.
+  void beginImeUndoGroup() {
+    if (isDisposed || _imeUndoGroupActive) return;
+    _debouncedSealHistoryItemTimer?.cancel();
+    _imeUndoGroupActive = true;
+    if (transactionHost case final host?) {
+      host.beginUndoGroup();
+    } else if (undoManager.undoStack.isNonEmpty) {
+      undoManager.undoStack.last.seal();
+    }
+  }
+
+  void endImeUndoGroup() {
+    if (isDisposed || !_imeUndoGroupActive) return;
+    _imeUndoGroupActive = false;
+    _debouncedSealHistoryItemTimer?.cancel();
+    if (transactionHost case final host?) {
+      host.endUndoGroup();
+    } else if (undoManager.undoStack.isNonEmpty) {
+      undoManager.undoStack.last.seal();
+    }
+  }
+
   final bool _enableCheckIntegrity = false;
 
   // the value of the notifier is meaningless, just for triggering the callbacks.
@@ -951,8 +976,10 @@ class EditorState {
   }
 
   @internal
-  void updateSharedSelection(Selection? value,
-      {Transaction? localTransaction}) {
+  void updateSharedSelection(
+    Selection? value, {
+    Transaction? localTransaction,
+  }) {
     _selectionUpdateReason = localTransaction?.reason ??
         (localTransaction == null
             ? SelectionUpdateReason.remote
@@ -1192,6 +1219,7 @@ class EditorState {
 
     // Only debounce-seal for user edits (grouping consecutive keystrokes).
     if (source == TransactionSource.userEdit) {
+      if (_imeUndoGroupActive) return;
       if (skipDebounce && undoManager.undoStack.isNonEmpty) {
         AppFlowyEditorLog.editor.debug('Seal history item');
         final last = undoManager.undoStack.last;

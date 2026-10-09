@@ -231,8 +231,11 @@ class CrdtDocumentBinding {
 
   int? resolve(String id, Uint8List anchor) =>
       store.read((tx) => text(tx, id)?.resolve(tx, anchor));
-  CrdtUndoManager undoManager(String origin) =>
-      store.undoManager(origin, [blocks, children, texts]);
+  CrdtUndoManager undoManager(String origin) => store.undoManager(
+        origin,
+        [blocks, children, texts],
+        captureTimeout: const Duration(days: 1),
+      );
   void dispose() => store.dispose();
 }
 

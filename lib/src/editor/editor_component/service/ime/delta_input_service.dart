@@ -11,6 +11,8 @@ class DeltaTextInputService extends TextInputService with DeltaTextInputClient {
     required super.onReplace,
     required super.onNonTextUpdate,
     required super.onPerformAction,
+    super.onCompositionStart,
+    super.onCompositionEnd,
   });
 
   @override
@@ -33,19 +35,7 @@ class DeltaTextInputService extends TextInputService with DeltaTextInputClient {
     bool willApply = true;
     for (final delta in formattedDeltas) {
       _updateComposing(delta);
-      switch (delta) {
-        case TextEditingDeltaInsertion _:
-          if (!(await onInsert(delta))) willApply = false;
-
-        case TextEditingDeltaDeletion _:
-          if (!(await onDelete(delta))) willApply = false;
-
-        case TextEditingDeltaReplacement _:
-          if (!(await onReplace(delta))) willApply = false;
-
-        case TextEditingDeltaNonTextUpdate _:
-          if (!(await onNonTextUpdate(delta))) willApply = false;
-      }
+      if (!(await dispatchDelta(delta))) willApply = false;
     }
 
     return willApply;
@@ -77,6 +67,7 @@ class DeltaTextInputService extends TextInputService with DeltaTextInputClient {
 
   @override
   void close() {
+    finishCompositionSession();
     composingTextRange = null;
     _textInputConnection?.close();
     _textInputConnection = null;
@@ -100,10 +91,11 @@ class DeltaTextInputService extends TextInputService with DeltaTextInputClient {
   @override
   void clearComposingTextRange() {
     composingTextRange = TextRange.empty;
+    finishCompositionSession();
   }
 
   @override
-  void connectionClosed() {}
+  void connectionClosed() => close();
 
   @override
   void insertTextPlaceholder(Size size) {}
@@ -171,7 +163,9 @@ class DeltaTextInputService extends TextInputService with DeltaTextInputClient {
   void insertContent(KeyboardInsertedContent content) {}
 
   void _updateComposing(TextEditingDelta delta) {
-    if (delta is! TextEditingDeltaNonTextUpdate) {
+    if (delta is TextEditingDeltaNonTextUpdate) {
+      composingTextRange = delta.composing;
+    } else {
       if (composingTextRange != null &&
           composingTextRange!.start != -1 &&
           delta.composing.end != -1) {

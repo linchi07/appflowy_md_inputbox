@@ -392,6 +392,8 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
   NonDeltaTextInputService buildTextInputService() {
     return NonDeltaTextInputService(
       keepEditorFocusNotifier: editorState.keepEditorFocusNotifier,
+      onCompositionStart: editorState.beginImeUndoGroup,
+      onCompositionEnd: editorState.endImeUndoGroup,
       onInsert: (insertion) async {
         for (final interceptor in interceptors) {
           final result = await interceptor.interceptInsert(

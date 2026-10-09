@@ -91,3 +91,16 @@ flutter test
 
 Web 也使用相同抽象接口；具体运行时由宿主提供。EverNote 当前选择官方 yffi/Yrs，
 原生构建和集成测试都在 EverNote 仓库；未实现 Web 协同适配器。
+
+## 输入法与撤销边界
+
+IME 的 composing 生命周期由编辑器管理。第一次 preedit 前开始分组，最终文字替换
+应用后结束；若系统只发 non-text 更新清空 composing，也会结束同一分组。清空输入
+范围、失焦关闭连接都会结束分组。普通编辑与下一次 composition 保持独立。
+
+binding 通过 runtime 的 captureTimeout/stopCapturing 控制原生 UndoManager；不拼接
+自定义逆操作。standalone EditorState 在同一 composing 期间不启动历史封存计时器。
+因此慢速输入、拼音到汉字替换和候选更新不会被拆成多个撤销步骤。
+
+中间文字仍以真实 CRDT 增量同步；composing 范围和分组开关只是视图状态，未存入
+共享节点。本轮没有增加只在源窗口显示 preedit 的本地覆盖层。
