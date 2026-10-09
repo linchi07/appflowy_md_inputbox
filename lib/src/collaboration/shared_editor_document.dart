@@ -5,6 +5,13 @@ import 'dart:typed_data';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:collection/collection.dart';
 import 'package:uuid/uuid.dart';
+import 'package:flutter/services.dart'
+    show
+        TextEditingDelta,
+        TextEditingDeltaInsertion,
+        TextEditingDeltaDeletion,
+        TextEditingDeltaReplacement,
+        TextEditingDeltaNonTextUpdate;
 
 import 'crdt_document_binding.dart';
 
@@ -196,6 +203,9 @@ class SharedEditorDocument {
     if (!identical(transaction.document, view.state.document)) {
       throw ArgumentError('Foreign editor transaction');
     }
+    if (view.preedit != null) {
+      return _preview(view, transaction, withUpdateSelection);
+    }
     if (transaction.baseRevision != null &&
         transaction.baseRevision != revision) {
       throw StateError('Stale transaction: rebuild it from the current view.');
@@ -231,6 +241,153 @@ class SharedEditorDocument {
       withUpdateSelection: withUpdateSelection,
     );
     return Future.value();
+  }
+
+  Future<void> _preview(
+    _View view,
+    Transaction transaction,
+    bool updateSelection,
+  ) {
+    final pending = view.preedit!;
+    final operations = _prepare(view, transaction);
+    for (final op in operations) {
+      validateValue(op.toJson());
+    }
+    if (pending.nodeId != null &&
+        operations
+            .any((op) => op.kind != 'text' || op.nodeId != pending.nodeId)) {
+      // A structural command needs a complete local shadow. Recover its
+      // baseline from the frozen projection, retaining the original node data.
+      pending.promote(view);
+    }
+    pending.track(operations);
+    if (pending.nodeId == null && pending.deferredConflict(_index)) {
+      _cancelPreedit(view);
+      return Future.value();
+    }
+    view.state.applySharedProjection(transaction);
+    view.reindex();
+    if (updateSelection) {
+      view.state.updateSharedSelection(
+        transaction.afterSelection,
+        localTransaction: transaction,
+      );
+    }
+    return Future.value();
+  }
+
+  void _refresh(_View view) {
+    view.state.applySharedProjection(
+      _buildProjection(
+        view.state.document,
+        _projection(view.referenceNodeId),
+      ),
+    );
+    view.reindex();
+  }
+
+  void _cancelPreedit(_View view) {
+    final pending = view.preedit;
+    if (pending == null) return;
+    view.preedit = null;
+    view.undoGroupActive = false;
+    view.undoGroupHasEdit = false;
+    view.undoScope.stopCapturing();
+    view.state.imeProjectionInProgress = true;
+    try {
+      _refresh(view);
+      view.state
+          .updateSharedSelection(view.resolveSelection(pending.selection));
+    } finally {
+      view.state.imeProjectionInProgress = false;
+      pending.dispose();
+    }
+    view.state.resetImeComposition();
+  }
+
+  void _finishPreedit(_View view) {
+    final pending = view.preedit;
+    if (pending == null) return;
+    final selected = view.state.selection;
+    final selectedStartId = selected == null
+        ? null
+        : view.state.document.nodeAtPath(selected.start.path)?.id;
+    final selectedEndId = selected == null
+        ? null
+        : view.state.document.nodeAtPath(selected.end.path)?.id;
+    Transaction? patch;
+    Delta? candidate;
+    (int, int)? range;
+    try {
+      if (pending.nodeId != null) {
+        candidate = pending.candidate(view.index[pending.nodeId]?.delta);
+        range = pending.range(_backend);
+        if (candidate == null || range == null) {
+          _cancelPreedit(view);
+          return;
+        }
+      } else {
+        patch = _buildProjection(
+          pending.baseline!,
+          Document(root: view.state.document.root.cloneForView()),
+        );
+      }
+      view.preedit = null;
+      _refresh(view);
+      final transaction = view.state.transaction;
+      if (pending.nodeId case final id?) {
+        final node = view.index[id];
+        if (node == null) {
+          view.state.resetImeComposition();
+          return;
+        }
+        final delta = Delta()
+          ..retain(range!.$1)
+          ..delete(range.$2 - range.$1);
+        for (final op in candidate!) {
+          delta.insert((op as TextInsert).text, attributes: op.attributes);
+        }
+        if (!const DeepCollectionEquality().equals(
+          node.delta!.toJson(),
+          node.delta!.compose(delta).toJson(),
+        )) {
+          transaction.add(
+            UpdateTextOperation(node.path, delta, Delta()),
+            transform: false,
+          );
+        }
+        // IME carets normally sit inside the candidate. Keep a focus-loss null
+        // selection and map other selected nodes by their stable identities.
+        Position? mapped(String? selectedId, Position? position) {
+          final target = view.index[selectedId];
+          if (target == null || position == null) return null;
+          final offset = selectedId == id
+              ? range!.$1 +
+                  (position.offset - pending.start).clamp(0, candidate!.length)
+              : position.offset.clamp(0, target.delta?.length ?? 0);
+          return Position(path: target.path, offset: offset);
+        }
+
+        final start = mapped(selectedStartId, selected?.start);
+        final end = mapped(selectedEndId, selected?.end);
+        transaction.afterSelection = start == null || end == null
+            ? null
+            : Selection(start: start, end: end);
+      } else {
+        for (final op in patch!.operations) {
+          transaction.add(
+            op,
+            transform: false,
+          );
+        }
+        transaction.afterSelection = selected;
+      }
+      // The frozen preview has already displayed these edits; publish only the
+      // final patch to the authoritative runtime and all other projections.
+      _apply(view, transaction, const ApplyOptions(), true);
+    } finally {
+      pending.dispose();
+    }
   }
 
   void applyChange(SharedDocumentChange change) {
@@ -301,7 +458,12 @@ class SharedEditorDocument {
     bool withUpdateSelection = true,
   }) {
     final selections = {
-      for (final view in _views.values) view: view.captureSelection(),
+      for (final view in _views.values)
+        if (view.preedit == null) view: view.captureSelection(),
+    };
+    final pendingRanges = {
+      for (final view in _views.values)
+        if (view.preedit?.nodeId != null) view: view.preedit!.range(_backend),
     };
     _committing = true;
     List<Uint8List> updates = const [];
@@ -357,6 +519,17 @@ class SharedEditorDocument {
         }
         _revision++;
         for (final view in _views.values.toList()) {
+          if (view.preedit case final pending?) {
+            if (pending.conflicts(
+              events,
+              pendingRanges[view],
+              _index,
+              view.referenceNodeId,
+            )) {
+              _cancelPreedit(view);
+            }
+            continue;
+          }
           final projection = structural
               ? _buildProjection(
                   view.state.document,
@@ -427,6 +600,10 @@ class SharedEditorDocument {
 
   void _history(_View view, {required bool redo}) {
     _checkOpen();
+    if (view.preedit != null) {
+      _cancelPreedit(view);
+      return;
+    }
     if (!view.state.editable ||
         view.state.isDisposed ||
         !(redo ? view.undoScope.canRedo : view.undoScope.canUndo)) {
@@ -626,6 +803,7 @@ class _View implements EditorTransactionHost {
   late final CrdtUndoManager undoScope;
   bool undoGroupActive = false;
   bool undoGroupHasEdit = false;
+  _Preedit? preedit;
   late EditorState state;
   late Map<String, Node> index;
   void reindex() => index = _indexNodes(state.document.root);
@@ -643,17 +821,22 @@ class _View implements EditorTransactionHost {
   }
 
   @override
-  void beginUndoGroup() {
+  void beginUndoGroup({TextEditingDelta? delta}) {
     if (undoGroupActive) return;
     undoScope.stopCapturing();
     undoGroupActive = true;
     undoGroupHasEdit = false;
+    preedit = _Preedit.capture(this, delta);
   }
 
   @override
   void endUndoGroup() {
     if (!undoGroupActive) return;
-    undoScope.stopCapturing();
+    try {
+      owner._finishPreedit(this);
+    } finally {
+      undoScope.stopCapturing();
+    }
     undoGroupActive = false;
     undoGroupHasEdit = false;
   }
@@ -678,6 +861,8 @@ class _View implements EditorTransactionHost {
   @override
   void detach() {
     owner._views.remove(state);
+    preedit?.dispose();
+    preedit = null;
     undoScope.dispose();
     index.clear();
   }
@@ -723,6 +908,193 @@ class _SelectionAnchor {
   final Uint8List? start;
   final String endId;
   final Uint8List? end;
+}
+
+/// Only a view draft. These values never enter CRDT maps or outgoing updates.
+class _Preedit {
+  _Preedit(this.selection);
+  final _SelectionAnchor? selection;
+  String? nodeId;
+  String? type;
+  Delta? base;
+  Attributes? attributes;
+  int start = 0;
+  int end = 0;
+  Uint8List? startAnchor;
+  Uint8List? endAnchor;
+  Document? baseline;
+  final Set<String> touched = {};
+  final Set<String> remotelyChanged = {};
+  bool _disposed = false;
+
+  bool deferredConflict(Map<String, Node> index) {
+    for (final id in remotelyChanged) {
+      for (Node? node = index[id]; node != null; node = node.parent) {
+        if (touched.contains(node.id)) return true;
+      }
+    }
+    return false;
+  }
+
+  static _Preedit capture(_View view, TextEditingDelta? delta) {
+    final result = _Preedit(view.captureSelection());
+    final selected = view.state.selection?.normalized;
+    final node = selected == null
+        ? null
+        : view.state.document.nodeAtPath(selected.start.path);
+    if (selected?.isSingle == true && node?.delta != null) {
+      var start = selected!.start.offset;
+      var end = selected.end.offset;
+      if (delta is TextEditingDeltaReplacement) {
+        start = delta.replacedRange.start;
+        end = delta.replacedRange.end;
+      } else if (delta is TextEditingDeltaDeletion) {
+        start = delta.deletedRange.start;
+        end = delta.deletedRange.end;
+      } else if (delta is TextEditingDeltaInsertion) {
+        start = end = delta.insertionOffset;
+      } else if (delta is TextEditingDeltaNonTextUpdate) {
+        start = delta.composing.start;
+        end = delta.composing.end;
+      }
+      if (delta != null &&
+          delta is! TextEditingDeltaNonTextUpdate &&
+          delta.composing.isValid) {
+        final inserted = delta is TextEditingDeltaInsertion
+            ? delta.textInserted.length
+            : delta is TextEditingDeltaReplacement
+                ? delta.replacementText.length
+                : 0;
+        final change = inserted - (end - start);
+        int baselineOffset(int offset, bool trailing) {
+          if (offset <= start) return offset;
+          if (offset >= start + inserted) return offset - change;
+          return trailing ? end : start;
+        }
+
+        final composingStart = baselineOffset(delta.composing.start, false);
+        final composingEnd = baselineOffset(delta.composing.end, true);
+        if (composingStart < start) start = composingStart;
+        if (composingEnd > end) end = composingEnd;
+      }
+      if (!selected.isCollapsed) {
+        if (selected.start.offset < start) start = selected.start.offset;
+        if (selected.end.offset > end) end = selected.end.offset;
+      }
+      if (start >= 0 && end >= start && end <= node!.delta!.length) {
+        result.nodeId = node.id;
+        result.type = node.type;
+        result.base = Delta.fromJson(node.delta!.toJson());
+        result.attributes = Map<String, dynamic>.of(node.attributes)
+          ..remove('delta');
+        result.start = start;
+        result.end = end;
+        result.startAnchor = view.owner._backend
+            .position(node.id, start, assoc: start == end ? -1 : 0);
+        result.endAnchor = start == end
+            ? result.startAnchor
+            : view.owner._backend.position(node.id, end, assoc: -1);
+        result.touched.add(node.id);
+        return result;
+      }
+    }
+    result.baseline = Document(root: view.state.document.root.cloneForView());
+    return result;
+  }
+
+  void promote(_View view) {
+    baseline = Document(root: view.state.document.root.cloneForView());
+    final original = _indexNodes(baseline!.root)[nodeId];
+    original?.updateAttributes({...attributes!, 'delta': base!.toJson()});
+    nodeId = null;
+  }
+
+  void track(List<SharedOperation> operations) {
+    for (final op in operations) {
+      if (op.nodeId != null) touched.add(op.nodeId!);
+      if (op.kind == 'delete') touched.addAll(op.nodeIds);
+      if (op.kind == 'insert') {
+        touched.addAll(op.insertedNodeIds);
+      }
+    }
+  }
+
+  (int, int)? range(CrdtDocumentBinding binding) {
+    if (nodeId == null) return null;
+    final s = binding.resolve(nodeId!, startAnchor!);
+    final e = binding.resolve(nodeId!, endAnchor!);
+    return s == null || e == null || e < s ? null : (s, e);
+  }
+
+  Delta? candidate(Delta? current) {
+    if (current == null) return null;
+    final suffix = base!.length - end;
+    final candidateEnd = current.length - suffix;
+    if (candidateEnd < start) return null;
+    const equality = DeepCollectionEquality();
+    if (!equality.equals(
+          base!.slice(0, start).toJson(),
+          current.slice(0, start).toJson(),
+        ) ||
+        !equality.equals(
+          base!.slice(end).toJson(),
+          current.slice(candidateEnd).toJson(),
+        )) {
+      return null;
+    }
+    return current.slice(start, candidateEnd);
+  }
+
+  bool conflicts(
+    List<CrdtChange> events,
+    (int, int)? before,
+    Map<String, Node> index,
+    String? referenceId,
+  ) {
+    if (nodeId != null) {
+      final node = index[nodeId];
+      if (node == null ||
+          node.type != type ||
+          node.delta == null ||
+          before == null) {
+        return true;
+      }
+      if (referenceId != null) {
+        Node? parent = node;
+        while (parent != null && parent.id != referenceId) {
+          parent = parent.parent;
+        }
+        if (parent == null) return true;
+      }
+    }
+    for (final event in events) {
+      final id = event.path.firstOrNull;
+      if (id is String) remotelyChanged.add(id);
+      if (nodeId == null) {
+        if (_isStructuralChange(event) || deferredConflict(index)) return true;
+      } else if (_isTextChange(event) && id == nodeId) {
+        var cursor = 0;
+        for (final op in Delta.fromJson(event.delta!)) {
+          if (op is TextInsert) {
+            if (before!.$1 < cursor && cursor < before.$2) return true;
+          } else {
+            final next = cursor + op.length;
+            final changed = op is TextDelete ||
+                (op is TextRetain && op.attributes?.isNotEmpty == true);
+            if (changed && cursor < before!.$2 && next > before.$1) return true;
+            cursor = next;
+          }
+        }
+      }
+    }
+    return nodeId == null && deferredConflict(index);
+  }
+
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    baseline?.dispose();
+  }
 }
 
 Map<String, Node> _indexNodes(Node root) {
@@ -807,7 +1179,10 @@ Transaction _buildProjection(Document current, Document desired) {
   final transaction = Transaction(document: current);
   const equality = DeepCollectionEquality();
   void add(Operation operation) {
-    transaction.add(operation, transform: false);
+    transaction.add(
+      operation,
+      transform: false,
+    );
     if (operation is DeleteOperation) {
       shadow.delete(operation.path, operation.nodes.length);
     }

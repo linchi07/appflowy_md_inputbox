@@ -11,6 +11,8 @@ Future<void> onReplace(
 ) async {
   AppFlowyEditorLog.input.debugLazy(() => 'onReplace: $replacement');
 
+  final generation = editorState.imeCompositionGeneration;
+
   // delete the selection
   final selection = editorState.selection;
   if (selection == null) {
@@ -18,14 +20,13 @@ Future<void> onReplace(
   }
 
   if (selection.isSingle) {
-    final execution = await executeCharacterShortcutEvent(
-      editorState,
-      replacement.replacementText,
-      characterShortcutEvents,
-    );
-
-    if (execution) {
-      return;
+    if (!editorState.isImeComposing) {
+      final execution = await executeCharacterShortcutEvent(
+        editorState,
+        replacement.replacementText,
+        characterShortcutEvents,
+      );
+      if (execution) return;
     }
 
     if (PlatformExtension.isIOS) {
@@ -61,31 +62,36 @@ Future<void> onReplace(
       ..afterSelection = afterSelection;
     await editorState.apply(transaction);
   } else {
+    // Non-delta diffs may retain identical letters inside the selected range.
+    // Recover the complete candidate from the native value before deleting the
+    // editor's multi-node selection, rather than inserting only the trimmed diff.
+    final normalized = selection.normalized;
+    final first = editorState.document.nodeAtPath(normalized.start.path);
+    final last = editorState.document.nodeAtPath(normalized.end.path);
+    final value = replacement.oldText.replaceRange(
+      replacement.replacedRange.start,
+      replacement.replacedRange.end,
+      replacement.replacementText,
+    );
+    final suffix = (last?.delta?.length ?? 0) - normalized.end.offset;
+    final candidate = first?.delta != null &&
+            last?.delta != null &&
+            normalized.start.offset <= value.length - suffix
+        ? value.substring(normalized.start.offset, value.length - suffix)
+        : replacement.replacementText;
     await editorState.deleteSelection(selection);
-    // insert the replacement
-    final insertion = replacement.toInsertion();
+    if (generation != editorState.imeCompositionGeneration) return;
+    final insertion = TextEditingDeltaInsertion(
+      oldText: value,
+      textInserted: candidate,
+      insertionOffset: normalized.start.offset,
+      selection: replacement.selection,
+      composing: replacement.composing,
+    );
     await onInsert(
       insertion,
       editorState,
       characterShortcutEvents,
-    );
-  }
-}
-
-extension on TextEditingDeltaReplacement {
-  TextEditingDeltaInsertion toInsertion() {
-    final text = oldText.replaceRange(
-      replacedRange.start,
-      replacedRange.end,
-      '',
-    );
-
-    return TextEditingDeltaInsertion(
-      oldText: text,
-      textInserted: replacementText,
-      insertionOffset: replacedRange.start,
-      selection: selection,
-      composing: composing,
     );
   }
 }

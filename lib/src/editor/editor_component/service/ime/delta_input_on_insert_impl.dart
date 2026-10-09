@@ -11,7 +11,8 @@ Future<void> onInsert(
 ) async {
   AppFlowyEditorLog.input.debugLazy(() => 'onInsert: $insertion');
 
-  final textInserted = insertion.textInserted;
+  final generation = editorState.imeCompositionGeneration;
+  var textInserted = insertion.textInserted;
 
   /// On mobile devices, the "/" is context-sensitive,which means it can't be
   /// recognized as a standalone character. This requires special handling.
@@ -21,7 +22,8 @@ Future<void> onInsert(
   // In France, the backtick key is used to toggle a character style.
   // We should prevent the execution of character shortcut events when the
   // composing range is not collapsed.
-  if (insertion.composing.isCollapsed || isMobileSlash) {
+  if (!editorState.isImeComposing &&
+      (insertion.composing.isCollapsed || isMobileSlash)) {
     // execute character shortcut events
     final execution = await executeCharacterShortcutEvent(
       editorState,
@@ -42,7 +44,23 @@ Future<void> onInsert(
   }
 
   if (!selection.isCollapsed) {
+    final selected = selection.normalized;
+    final first = editorState.document.nodeAtPath(selected.start.path);
+    final last = editorState.document.nodeAtPath(selected.end.path);
+    final value = insertion.oldText.replaceRange(
+      insertion.insertionOffset,
+      insertion.insertionOffset,
+      insertion.textInserted,
+    );
+    final suffix = (last?.delta?.length ?? 0) - selected.end.offset;
+    if (first?.delta != null &&
+        last?.delta != null &&
+        selected.start.offset <= value.length - suffix) {
+      textInserted =
+          value.substring(selected.start.offset, value.length - suffix);
+    }
     await editorState.deleteSelection(selection);
+    if (generation != editorState.imeCompositionGeneration) return;
   }
 
   selection = editorState.selection?.normalized;

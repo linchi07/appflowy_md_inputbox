@@ -9,6 +9,7 @@ import 'package:appflowy_editor/src/editor/util/platform_extension.dart';
 import 'package:appflowy_editor/src/history/undo_manager.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show TextEditingDelta;
 
 import 'service/markdown_parser.dart';
 
@@ -814,28 +815,51 @@ class EditorState {
 
   Timer? _debouncedSealHistoryItemTimer;
   bool _imeUndoGroupActive = false;
+  int _imeCompositionGeneration = 0;
+  bool imeProjectionInProgress = false;
+  final ValueNotifier<int> imeRefreshNotifier = ValueNotifier(0);
+  final ValueNotifier<int> imeResetNotifier = ValueNotifier(0);
+  bool get isImeComposing => _imeUndoGroupActive;
+  int get imeCompositionGeneration => _imeCompositionGeneration;
 
   /// The whole IME preedit -> committed text sequence is one user intention.
-  void beginImeUndoGroup() {
+  void beginImeUndoGroup([TextEditingDelta? delta]) {
     if (isDisposed || _imeUndoGroupActive) return;
     _debouncedSealHistoryItemTimer?.cancel();
     _imeUndoGroupActive = true;
+    _imeCompositionGeneration++;
     if (transactionHost case final host?) {
-      host.beginUndoGroup();
+      host.beginUndoGroup(delta: delta);
     } else if (undoManager.undoStack.isNonEmpty) {
       undoManager.undoStack.last.seal();
     }
   }
 
-  void endImeUndoGroup() {
+  void endImeUndoGroup([bool refreshInput = true]) {
     if (isDisposed || !_imeUndoGroupActive) return;
     _imeUndoGroupActive = false;
+    _imeCompositionGeneration++;
     _debouncedSealHistoryItemTimer?.cancel();
     if (transactionHost case final host?) {
-      host.endUndoGroup();
+      imeProjectionInProgress = true;
+      try {
+        host.endUndoGroup();
+      } finally {
+        imeProjectionInProgress = false;
+      }
     } else if (undoManager.undoStack.isNonEmpty) {
       undoManager.undoStack.last.seal();
     }
+    if (refreshInput) imeRefreshNotifier.value++;
+  }
+
+  /// A conflicting shared edit invalidated this local draft, never the peer edit.
+  @internal
+  void resetImeComposition() {
+    _imeUndoGroupActive = false;
+    _imeCompositionGeneration++;
+    _debouncedSealHistoryItemTimer?.cancel();
+    imeResetNotifier.value++;
   }
 
   final bool _enableCheckIntegrity = false;
@@ -865,6 +889,8 @@ class EditorState {
     focusNotifier.dispose();
     toggledStyleNotifier.dispose();
     undoManager.dispose();
+    imeRefreshNotifier.dispose();
+    imeResetNotifier.dispose();
     autoScroller?.stopAutoScroll();
     autoScroller = null;
     scrollableState = null;

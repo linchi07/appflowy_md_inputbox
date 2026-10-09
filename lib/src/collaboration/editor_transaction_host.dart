@@ -1,4 +1,5 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:flutter/services.dart';
 
 /// Internal commit boundary. A view owns UI state; its host owns shared content.
 abstract class EditorTransactionHost {
@@ -18,7 +19,7 @@ abstract class EditorTransactionHost {
   void undo();
   void redo();
   void clearHistory();
-  void beginUndoGroup();
+  void beginUndoGroup({TextEditingDelta? delta});
   void endUndoGroup();
   void detach();
 }

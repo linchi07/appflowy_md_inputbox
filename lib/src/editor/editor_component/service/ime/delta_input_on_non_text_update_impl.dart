@@ -87,7 +87,7 @@ Future<bool> _checkIfBacktickPressed(
 ) async {
   // if the composing range is not empty, it means the user is typing a text,
   // so we don't need to handle the backtick pressed event
-  if (!nonTextUpdate.composing.isCollapsed) {
+  if (editorState.isImeComposing || !nonTextUpdate.composing.isCollapsed) {
     return false;
   }
 

@@ -231,6 +231,10 @@ class CrdtDocumentBinding {
 
   int? resolve(String id, Uint8List anchor) =>
       store.read((tx) => text(tx, id)?.resolve(tx, anchor));
+  Uint8List position(String id, int offset, {int assoc = 0}) => store.write(
+        'binding:selection',
+        (tx) => text(tx, id)!.anchor(tx, offset, assoc: assoc),
+      );
   CrdtUndoManager undoManager(String origin) => store.undoManager(
         origin,
         [blocks, children, texts],

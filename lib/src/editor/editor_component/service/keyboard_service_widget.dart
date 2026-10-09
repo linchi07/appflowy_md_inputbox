@@ -69,6 +69,8 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
         .registerGestureInterceptor(interceptor);
 
     textInputService = buildTextInputService();
+    editorState.imeRefreshNotifier.addListener(_onImeRefresh);
+    editorState.imeResetNotifier.addListener(_onImeReset);
 
     focusNode = widget.focusNode ?? FocusNode(debugLabel: 'keyboard service');
     focusNode.addListener(_onFocusChanged);
@@ -81,6 +83,8 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
   void dispose() {
     editorState.focusNotifier.value = false;
     textInputService.close();
+    editorState.imeRefreshNotifier.removeListener(_onImeRefresh);
+    editorState.imeResetNotifier.removeListener(_onImeReset);
     editorState.selectionNotifier.removeListener(_onSelectionChanged);
     editorState.service.selectionService.unregisterGestureInterceptor(
       'keyboard',
@@ -215,6 +219,7 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
   }
 
   void _onSelectionChanged() {
+    if (editorState.imeProjectionInProgress) return;
     final doNotAttach = editorState
         .selectionExtraInfo?[selectionExtraInfoDoNotAttachTextService];
     if (doNotAttach == true) {
@@ -254,6 +259,15 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
     }
 
     previousSelection = selection;
+  }
+
+  void _onImeRefresh() {
+    if (mounted && focusNode.hasFocus) _onSelectionChanged();
+  }
+
+  void _onImeReset() {
+    textInputService.close();
+    _onImeRefresh();
   }
 
   void _attachTextInputService(Selection selection) {

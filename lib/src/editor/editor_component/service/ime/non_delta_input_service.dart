@@ -142,7 +142,7 @@ class NonDeltaTextInputService extends TextInputService with TextInputClient {
 
   @override
   void close() {
-    finishCompositionSession();
+    finishCompositionSession(refreshInput: false);
     keepEditorFocusNotifier?.reset();
     _editingValueTimer?.cancel();
     _editingValueTimer = null;

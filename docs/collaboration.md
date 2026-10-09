@@ -102,5 +102,17 @@ binding 通过 runtime 的 captureTimeout/stopCapturing 控制原生 UndoManager
 自定义逆操作。standalone EditorState 在同一 composing 期间不启动历史封存计时器。
 因此慢速输入、拼音到汉字替换和候选更新不会被拆成多个撤销步骤。
 
-中间文字仍以真实 CRDT 增量同步；composing 范围和分组开关只是视图状态，未存入
-共享节点。本轮没有增加只在源窗口显示 preedit 的本地覆盖层。
+composing 中间态只修改源 EditorState 的本地投影，不修改主 CRDT 文档，不生成共享
+更新、不记录原生撤销。候选上屏或输入连接正常关闭时，才提交最终内容；取消使内容
+恢复到基线时不提交。网络与数据库应监听 SharedEditorDocument.changes，而不是把
+源 EditorState.document 当作持久化数据。
+
+单文本节点使用 Yrs/runtime 相对位置定位原始替换区域，保留区域外的并发编辑。
+源投影在预编辑期间冻结，提交前以最新共享内容重建，再应用最终候选。区域内的
+远端编辑、节点删除或脱离引用范围会取消草稿并重置 IME 客户端，以保护已提交内容。
+节点移动但身份不变仍能提交。跨节点替换用临时视图基线生成一个最终结构补丁；
+若相关内容或结构发生并发变化，则保守取消。取消可由 imeResetNotifier 观察到。
+
+普通预编辑只保留目标文本节点的数据；跨节点替换才保留视图基线。源视图暂缓共享
+投影，但其他视图继续正常接收更新。最终提交仍由真正的 CRDT runtime 处理，不进行
+自写 OT 合并。
