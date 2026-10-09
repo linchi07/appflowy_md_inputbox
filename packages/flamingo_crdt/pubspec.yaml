@@ -1,0 +1,6 @@
+name: flamingo_crdt
+description: Engine-independent synchronous CRDT contract for Flamingo bindings.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: '>=3.6.0 <4.0.0'

@@ -134,4 +134,3 @@ app.*.symbols
 .fvm/
 
 **/target/
-!packages/flamingo_yffi/native/Cargo.lock

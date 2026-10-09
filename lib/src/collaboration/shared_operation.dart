@@ -12,12 +12,13 @@ class SharedOperation {
     required String parentId,
     String? beforeId,
     required Iterable<Node> nodes,
-  }) => SharedOperation({
-    'op': 'insert',
-    'parentId': parentId,
-    'beforeId': beforeId,
-    'nodes': nodes.map((node) => node.toJson()).toList(),
-  });
+  }) =>
+      SharedOperation({
+        'op': 'insert',
+        'parentId': parentId,
+        'beforeId': beforeId,
+        'nodes': nodes.map((node) => node.toJson()).toList(),
+      });
 
   factory SharedOperation.delete(Iterable<String> nodeIds) =>
       SharedOperation({'op': 'delete', 'nodeIds': nodeIds.toList()});
@@ -30,10 +31,10 @@ class SharedOperation {
       });
 
   factory SharedOperation.text(String nodeId, Delta delta) => SharedOperation({
-    'op': 'text',
-    'nodeId': nodeId,
-    'delta': delta.toJson(),
-  });
+        'op': 'text',
+        'nodeId': nodeId,
+        'delta': delta.toJson(),
+      });
 
   final Map<String, dynamic> _json;
   String get kind => _json['op'] as String;
@@ -62,7 +63,8 @@ class SharedOperation {
   Map<String, dynamic> toJson() => _json;
 }
 
-/// A real Yrs v1 update. Origin is application metadata, not a merge order.
+/// An opaque update emitted by the application-selected CRDT runtime.
+/// Origin is application metadata, not a merge order.
 /// Remote notifications allow persistence; transports should send local ones.
 class SharedDocumentChange {
   SharedDocumentChange({
@@ -88,12 +90,12 @@ class SharedDocumentChange {
   /// Hint emitted by legal bindings; absent hints conservatively validate shape.
   final bool structureChanged;
   Map<String, dynamic> toJson() => {
-    'documentId': documentId,
-    'origin': origin,
-    'update': base64Encode(update),
-    'isRemote': isRemote,
-    'structureChanged': structureChanged,
-  };
+        'documentId': documentId,
+        'origin': origin,
+        'update': base64Encode(update),
+        'isRemote': isRemote,
+        'structureChanged': structureChanged,
+      };
 }
 
 /// The original update remains available for application conflict handling.

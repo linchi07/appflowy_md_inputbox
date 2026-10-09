@@ -2,28 +2,28 @@ import 'dart:typed_data';
 
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:collection/collection.dart';
-import 'package:flamingo_yffi/flamingo_yffi.dart';
 
-/// Domain binding only. Conflict resolution and undo are exclusively Yrs.
-class YrsDocumentBackend {
-  YrsDocumentBackend() : native = YDocument() {
-    metadata = native.map('flamingo:metadata');
-    blocks = native.map('flamingo:blocks');
-    children = native.map('flamingo:children');
-    texts = native.map('flamingo:texts');
+/// Editor schema binding over application-supplied CRDT primitives.
+class CrdtDocumentBinding {
+  CrdtDocumentBinding(this.store) {
+    metadata = store.map('flamingo:metadata');
+    blocks = store.map('flamingo:blocks');
+    children = store.map('flamingo:children');
+    texts = store.map('flamingo:texts');
   }
 
-  final YDocument native;
-  late final YMap metadata;
-  late final YMap blocks;
-  late final YMap children;
-  late final YMap texts;
+  final CrdtDocument store;
+  late final CrdtMap metadata;
+  late final CrdtMap blocks;
+  late final CrdtMap children;
+  late final CrdtMap texts;
   static const equality = DeepCollectionEquality();
 
   void initialize(Document document, String documentId) {
     validateNode(document.root);
+    store.validateValue(document.root.toJson());
     validateTables(document.root);
-    native.write('binding:import', (tx) {
+    store.write('binding:import', (tx) {
       metadata.set(tx, 'schema', 1);
       metadata.set(tx, 'documentId', documentId);
       metadata.set(tx, 'rootId', document.root.id);
@@ -33,48 +33,51 @@ class YrsDocumentBackend {
   }
 
   void drain() {
-    native.takeChanges();
-    native.takeUpdates();
+    store.takeChanges();
+    store.takeUpdates();
   }
 
-  String get rootId =>
-      native.read((tx) => metadata.get(tx, 'rootId') as String);
+  String get rootId => store.read((tx) => metadata.get(tx, 'rootId') as String);
   String get documentId =>
-      native.read((tx) => metadata.get(tx, 'documentId') as String);
+      store.read((tx) => metadata.get(tx, 'documentId') as String);
 
-  void validateIdentity(String expected) => native.read((tx) {
-    if (metadata.get(tx, 'schema') != 1 ||
-        metadata.get(tx, 'documentId') != expected ||
-        metadata.get(tx, 'rootId') is! String) {
-      throw FormatException('Incompatible Flamingo document identity/schema.');
-    }
-  });
+  void validateIdentity(String expected) => store.read((tx) {
+        if (metadata.get(tx, 'schema') != 1 ||
+            metadata.get(tx, 'documentId') != expected ||
+            metadata.get(tx, 'rootId') is! String) {
+          throw FormatException(
+            'Incompatible Flamingo document identity/schema.',
+          );
+        }
+      });
 
-  YMap _record(YTransaction tx, String id) => blocks.get(tx, id) as YMap;
-  YText? text(YTransaction tx, String id) => texts.get(tx, id) as YText?;
-  YArray _order(YTransaction tx, String id) {
-    var order = children.get(tx, id) as YArray?;
+  CrdtMap _record(CrdtTransaction tx, String id) =>
+      blocks.get(tx, id) as CrdtMap;
+  CrdtText? text(CrdtTransaction tx, String id) =>
+      texts.get(tx, id) as CrdtText?;
+  CrdtArray _order(CrdtTransaction tx, String id) {
+    var order = children.get(tx, id) as CrdtArray?;
     if (order == null) {
-      children.set(tx, id, const YNewArray());
-      order = children.get(tx, id) as YArray;
+      children.set(tx, id, const CrdtNewArray());
+      order = children.get(tx, id) as CrdtArray;
     }
     return order;
   }
 
-  void _set(YTransaction tx, YMap map, String key, Object? value) {
+  void _set(CrdtTransaction tx, CrdtMap map, String key, Object? value) {
     if (!equality.equals(map.get(tx, key), value)) map.set(tx, key, value);
   }
 
-  void _putNode(YTransaction tx, Node node, String? parentId) {
-    var record = blocks.get(tx, node.id) as YMap?;
+  void _putNode(CrdtTransaction tx, Node node, String? parentId) {
+    var record = blocks.get(tx, node.id) as CrdtMap?;
     if (record == null) {
-      blocks.set(tx, node.id, const YNewMap());
+      blocks.set(tx, node.id, const CrdtNewMap());
       record = _record(tx, node.id);
-      record.set(tx, 'props', const YNewMap());
+      record.set(tx, 'props', const CrdtNewMap());
     }
     _set(tx, record, 'type', node.type);
     _set(tx, record, 'parent', parentId);
-    final props = record.get(tx, 'props') as YMap;
+    final props = record.get(tx, 'props') as CrdtMap;
     final next = sharedAttributes(node);
     for (final key in props.entries(tx).keys) {
       if (!next.containsKey(key)) props.remove(tx, key);
@@ -85,7 +88,7 @@ class YrsDocumentBackend {
     if (node.delta != null) {
       var content = text(tx, node.id);
       if (content == null) {
-        texts.set(tx, node.id, const YNewText());
+        texts.set(tx, node.id, const CrdtNewText());
         content = text(tx, node.id)!;
       }
       final delta = Delta.fromJson(content.delta(tx)).diff(node.delta!);
@@ -114,12 +117,12 @@ class YrsDocumentBackend {
       for (final op in operations.where((op) => op.kind == 'insert'))
         ...op.insertedNodeIds,
     };
-    native.write(origin, (tx) {
+    store.write(origin, (tx) {
       for (final op in operations) {
         if (op.kind == 'text') {
           text(tx, op.nodeId!)!.applyDelta(tx, _jsonDelta(op.delta));
         } else if (op.kind == 'update') {
-          final props = _record(tx, op.nodeId!).get(tx, 'props') as YMap;
+          final props = _record(tx, op.nodeId!).get(tx, 'props') as CrdtMap;
           for (final entry in op.attributes.entries) {
             if (entry.value == null) {
               props.remove(tx, entry.key);
@@ -137,9 +140,8 @@ class YrsDocumentBackend {
         } else if (op.kind == 'insert') {
           final order = _order(tx, op.parentId);
           final values = order.values(tx);
-          var index = op.beforeId == null
-              ? values.length
-              : values.indexOf(op.beforeId);
+          var index =
+              op.beforeId == null ? values.length : values.indexOf(op.beforeId);
           if (index < 0) index = values.length;
           final nodes = op.nodes;
           try {
@@ -157,7 +159,7 @@ class YrsDocumentBackend {
     });
   }
 
-  void _removePlacement(YTransaction tx, String parent, String id) {
+  void _removePlacement(CrdtTransaction tx, String parent, String id) {
     final order = _order(tx, parent);
     final values = order.values(tx);
     for (var i = values.length - 1; i >= 0; i--) {
@@ -165,81 +167,80 @@ class YrsDocumentBackend {
     }
   }
 
-  void _deleteSubtree(YTransaction tx, String id, Set<String> reinserted) {
+  void _deleteSubtree(CrdtTransaction tx, String id, Set<String> reinserted) {
     if (reinserted.contains(id)) return;
     for (final child in _order(tx, id).values(tx).cast<String>()) {
       if (_record(tx, child).get(tx, 'parent') == id) {
         _deleteSubtree(tx, child, reinserted);
       }
     }
-    // Native UndoManager retains deleted shared types only as needed for undo.
+    // The runtime retains deleted shared types only as needed for undo.
     // Do not keep every deleted node/text alive forever in an application map.
     texts.remove(tx, id);
     children.remove(tx, id);
     blocks.remove(tx, id);
   }
 
-  Document snapshot() => native.read((tx) {
-    final records = blocks.entries(tx).cast<String, YMap>();
-    final seen = <String>{};
-    Node? build(String id, String? parent) {
-      final record = records[id];
-      if (record == null ||
-          record.get(tx, 'deleted') == true ||
-          record.get(tx, 'parent') != parent ||
-          !seen.add(id)) {
-        return null;
-      }
-      final props = (record.get(tx, 'props') as YMap).entries(tx);
-      final content = text(tx, id);
-      if (content != null) props['delta'] = content.delta(tx);
-      final order = children.get(tx, id) as YArray?;
-      return Node(
-        type: record.get(tx, 'type') as String,
-        id: id,
-        attributes: props,
-        children: [
-          for (final child in order?.values(tx) ?? const [])
-            if (child is String) ...[?build(child, id)],
-        ],
+  Document snapshot() => store.read((tx) {
+        final records = blocks.entries(tx).cast<String, CrdtMap>();
+        final seen = <String>{};
+        Node? build(String id, String? parent) {
+          final record = records[id];
+          if (record == null ||
+              record.get(tx, 'deleted') == true ||
+              record.get(tx, 'parent') != parent ||
+              !seen.add(id)) {
+            return null;
+          }
+          final props = (record.get(tx, 'props') as CrdtMap).entries(tx);
+          final content = text(tx, id);
+          if (content != null) props['delta'] = content.delta(tx);
+          final order = children.get(tx, id) as CrdtArray?;
+          return Node(
+            type: record.get(tx, 'type') as String,
+            id: id,
+            attributes: props,
+            children: [
+              for (final child in order?.values(tx) ?? const [])
+                if (child is String) ...[
+                  if (build(child, id) case final node?) node,
+                ],
+            ],
+          );
+        }
+
+        // Parent ownership filters concurrent moves and duplicate array placements.
+        final root = metadata.get(tx, 'rootId') as String;
+        final node = build(root, null);
+        if (node == null) throw FormatException('Missing document root.');
+        if (seen.length != records.length) {
+          node.dispose();
+          throw InvalidHierarchy(records.keys.toSet().difference(seen));
+        }
+        return Document(root: node);
+      });
+
+  Map<String, Uint8List> anchors(Map<String, int> offsets) => store.write(
+        'binding:selection',
+        (tx) => {
+          for (final entry in offsets.entries)
+            if (text(tx, entry.key) case final content?)
+              entry.key: content.anchor(tx, entry.value),
+        },
       );
-    }
-
-    // Parent ownership filters concurrent moves and duplicate array placements.
-    final root = metadata.get(tx, 'rootId') as String;
-    final node = build(root, null);
-    if (node == null) throw FormatException('Missing document root.');
-    if (seen.length != records.length) {
-      node.dispose();
-      throw InvalidHierarchy(records.keys.toSet().difference(seen));
-    }
-    return Document(root: node);
-  });
-
-  Map<String, Uint8List> anchors(Map<String, int> offsets) => native.write(
-    'binding:selection',
-    (tx) => {
-      for (final entry in offsets.entries)
-        if (text(tx, entry.key) case final content?)
-          entry.key: content.anchor(tx, entry.value),
-    },
-  );
 
   int? resolve(String id, Uint8List anchor) =>
-      native.read((tx) => text(tx, id)?.resolve(tx, anchor));
-  YUndoManager undoManager(String origin) =>
-      native.undoManager(origin, [blocks, children, texts]);
-  void dispose() => native.dispose();
+      store.read((tx) => text(tx, id)?.resolve(tx, anchor));
+  CrdtUndoManager undoManager(String origin) =>
+      store.undoManager(origin, [blocks, children, texts]);
+  void dispose() => store.dispose();
 }
 
 List<Map<String, dynamic>> _jsonDelta(Delta delta) =>
     delta.toJson().map((op) => Map<String, dynamic>.from(op)).toList();
 
-/// Validate all ABI inputs before the first native write (Yrs has no rollback).
+/// Validate the editor schema before the runtime commits a command batch.
 void validateValue(Object? value) {
-  if (value is String && value.contains('\u0000')) {
-    throw ArgumentError('NUL is unsupported by yffi C strings.');
-  }
   if (value is Map) {
     for (final entry in value.entries) {
       if (entry.key is! String) {
@@ -284,7 +285,7 @@ void validateNode(Node node) {
 }
 
 /// The legacy table representation has redundant dimensions and coordinates.
-/// A valid Yrs merge alone does not guarantee this domain invariant.
+/// A valid CRDT merge alone does not guarantee this domain invariant.
 void validateTables(Node root) {
   if (root.type == TableBlockKeys.type) {
     final cols = root.attributes[TableBlockKeys.colsLen];

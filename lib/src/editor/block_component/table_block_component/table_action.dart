@@ -163,8 +163,9 @@ Future<void> _addRow(
       attributes: {
         TableCellBlockKeys.colPosition: col,
         TableCellBlockKeys.rowPosition: position,
-        TableCellBlockKeys.colBackgroundColor:
-            ?first.attributes[TableCellBlockKeys.colBackgroundColor],
+        if (first.attributes[TableCellBlockKeys.colBackgroundColor]
+            case final color?)
+          TableCellBlockKeys.colBackgroundColor: color,
       },
       children: [paragraphNode()],
     );
@@ -358,13 +359,14 @@ dynamic newCellNode(Node tableNode, n) {
       tableNode.attributes[TableBlockKeys.rowDefaultHeight].toString(),
     )!;
     if (row < rowsLen) {
-      nodeHeight =
-          double.tryParse(
+      nodeHeight = double.tryParse(
             getCellNode(
               tableNode,
               0,
               row,
-            )!.attributes[TableCellBlockKeys.height].toString(),
+            )!
+                .attributes[TableCellBlockKeys.height]
+                .toString(),
           ) ??
           nodeHeight;
     }
@@ -376,13 +378,14 @@ dynamic newCellNode(Node tableNode, n) {
       tableNode.attributes[TableBlockKeys.colDefaultWidth].toString(),
     )!;
     if (col < colsLen) {
-      nodeWidth =
-          double.tryParse(
+      nodeWidth = double.tryParse(
             getCellNode(
               tableNode,
               col,
               0,
-            )!.attributes[TableCellBlockKeys.width].toString(),
+            )!
+                .attributes[TableCellBlockKeys.width]
+                .toString(),
           ) ??
           nodeWidth;
     }

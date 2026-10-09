@@ -1,6 +1,8 @@
 /// AppFlowyEditor library
 library;
 
+export 'package:flamingo_crdt/flamingo_crdt.dart';
+
 export 'src/collaboration/editor_transaction_host.dart';
 export 'src/collaboration/shared_operation.dart';
 export 'src/collaboration/shared_editor_document.dart';
